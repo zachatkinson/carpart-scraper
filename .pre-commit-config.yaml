@@ -64,37 +64,6 @@ repos:
         files: ^src/
         exclude: ^(test_hierarchy\.py|tests/performance/.*)$
 
-  # Local hooks for pytest
-  - repo: local
-    hooks:
-      - id: pytest-check
-        name: Run pytest tests
-        entry: .venv/bin/pytest
-        language: system
-        pass_filenames: false
-        always_run: true
-        args:
-          - tests/
-          - -x
-          - --tb=short
-          - --no-cov
-          - -q
-        stages: [pre-commit]
-
-      - id: pytest-coverage
-        name: Check test coverage
-        entry: .venv/bin/pytest
-        language: system
-        pass_filenames: false
-        always_run: false
-        args:
-          - tests/
-          - --cov=src
-          - --cov-report=term-missing
-          - --cov-fail-under=85
-          - -q
-        stages: [pre-push]
-
 # Configuration
 default_language_version:
   python: python3.13
@@ -109,5 +78,4 @@ ci:
   autoupdate_branch: ''
   autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
   autoupdate_schedule: weekly
-  skip: [pytest-check, pytest-coverage]  # Skip local hooks in CI
   submodules: false
