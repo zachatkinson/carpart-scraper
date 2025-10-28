@@ -15,26 +15,32 @@ jobs:
       matrix:
         test-group:
           - name: "Unit 1/4"
+            id: "unit1"
             splits: 4
             group: 1
             path: "tests/unit/"
           - name: "Unit 2/4"
+            id: "unit2"
             splits: 4
             group: 2
             path: "tests/unit/"
           - name: "Unit 3/4"
+            id: "unit3"
             splits: 4
             group: 3
             path: "tests/unit/"
           - name: "Unit 4/4"
+            id: "unit4"
             splits: 4
             group: 4
             path: "tests/unit/"
           - name: "Integration"
+            id: "integration"
             splits: 1
             group: 1
             path: "tests/integration/"
           - name: "Performance"
+            id: "performance"
             splits: 1
             group: 1
             path: "tests/performance/"
@@ -59,7 +65,7 @@ jobs:
 
       - name: Run tests with coverage
         env:
-          COVERAGE_FILE: .coverage.${{ matrix.test-group.name }}
+          COVERAGE_FILE: .coverage.${{ matrix.test-group.id }}
         run: |
           uv run pytest ${{ matrix.test-group.path }} \
             --splits ${{ matrix.test-group.splits }} \
@@ -73,8 +79,8 @@ jobs:
       - name: Upload coverage data
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ matrix.test-group.group }}-of-${{ matrix.test-group.splits }}
-          path: .coverage.*
+          name: coverage-${{ matrix.test-group.id }}
+          path: .coverage.${{ matrix.test-group.id }}
           retention-days: 1
 
   coverage:
