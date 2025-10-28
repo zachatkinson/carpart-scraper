@@ -67,8 +67,6 @@ jobs:
             --cov-fail-under=0 \
             --no-cov-on-fail \
             -v
-        env:
-          COVERAGE_CORE: sysmon
 
       - name: Upload coverage data
         uses: actions/upload-artifact@v4
