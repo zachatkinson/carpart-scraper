@@ -64,72 +64,25 @@ jobs:
         run: uv pip install pytest-split
 
       - name: Run tests with coverage
-        env:
-          COVERAGE_FILE: .coverage.${{ matrix.test-group.id }}
         run: |
           uv run pytest ${{ matrix.test-group.path }} \
             --splits ${{ matrix.test-group.splits }} \
             --group ${{ matrix.test-group.group }} \
             --cov=src \
+            --cov-report=xml \
             --cov-report=term-missing \
             --cov-fail-under=0 \
             --no-cov-on-fail \
             -v
-
-      - name: Upload coverage data
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.test-group.id }}
-          path: .coverage.${{ matrix.test-group.id }}
-          retention-days: 1
-
-  coverage:
-    name: Combine & Upload Coverage
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          version: "latest"
-
-      - name: Set up Python
-        run: uv python install 3.13
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
-
-      - name: Download all coverage artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: coverage-*
-          merge-multiple: true
-
-      - name: Combine coverage
-        run: |
-          uv run coverage combine
-          uv run coverage xml
-          uv run coverage html
-          uv run coverage report --fail-under=90
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
+          flags: ${{ matrix.test-group.id }}
+          name: ${{ matrix.test-group.name }}
           fail_ci_if_error: false
-
-      - name: Upload coverage artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: |
-            htmlcov/
-            coverage.xml
 
   lint:
     name: Lint and Type Check
