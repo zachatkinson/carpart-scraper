@@ -110,7 +110,6 @@ packages = ["src"]
 target-version = "py313"
 line-length = 100
 src = ["src", "tests"]
-extend-exclude = ["test_hierarchy.py", "tests/performance/"]
 
 [tool.ruff.lint]
 select = [
@@ -161,8 +160,6 @@ select = [
 ignore = [
     "D203",   # one-blank-line-before-class (conflicts with D211)
     "D213",   # multi-line-summary-second-line (conflicts with D212)
-    "ANN101", # missing-type-self
-    "ANN102", # missing-type-cls
     "COM812", # trailing-comma-missing (conflicts with formatter)
     "ISC001", # single-line-implicit-string-concatenation (conflicts with formatter)
 ]
@@ -177,6 +174,17 @@ ignore = [
 ]
 "__init__.py" = [
     "D104",   # missing docstring in public package
+]
+"test_hierarchy.py" = [
+    "T201",   # print statements ok in manual test script
+    "SLF001", # private member access ok for internal testing
+]
+"tests/performance/**/*.py" = [
+    "T201",   # print statements ok in performance tests
+    "ANN",    # type annotations not required in benchmarks
+    "D",      # docstrings not required in benchmarks
+    "INP001", # implicit namespace package ok in perf tests
+    "PLC0415", # imports inside functions ok for memory profiling
 ]
 
 [tool.ruff.lint.pydocstyle]

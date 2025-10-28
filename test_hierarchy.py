@@ -50,7 +50,6 @@ def main() -> int:
     try:
         # Test 1: Build hierarchy for Honda only (all years)
         print_subsection("Test 1: Building hierarchy for Honda (all years)...")
-        # Using private method for testing purposes  # noqa: SLF001
         honda_hierarchy = orchestrator._build_hierarchy(make_filter="Honda")
         print(f"✓ Found {len(honda_hierarchy)} Honda vehicle configurations")
         print()
@@ -64,7 +63,6 @@ def main() -> int:
 
         # Test 2: Build hierarchy for Honda 2020 only
         print_subsection("Test 2: Building hierarchy for Honda 2020...")
-        # Using private method for testing purposes  # noqa: SLF001
         honda_2020 = orchestrator._build_hierarchy(make_filter="Honda", year_filter=2020)
         print(f"✓ Found {len(honda_2020)} Honda 2020 models")
         print()
@@ -78,7 +76,6 @@ def main() -> int:
         # Test 3: Verify year enumeration directly
         print_subsection("Test 3: Testing year enumeration for Honda...")
         honda_id = 3  # Honda ID from MAKES constant
-        # Using private method for testing purposes  # noqa: SLF001
         years = orchestrator._enumerate_years(honda_id, "Honda")
         print(f"✓ Found {len(years)} years for Honda")
         print(f"  Sample years: {list(years.values())[:5]}")
@@ -87,23 +84,23 @@ def main() -> int:
         # Test 4: Verify model enumeration for a specific year
         if years:
             # Get first year_id
-            first_year_id = list(years.keys())[0]
+            first_year_id = next(iter(years.keys()))
             first_year = years[first_year_id]
             print_subsection(f"Test 4: Testing model enumeration for Honda {first_year}...")
-            # Using private method for testing purposes  # noqa: SLF001
             models = orchestrator._enumerate_models(first_year_id, first_year, "Honda")
             print(f"✓ Found {len(models)} Honda {first_year} models")
             print(f"  Models: {', '.join(list(models.values())[:5])}")
             print()
-
-        print_section("All tests passed! ✓")
-        return 0
 
     except Exception as e:  # noqa: BLE001
         # Broad exception is acceptable for a test script
         print(f"\n❌ Error: {e}")
         traceback.print_exc()
         return 1
+
+    else:
+        print_section("All tests passed! ✓")
+        return 0
 
     finally:
         # Clean up
