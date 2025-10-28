@@ -1,0 +1,113 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+
+repos:
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+      - id: check-toml
+        name: Check TOML syntax
+      - id: check-json
+        name: Check JSON syntax
+      - id: check-added-large-files
+        name: Check for large files
+        args: ['--maxkb=1000']  # 1MB limit
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: check-case-conflict
+        name: Check for case conflicts
+      - id: detect-private-key
+        name: Detect private keys
+      - id: mixed-line-ending
+        name: Fix mixed line endings
+
+  # Ruff - Fast Python linter and formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      # Run the linter
+      - id: ruff
+        name: Ruff check (linting)
+        args: [--fix]
+        exclude: ^(test_hierarchy\.py|tests/performance/.*)$
+      # Run the formatter
+      - id: ruff-format
+        name: Ruff format (formatting)
+        exclude: ^(test_hierarchy\.py|tests/performance/.*)$
+
+  # MyPy - Static type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.0
+    hooks:
+      - id: mypy
+        name: MyPy type checking
+        additional_dependencies:
+          - types-pyyaml
+          - pydantic
+          - click
+          - httpx
+          - playwright
+          - rich
+          - structlog
+          - tenacity
+          - beautifulsoup4
+          - lxml
+        args: [--config-file=pyproject.toml]
+        files: ^src/
+        exclude: ^(test_hierarchy\.py|tests/performance/.*)$
+
+  # Local hooks for pytest
+  - repo: local
+    hooks:
+      - id: pytest-check
+        name: Run pytest tests
+        entry: .venv/bin/pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        args:
+          - tests/
+          - -x
+          - --tb=short
+          - --no-cov
+          - -q
+        stages: [pre-commit]
+
+      - id: pytest-coverage
+        name: Check test coverage
+        entry: .venv/bin/pytest
+        language: system
+        pass_filenames: false
+        always_run: false
+        args:
+          - tests/
+          - --cov=src
+          - --cov-report=term-missing
+          - --cov-fail-under=85
+          - -q
+        stages: [pre-push]
+
+# Configuration
+default_language_version:
+  python: python3.13
+
+# CI configuration
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: [pytest-check, pytest-coverage]  # Skip local hooks in CI
+  submodules: false

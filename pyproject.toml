@@ -1,0 +1,307 @@
+[project]
+name = "carpart-scraper"
+version = "0.1.0"
+description = "Industry-leading web scraper and REST API for CSF MyCarParts automotive parts data"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [
+    {name = "Development Team", email = "dev@example.com"}
+]
+keywords = ["scraper", "automotive", "parts", "fastapi", "web-scraping"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Framework :: FastAPI",
+    "Framework :: Pydantic",
+    "Framework :: Pytest",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    # Web scraping
+    "playwright>=1.40.0",
+    "beautifulsoup4>=4.12.0",
+    "httpx>=0.26.0",
+    "lxml>=5.1.0",
+
+    # Data validation
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+
+    # CLI
+    "click>=8.1.7",
+    "rich>=13.7.0",
+
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "structlog>=24.1.0",
+    "tenacity>=8.2.3",
+    "pyyaml>=6.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=7.4.4",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.23.3",
+    "pytest-watch>=4.2.0",
+    "factory-boy>=3.3.0",
+    "faker>=22.0.0",
+    "hypothesis>=6.96.0",
+
+    # Code quality
+    "ruff>=0.1.14",
+    "mypy>=1.8.0",
+    "pre-commit>=3.6.0",
+
+    # Type stubs
+    "types-beautifulsoup4>=4.12.0",
+    "types-pyyaml>=6.0.0",
+
+    # Development tools
+    "ipython>=8.20.0",
+    "ipdb>=0.13.13",
+]
+
+test = [
+    "pytest>=7.4.4",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.23.3",
+    "factory-boy>=3.3.0",
+    "faker>=22.0.0",
+]
+
+api = [
+    # Optional FastAPI for local testing/development
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+]
+
+[project.scripts]
+carpart = "src.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/carpart-scraper"
+Documentation = "https://github.com/yourusername/carpart-scraper/blob/main/README.md"
+Repository = "https://github.com/yourusername/carpart-scraper"
+Issues = "https://github.com/yourusername/carpart-scraper/issues"
+Changelog = "https://github.com/yourusername/carpart-scraper/blob/main/CHANGELOG.md"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+# ============================================================================
+# Tool Configuration
+# ============================================================================
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "D",      # pydocstyle
+    "UP",     # pyupgrade
+    "ANN",    # flake8-annotations
+    "ASYNC",  # flake8-async
+    "S",      # flake8-bandit
+    "BLE",    # flake8-blind-except
+    "B",      # flake8-bugbear
+    "A",      # flake8-builtins
+    "COM",    # flake8-commas
+    "C4",     # flake8-comprehensions
+    "DTZ",    # flake8-datetimez
+    "T10",    # flake8-debugger
+    "EM",     # flake8-errmsg
+    "EXE",    # flake8-executable
+    "ISC",    # flake8-implicit-str-concat
+    "ICN",    # flake8-import-conventions
+    "G",      # flake8-logging-format
+    "INP",    # flake8-no-pep420
+    "PIE",    # flake8-pie
+    "T20",    # flake8-print
+    "PYI",    # flake8-pyi
+    "PT",     # flake8-pytest-style
+    "Q",      # flake8-quotes
+    "RSE",    # flake8-raise
+    "RET",    # flake8-return
+    "SLF",    # flake8-self
+    "SIM",    # flake8-simplify
+    "TID",    # flake8-tidy-imports
+    "TCH",    # flake8-type-checking
+    "ARG",    # flake8-unused-arguments
+    "PTH",    # flake8-use-pathlib
+    "ERA",    # eradicate
+    "PD",     # pandas-vet
+    "PGH",    # pygrep-hooks
+    "PL",     # pylint
+    "TRY",    # tryceratops
+    "NPY",    # numpy-specific rules
+    "RUF",    # ruff-specific rules
+]
+ignore = [
+    "D203",   # one-blank-line-before-class (conflicts with D211)
+    "D213",   # multi-line-summary-second-line (conflicts with D212)
+    "ANN101", # missing-type-self
+    "ANN102", # missing-type-cls
+    "COM812", # trailing-comma-missing (conflicts with formatter)
+    "ISC001", # single-line-implicit-string-concatenation (conflicts with formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",   # assert allowed in tests
+    "ARG",    # unused arguments ok in tests (fixtures)
+    "PLR2004", # magic values ok in tests
+    "S105",   # hardcoded passwords ok in tests
+    "S106",   # hardcoded passwords ok in tests
+]
+"__init__.py" = [
+    "D104",   # missing docstring in public package
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+check_untyped_defs = true
+no_implicit_reexport = true
+warn_unreachable = true
+show_error_codes = true
+show_error_context = true
+pretty = true
+
+# Additional strict checks
+disallow_untyped_calls = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+warn_no_return = true
+strict_optional = true
+strict_equality = true
+
+# Pydantic plugin for proper model type checking
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[[tool.mypy.overrides]]
+module = [
+    "playwright.*",
+    "bs4.*",
+    "factory.*",
+    "redis.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+# Allow more flexibility in test code for cleaner test patterns
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+# Pydantic models with optional fields can be instantiated without all params at runtime
+# but mypy's strict mode doesn't understand Pydantic's Field(None) pattern fully
+warn_return_any = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--tb=short",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-fail-under=90",
+    "--no-cov-on-fail",
+]
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (slower, may require external services)",
+    "e2e: End-to-end tests (slowest, full workflow)",
+    "slow: Marks tests as slow",
+    "network: Tests requiring network access",
+    "scraper: Tests for scraper functionality",
+    "api: Tests for API endpoints",
+    "database: Tests requiring database",
+    "models: Tests for data models",
+    "parser: Tests for HTML parsing",
+    "fetcher: Tests for HTTP fetching",
+]
+asyncio_mode = "auto"
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/.venv/*",
+]
+branch = true
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "def __str__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

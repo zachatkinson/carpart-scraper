@@ -1,0 +1,181 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# PyCharm
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/shelf
+.idea/**/contentModel.xml
+.idea/**/dataSources/
+.idea/**/dataSources.ids
+.idea/**/dataSources.local.xml
+.idea/**/sqlDataSources.xml
+.idea/**/dynamic.xml
+.idea/**/uiDesigner.xml
+.idea/**/dbnavigator.xml
+.idea/**/gradle.xml
+.idea/**/libraries
+.idea/**/mongoSettings.xml
+.idea/**/encodings.xml
+.idea/**/compiler.xml
+.idea/**/misc.xml
+.idea/**/modules.xml
+.idea/**/inspectionProfiles/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+coverage.xml
+*.cover
+*.log
+.cache
+nosetests.xml
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Ruff
+.ruff_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# PostgreSQL
+*.sql.gz
+postgresql/data/
+
+# Redis
+dump.rdb
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.envrc
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# Project specific
+scraped_data/
+exports/
+checkpoints/
+downloads/
+temp/
+tmp/
+.cache/
+
+# WordPress (for local testing)
+wordpress/
+wp-config.php
+wp-content/uploads/
+
+# Playwright
+playwright/.auth/
+
+# Documentation builds
+docs/_build/
+site/
+
+# Secrets and credentials
+*.pem
+*.key
+*.crt
+*.csr
+secrets.yaml
+credentials.json
+.secrets/
+
+# Backups
+*.bak
+*.backup
+*.old
+*.orig
+
+# Data files (uncomment if you want to ignore data)
+# *.csv
+# *.json
+# *.xml
+# *.parquet
+
+# Large files
+*.tar
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# CI/CD
+.github/workflows/*.local.yml
+.gitlab-ci.local.yml
+
+# Claude Code (keep settings, ignore temp files)
+.claude/.cache/
+.claude/temp/

@@ -1,0 +1,180 @@
+# CSF MyCarParts Scraper - Configuration File
+# ============================================
+#
+# This is an example configuration file with all available options documented.
+# Copy this file to 'config.yaml' and customize for your needs.
+#
+# CLI options always override config file settings.
+#
+# Design Principles:
+# - DRY: Configuration as single source of truth
+# - Respectful Scraping: Rate limiting and proper identification
+# - Type Safety: All values validated by Pydantic
+
+# Scraping Configuration
+# ----------------------
+# Controls web scraping behavior and respectful practices
+scraping:
+  # Minimum delay between HTTP requests (seconds)
+  # Respectful scraping requires at least 0.5s
+  # Default: 1.0
+  # Range: 0.5 - 10.0
+  min_delay: 1.0
+
+  # Maximum delay between HTTP requests (seconds)
+  # Random delays between min and max mimic human behavior
+  # Default: 3.0
+  # Range: 0.5 - 10.0 (must be >= min_delay)
+  max_delay: 3.0
+
+  # User agent string for HTTP requests
+  # MUST identify as a bot with contact information (respectful scraping)
+  # MUST NOT pretend to be a browser (e.g., no "Mozilla/5.0")
+  # Default: "CSF-Parts-Scraper/1.0 (https://github.com/yourusername/carpart-scraper)"
+  user_agent: CSF-Parts-Scraper/1.0 (https://github.com/yourusername/carpart-scraper)
+
+  # Request timeout in seconds
+  # Default: 30
+  # Range: 5 - 120
+  timeout: 30
+
+  # Maximum retry attempts for failed requests
+  # Uses exponential backoff between retries
+  # Default: 3
+  # Range: 1 - 10
+  max_retries: 3
+
+  # Whether to check and honor robots.txt
+  # Default: true
+  # SHOULD ALWAYS BE TRUE for respectful scraping
+  respect_robots_txt: true
+
+# Output Configuration
+# --------------------
+# Controls where and how data is exported
+output:
+  # Output directory for exported files
+  # Can be absolute or relative path
+  # Directory will be created if it doesn't exist
+  # Default: exports
+  directory: exports
+
+  # Export format
+  # Currently supported: json
+  # Default: json
+  format: json
+
+  # Pretty-print output files
+  # If true: JSON with 2-space indentation (human-readable)
+  # If false: Minified JSON (smaller files)
+  # Default: true
+  pretty: true
+
+  # Prefix for output filenames
+  # Example: "csf" generates "csf_parts.json", "csf_compatibility.json"
+  # Default: csf
+  # Length: 1 - 50 characters
+  file_prefix: csf
+
+# Filtering Configuration
+# -----------------------
+# Controls which data to scrape/export
+filtering:
+  # Vehicle makes to include
+  # Empty list = include all makes
+  # Example: ["Audi", "BMW", "Honda"]
+  # Default: [] (all makes)
+  makes: []
+
+  # Years to include
+  # Empty list = include all years
+  # Example: [2020, 2021, 2022, 2023, 2024]
+  # Range: 1950 - 2030
+  # Default: [] (all years)
+  years: []
+
+  # Part categories to include
+  # Empty list = include all categories
+  # Example: ["Radiators", "Condensers", "Intercoolers"]
+  # Default: [] (all categories)
+  categories: []
+
+  # Minimum price filter (USD)
+  # null = no minimum
+  # Default: null
+  min_price: null
+
+  # Maximum price filter (USD)
+  # null = no maximum
+  # Must be >= min_price if both are set
+  # Default: null
+  max_price: null
+
+# Export Configuration
+# --------------------
+# Controls export behavior and options
+export:
+  # Incremental export mode
+  # If true: Append to existing files instead of overwriting
+  # If false: Create new files (overwrite existing)
+  # Useful for large scraping jobs split into batches
+  # Default: false
+  incremental: false
+
+  # Hierarchical export format
+  # If true: Organize as Year > Make > Model > Parts
+  # If false: Flat list of parts
+  # Hierarchical format is optimized for WordPress import
+  # Default: false
+  hierarchical: false
+
+  # Include image URLs in export
+  # Default: true
+  include_images: true
+
+  # Include vehicle compatibility data in export
+  # Default: true
+  include_compatibility: true
+
+  # Remove duplicate parts (same SKU)
+  # Default: true
+  deduplicate: true
+
+# Example Configurations
+# ======================
+
+# Example 1: Conservative scraping (gentle on servers)
+# scraping:
+#   min_delay: 2.0
+#   max_delay: 5.0
+#   timeout: 45
+#   max_retries: 5
+
+# Example 2: Filter for specific makes/years
+# filtering:
+#   makes: ["Honda", "Acura", "Toyota"]
+#   years: [2020, 2021, 2022, 2023, 2024]
+#   categories: ["Radiators", "Condensers"]
+
+# Example 3: Large-scale incremental scraping
+# export:
+#   incremental: true
+#   deduplicate: true
+#   hierarchical: true
+
+# Example 4: Development/testing (faster scraping)
+# scraping:
+#   min_delay: 0.5
+#   max_delay: 1.0
+#   max_retries: 2
+# output:
+#   pretty: false  # Smaller files for testing
+
+# CLI Override Examples
+# =====================
+# All config options can be overridden via CLI:
+#
+# carpart scrape --config config.yaml --scraping__min_delay 2.0
+# carpart scrape --output__directory /tmp/exports
+# carpart scrape --filtering__makes Honda,Toyota --filtering__years 2023,2024
+# carpart scrape --export__hierarchical true
