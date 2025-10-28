@@ -515,10 +515,12 @@ class TestScraperOrchestratorContextManager:
 class TestScraperOrchestratorScrapeAll:
     """Test ScraperOrchestrator scrape_all method."""
 
-    def test_scrape_all_returns_statistics(self) -> None:
+    def test_scrape_all_returns_statistics(self, mocker: MockerFixture) -> None:
         """Test scrape_all returns statistics dictionary."""
         # Arrange
         orchestrator = ScraperOrchestrator()
+        # Mock _build_hierarchy to return empty list (no applications to process)
+        mocker.patch.object(orchestrator, "_build_hierarchy", return_value=[])
 
         # Act
         stats = orchestrator.scrape_all()
@@ -529,11 +531,13 @@ class TestScraperOrchestratorScrapeAll:
         assert "total_applications" in stats
         assert "parts_scraped" in stats
 
-    def test_scrape_all_accepts_make_filter(self) -> None:
+    def test_scrape_all_accepts_make_filter(self, mocker: MockerFixture) -> None:
         """Test scrape_all accepts make filter."""
         # Arrange
         orchestrator = ScraperOrchestrator()
         make_value = "Honda"
+        # Mock _build_hierarchy to return empty list (no applications to process)
+        mocker.patch.object(orchestrator, "_build_hierarchy", return_value=[])
 
         # Act
         stats = orchestrator.scrape_all(make_filter=make_value)
@@ -541,11 +545,13 @@ class TestScraperOrchestratorScrapeAll:
         # Assert
         assert stats["make_filter"] == make_value
 
-    def test_scrape_all_accepts_year_filter(self) -> None:
+    def test_scrape_all_accepts_year_filter(self, mocker: MockerFixture) -> None:
         """Test scrape_all accepts year filter."""
         # Arrange
         orchestrator = ScraperOrchestrator()
         year_value = 2025
+        # Mock _build_hierarchy to return empty list (no applications to process)
+        mocker.patch.object(orchestrator, "_build_hierarchy", return_value=[])
 
         # Act
         stats = orchestrator.scrape_all(year_filter=year_value)
