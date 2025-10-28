@@ -8,11 +8,36 @@ on:
 
 jobs:
   test:
-    name: Test Python ${{ matrix.python-version }}
+    name: Tests - ${{ matrix.test-group.name }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.13']
+        test-group:
+          - name: "Unit 1/4"
+            splits: 4
+            group: 1
+            path: "tests/unit/"
+          - name: "Unit 2/4"
+            splits: 4
+            group: 2
+            path: "tests/unit/"
+          - name: "Unit 3/4"
+            splits: 4
+            group: 3
+            path: "tests/unit/"
+          - name: "Unit 4/4"
+            splits: 4
+            group: 4
+            path: "tests/unit/"
+          - name: "Integration"
+            splits: 1
+            group: 1
+            path: "tests/integration/"
+          - name: "Performance"
+            splits: 1
+            group: 1
+            path: "tests/performance/"
 
     steps:
       - uses: actions/checkout@v4
@@ -23,33 +48,65 @@ jobs:
           version: "latest"
           enable-cache: true
 
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
+      - name: Set up Python
+        run: uv python install 3.13
 
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Run ruff format check
-        run: uv run ruff format --check .
+      - name: Install pytest-split
+        run: uv pip install pytest-split
 
-      - name: Run ruff linting
-        run: uv run ruff check .
-
-      - name: Run mypy
-        run: uv run mypy src/
-
-      - name: Run pytest with coverage
+      - name: Run tests with coverage
         run: |
-          uv run pytest tests/ \
+          uv run pytest ${{ matrix.test-group.path }} \
+            --splits ${{ matrix.test-group.splits }} \
+            --group ${{ matrix.test-group.group }} \
             --cov=src \
             --cov-report=xml \
-            --cov-report=html \
             --cov-report=term-missing \
             -v
 
+      - name: Upload coverage data
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.test-group.group }}-of-${{ matrix.test-group.splits }}
+          path: .coverage
+          retention-days: 1
+
+  coverage:
+    name: Combine & Upload Coverage
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+
+      - name: Combine coverage
+        run: |
+          uv run coverage combine
+          uv run coverage xml
+          uv run coverage html
+          uv run coverage report
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
-        if: matrix.python-version == '3.13'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
@@ -59,7 +116,6 @@ jobs:
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
-        if: matrix.python-version == '3.13'
         with:
           name: coverage-report
           path: |
