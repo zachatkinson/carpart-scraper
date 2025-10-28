@@ -670,9 +670,9 @@ class TestRespectfulFetcherRateLimiting:
         assert mock_random.call_count >= 1, "random.uniform should be called for rate limiting"
         # Check if any call matches our expected arguments
         call_args = [call[0] for call in mock_random.call_args_list]
-        assert any(args == (0.5, 3.0) for args in call_args), (
-            f"Expected uniform(0.5, 3.0), got {call_args}"
-        )
+        assert any(
+            args == (0.5, 3.0) for args in call_args
+        ), f"Expected uniform(0.5, 3.0), got {call_args}"
         mock_sleep.assert_called_with(2.0)
 
         # Cleanup
