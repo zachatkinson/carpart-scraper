@@ -297,6 +297,7 @@ omit = [
     "*/.venv/*",
 ]
 branch = true
+parallel = true
 
 [tool.coverage.report]
 precision = 2
