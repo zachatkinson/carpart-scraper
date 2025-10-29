@@ -1,0 +1,38 @@
+name: csf-parts-catalog
+type: wordpress
+docroot: wordpress
+php_version: "8.2"
+webserver_type: nginx-fpm
+xdebug_enabled: false
+additional_hostnames: []
+additional_fqdns: []
+database:
+  type: mysql
+  version: "8.0"
+use_dns_when_possible: true
+composer_version: "2"
+web_environment:
+  - WP_ENVIRONMENT_TYPE=local
+  - WP_DEBUG=true
+  - WP_DEBUG_LOG=true
+  - WP_DEBUG_DISPLAY=false
+
+nodejs_version: "20"
+
+# Router HTTP port - 80 by default
+router_http_port: "80"
+
+# Router HTTPS port - 443 by default
+router_https_port: "443"
+
+# Timezone
+timezone: America/New_York
+
+# Hooks
+hooks:
+  post-start:
+    - exec: |
+        # Create symlink for plugin if WordPress is installed
+        if [ -d /var/www/html/wordpress/wp-content/plugins ]; then
+          ln -sf /var/www/html /var/www/html/wordpress/wp-content/plugins/csf-parts-catalog
+        fi

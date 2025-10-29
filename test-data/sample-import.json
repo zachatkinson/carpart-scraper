@@ -1,0 +1,359 @@
+{
+  "metadata": {
+    "export_date": "2025-10-28T10:30:00.000000Z",
+    "total_parts": 8,
+    "version": "1.0",
+    "source": "csf.mycarparts.com"
+  },
+  "parts": [
+    {
+      "sku": "CSF-7012",
+      "name": "High Performance All-Aluminum Radiator",
+      "price": "299.99",
+      "description": "CSF's all-aluminum performance radiator is engineered to provide superior cooling efficiency for demanding applications. Features brazed aluminum core construction and high-flow design.",
+      "category": "Radiators",
+      "specifications": {
+        "Core Size": "26\" x 19\" x 2.5\"",
+        "Inlet Size": "1.5\"",
+        "Outlet Size": "1.5\"",
+        "Core Material": "Aluminum",
+        "Tank Material": "Aluminum",
+        "Row Count": "2",
+        "Fin Type": "Louvered",
+        "Warranty": "Lifetime Limited"
+      },
+      "images": [
+        {
+          "url": "https://csf.mycarparts.com/images/radiators/7012-primary.jpg",
+          "alt_text": "CSF High Performance All-Aluminum Radiator - Front View",
+          "is_primary": true
+        },
+        {
+          "url": "https://csf.mycarparts.com/images/radiators/7012-side.jpg",
+          "alt_text": "CSF High Performance All-Aluminum Radiator - Side View",
+          "is_primary": false
+        },
+        {
+          "url": "https://csf.mycarparts.com/images/radiators/7012-detail.jpg",
+          "alt_text": "CSF High Performance All-Aluminum Radiator - Detail View",
+          "is_primary": false
+        }
+      ],
+      "manufacturer": "CSF",
+      "in_stock": true,
+      "features": [
+        "Up to 25% more cooling capacity than OEM",
+        "100% brazed aluminum construction",
+        "High-flow design for maximum efficiency",
+        "Direct bolt-on replacement",
+        "Pressure tested to 30 PSI",
+        "Lifetime limited warranty"
+      ],
+      "tech_notes": "Compatible with automatic and manual transmission vehicles. Includes drain plug for easy maintenance.",
+      "position": "Front",
+      "scraped_at": "2025-10-28T10:25:32.123456Z",
+      "vehicle_compatibility": {
+        "makes": ["Honda", "Acura"],
+        "models": ["Civic", "Integra"],
+        "years": ["1992", "1993", "1994", "1995", "1996", "1997", "1998", "1999", "2000"]
+      }
+    },
+    {
+      "sku": "CSF-3569",
+      "name": "OEM Replacement Condenser with Receiver Drier",
+      "price": "189.95",
+      "description": "Factory-style A/C condenser with integrated receiver drier. Designed to meet or exceed OEM specifications for perfect fit and function.",
+      "category": "Condensers",
+      "specifications": {
+        "Type": "Parallel Flow",
+        "Material": "Aluminum",
+        "Includes Drier": "Yes",
+        "Core Size": "24\" x 16\"",
+        "Refrigerant Type": "R134a",
+        "Warranty": "2 Years"
+      },
+      "images": [
+        {
+          "url": "https://csf.mycarparts.com/images/condensers/3569-primary.jpg",
+          "alt_text": "CSF OEM Replacement Condenser - Main View",
+          "is_primary": true
+        }
+      ],
+      "manufacturer": "CSF",
+      "in_stock": true,
+      "features": [
+        "Parallel flow design for maximum efficiency",
+        "Integrated receiver drier included",
+        "Direct OEM replacement",
+        "Pre-coated for corrosion resistance",
+        "Leak tested to ensure quality"
+      ],
+      "tech_notes": "Requires evacuation and recharge of A/C system. Professional installation recommended.",
+      "position": "Front",
+      "scraped_at": "2025-10-28T10:26:15.234567Z",
+      "vehicle_compatibility": {
+        "makes": ["Toyota"],
+        "models": ["Camry"],
+        "years": ["2002", "2003", "2004", "2005", "2006"]
+      }
+    },
+    {
+      "sku": "CSF-8051",
+      "name": "Racing Radiator with Dual Core",
+      "price": "449.99",
+      "description": "Track-proven dual-core racing radiator engineered for extreme performance. Features advanced cooling technology and race-spec construction.",
+      "category": "Radiators",
+      "specifications": {
+        "Core Size": "28\" x 20\" x 3\"",
+        "Inlet Size": "1.75\"",
+        "Outlet Size": "1.75\"",
+        "Core Material": "Aluminum",
+        "Tank Material": "Aluminum",
+        "Row Count": "3",
+        "Fin Type": "High-Density Louvered",
+        "Capacity": "40% increase over stock",
+        "Warranty": "Limited Lifetime"
+      },
+      "images": [
+        {
+          "url": "https://csf.mycarparts.com/images/radiators/8051-primary.jpg",
+          "alt_text": "CSF Racing Radiator Dual Core - Front View",
+          "is_primary": true
+        },
+        {
+          "url": "https://csf.mycarparts.com/images/radiators/8051-installed.jpg",
+          "alt_text": "CSF Racing Radiator - Installed View",
+          "is_primary": false
+        }
+      ],
+      "manufacturer": "CSF",
+      "in_stock": true,
+      "features": [
+        "40% increase in cooling capacity",
+        "Triple-pass design for maximum heat dissipation",
+        "TIG-welded end tanks",
+        "High-flow inlet/outlet design",
+        "Track-tested and proven",
+        "Includes mounting hardware"
+      ],
+      "tech_notes": "Designed for racing applications. May require custom mounting or modifications. Not street legal in all states.",
+      "position": "Front",
+      "scraped_at": "2025-10-28T10:27:45.345678Z",
+      "vehicle_compatibility": {
+        "makes": ["Subaru"],
+        "models": ["WRX STI", "Impreza"],
+        "years": ["2004", "2005", "2006", "2007"]
+      }
+    },
+    {
+      "sku": "CSF-4125",
+      "name": "Transmission Oil Cooler",
+      "price": "124.50",
+      "description": "Heavy-duty transmission oil cooler designed to extend transmission life by maintaining optimal fluid temperatures under all conditions.",
+      "category": "Oil Coolers",
+      "specifications": {
+        "Type": "Plate and Fin",
+        "Core Size": "11\" x 7.5\" x 0.75\"",
+        "Inlet/Outlet": "-6 AN Fittings",
+        "Material": "Aluminum",
+        "Max Pressure": "150 PSI",
+        "Warranty": "3 Years"
+      },
+      "images": [
+        {
+          "url": "https://csf.mycarparts.com/images/oil-coolers/4125-primary.jpg",
+          "alt_text": "CSF Transmission Oil Cooler",
+          "is_primary": true
+        }
+      ],
+      "manufacturer": "CSF",
+      "in_stock": false,
+      "features": [
+        "Reduces transmission fluid temperatures by up to 40°F",
+        "Stacked plate design for maximum efficiency",
+        "Universal fitment with -6 AN fittings",
+        "Lightweight aluminum construction",
+        "Ideal for towing and performance applications"
+      ],
+      "tech_notes": "Requires compatible AN fittings and lines. Installation kit sold separately (CSF-4125-KIT).",
+      "position": null,
+      "scraped_at": "2025-10-28T10:28:22.456789Z",
+      "vehicle_compatibility": {
+        "makes": ["Universal"],
+        "models": ["Universal"],
+        "years": []
+      }
+    },
+    {
+      "sku": "CSF-6042",
+      "name": "Heavy Duty Charge Air Cooler (Intercooler)",
+      "price": "379.99",
+      "description": "Bar-and-plate intercooler engineered for high-boost turbocharged applications. Provides maximum cooling efficiency with minimal pressure drop.",
+      "category": "Intercoolers",
+      "specifications": {
+        "Core Size": "25.5\" x 11.8\" x 3.5\"",
+        "Inlet/Outlet": "3.0\"",
+        "End Tank Material": "Cast Aluminum",
+        "Core Type": "Bar and Plate",
+        "Max Boost": "35 PSI",
+        "Pressure Drop": "< 1 PSI at 30 PSI boost",
+        "Warranty": "Lifetime Limited"
+      },
+      "images": [
+        {
+          "url": "https://csf.mycarparts.com/images/intercoolers/6042-primary.jpg",
+          "alt_text": "CSF Heavy Duty Intercooler - Front View",
+          "is_primary": true
+        },
+        {
+          "url": "https://csf.mycarparts.com/images/intercoolers/6042-detail.jpg",
+          "alt_text": "CSF Heavy Duty Intercooler - Core Detail",
+          "is_primary": false
+        }
+      ],
+      "manufacturer": "CSF",
+      "in_stock": true,
+      "features": [
+        "Bar-and-plate core for maximum strength",
+        "Cast aluminum end tanks",
+        "35% larger core than OEM",
+        "Minimal pressure drop design",
+        "Direct bolt-on installation",
+        "Dyno-proven power gains"
+      ],
+      "tech_notes": "Compatible with stock boost levels and aftermarket tunes. Professional installation recommended.",
+      "position": "Front",
+      "scraped_at": "2025-10-28T10:29:05.567890Z",
+      "vehicle_compatibility": {
+        "makes": ["BMW"],
+        "models": ["335i", "135i"],
+        "years": ["2007", "2008", "2009", "2010", "2011", "2012", "2013"]
+      }
+    },
+    {
+      "sku": "CSF-2875",
+      "name": "A/C Condenser - OEM Replacement",
+      "price": null,
+      "description": "Direct replacement A/C condenser manufactured to OEM specifications. Ensures reliable cooling performance for your vehicle's air conditioning system.",
+      "category": "Condensers",
+      "specifications": {
+        "Type": "Tube and Fin",
+        "Material": "Aluminum",
+        "Core Size": "20\" x 14\"",
+        "Refrigerant Type": "R134a",
+        "Warranty": "1 Year"
+      },
+      "images": [],
+      "manufacturer": "CSF",
+      "in_stock": true,
+      "features": [
+        "Direct OEM replacement",
+        "Quality tested for leak-free operation",
+        "Designed for R134a refrigerant",
+        "Easy installation"
+      ],
+      "tech_notes": "Contact for pricing. Requires A/C system evacuation and recharge.",
+      "position": "Front",
+      "scraped_at": "2025-10-28T10:29:48.678901Z",
+      "vehicle_compatibility": {
+        "makes": ["Ford"],
+        "models": ["F-150"],
+        "years": ["2009", "2010", "2011", "2012", "2013", "2014"]
+      }
+    },
+    {
+      "sku": "CSF-9201",
+      "name": "Auxiliary Coolant Pump for Hybrid Vehicles",
+      "price": "159.99",
+      "description": "Electric auxiliary coolant pump specifically designed for hybrid vehicle applications. Ensures proper coolant circulation during electric-only operation.",
+      "category": "Cooling Accessories",
+      "specifications": {
+        "Voltage": "12V",
+        "Flow Rate": "800 L/h",
+        "Connector Type": "OEM-style plug",
+        "Material": "Thermoplastic housing",
+        "Warranty": "2 Years"
+      },
+      "images": [
+        {
+          "url": "https://csf.mycarparts.com/images/accessories/9201-primary.jpg",
+          "alt_text": "CSF Auxiliary Coolant Pump",
+          "is_primary": true
+        }
+      ],
+      "manufacturer": "CSF",
+      "in_stock": true,
+      "features": [
+        "OEM-quality replacement",
+        "Plug-and-play installation",
+        "Quiet operation",
+        "Long service life",
+        "Critical for hybrid cooling system operation"
+      ],
+      "tech_notes": "Essential for proper hybrid system operation. Failure can lead to overheating and system damage.",
+      "position": null,
+      "scraped_at": "2025-10-28T10:30:12.789012Z",
+      "vehicle_compatibility": {
+        "makes": ["Toyota", "Lexus"],
+        "models": ["Prius", "Camry Hybrid", "RX 450h"],
+        "years": ["2010", "2011", "2012", "2013", "2014", "2015"]
+      }
+    },
+    {
+      "sku": "CSF-5533",
+      "name": "Performance Radiator with Dual Electric Fans",
+      "price": "549.00",
+      "description": "Complete cooling solution featuring high-capacity aluminum radiator with dual high-CFM electric fans. Perfect for engine swaps and high-performance builds.",
+      "category": "Radiators",
+      "specifications": {
+        "Core Size": "27.5\" x 19\" x 3\"",
+        "Inlet Size": "1.75\"",
+        "Outlet Size": "1.75\"",
+        "Core Material": "Aluminum",
+        "Tank Material": "Aluminum",
+        "Fan Count": "2",
+        "Fan CFM": "2500 (each)",
+        "Fan Diameter": "12\"",
+        "Voltage": "12V",
+        "Includes Shroud": "Yes",
+        "Warranty": "Lifetime Limited"
+      },
+      "images": [
+        {
+          "url": "https://csf.mycarparts.com/images/radiators/5533-primary.jpg",
+          "alt_text": "CSF Performance Radiator with Dual Fans - Complete Assembly",
+          "is_primary": true
+        },
+        {
+          "url": "https://csf.mycarparts.com/images/radiators/5533-fans.jpg",
+          "alt_text": "CSF Performance Radiator - Fan Detail",
+          "is_primary": false
+        },
+        {
+          "url": "https://csf.mycarparts.com/images/radiators/5533-core.jpg",
+          "alt_text": "CSF Performance Radiator - Core Construction",
+          "is_primary": false
+        }
+      ],
+      "manufacturer": "CSF",
+      "in_stock": true,
+      "features": [
+        "Complete bolt-in cooling solution",
+        "Dual high-CFM electric fans",
+        "Custom fan shroud included",
+        "Relay and wiring harness included",
+        "50% more cooling than stock",
+        "Designed for high-horsepower applications",
+        "Fits with A/C and power steering"
+      ],
+      "tech_notes": "Requires 12V power source for fans. Thermostat switch sold separately (CSF-5533-SWITCH). May require minor trimming for some applications.",
+      "position": "Front",
+      "scraped_at": "2025-10-28T10:30:45.890123Z",
+      "vehicle_compatibility": {
+        "makes": ["Chevrolet", "GMC"],
+        "models": ["Silverado", "Sierra"],
+        "years": ["1999", "2000", "2001", "2002", "2003", "2004", "2005", "2006"]
+      }
+    }
+  ]
+}

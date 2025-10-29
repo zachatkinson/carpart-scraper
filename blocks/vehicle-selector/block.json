@@ -1,0 +1,48 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "csf-parts/vehicle-selector",
+	"title": "CSF Vehicle Selector",
+	"category": "widgets",
+	"icon": "car",
+	"description": "Interactive vehicle selector with cascading filters for Year, Make, and Model",
+	"keywords": ["vehicle", "selector", "filter", "year", "make", "model", "csf"],
+	"version": "1.0.0",
+	"textdomain": "csf-parts",
+	"attributes": {
+		"showYear": {
+			"type": "boolean",
+			"default": true
+		},
+		"showMake": {
+			"type": "boolean",
+			"default": true
+		},
+		"showModel": {
+			"type": "boolean",
+			"default": true
+		},
+		"resultsPerPage": {
+			"type": "number",
+			"default": 12
+		},
+		"columns": {
+			"type": "number",
+			"default": 3
+		},
+		"buttonText": {
+			"type": "string",
+			"default": "Find Parts"
+		},
+		"enableAjax": {
+			"type": "boolean",
+			"default": true
+		}
+	},
+	"supports": {
+		"html": false,
+		"align": ["wide", "full"]
+	},
+	"editorScript": "file:./index.js",
+	"render": "file:./render.php"
+}

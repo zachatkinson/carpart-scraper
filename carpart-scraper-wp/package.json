@@ -1,0 +1,43 @@
+{
+  "name": "csf-parts-catalog",
+  "version": "1.0.0",
+  "description": "WordPress plugin for CSF MyCarParts automotive parts catalog with Gutenberg blocks and async search",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "wp-scripts build",
+    "start": "wp-scripts start",
+    "lint:js": "wp-scripts lint-js",
+    "format": "wp-scripts format",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
+  },
+  "keywords": [
+    "wordpress",
+    "gutenberg",
+    "blocks",
+    "automotive",
+    "parts",
+    "catalog"
+  ],
+  "author": "Development Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@wordpress/scripts": "^30.26.0",
+    "@testing-library/react": "^16.1.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/ui": "^3.0.0",
+    "vitest": "^3.0.0",
+    "jsdom": "^25.0.1"
+  },
+  "dependencies": {
+    "@wordpress/block-editor": "^15.6.0",
+    "@wordpress/blocks": "^15.6.0",
+    "@wordpress/components": "^30.6.0",
+    "@wordpress/data": "^10.11.0",
+    "@wordpress/element": "^6.11.0",
+    "@wordpress/i18n": "^6.6.0",
+    "@wordpress/server-side-render": "^6.9.0"
+  }
+}

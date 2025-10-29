@@ -10,6 +10,9 @@
 - [Python Coding Standards](#python-coding-standards)
 - [Type Safety](#type-safety)
 - [API Design Guidelines](#api-design-guidelines)
+- [Respectful Web Scraping](#respectful-web-scraping)
+- [WordPress Plugin Development](#wordpress-plugin-development)
+- [Code Quality and Linting](#code-quality-and-linting)
 - [Testing Standards](#testing-standards)
 - [Error Handling](#error-handling)
 - [Documentation Requirements](#documentation-requirements)
@@ -1082,6 +1085,570 @@ Before deploying any scraper, verify:
 - [ ] Off-peak scheduling considered
 - [ ] No parallel requests without rate limiting
 - [ ] Error handling prevents runaway retries
+
+## WordPress Plugin Development
+
+**Rule**: All WordPress plugin code must follow WordPress core coding standards, security best practices, and architectural patterns.
+
+**Authoritative Resources**:
+- [WordPress Plugin Developer Handbook](https://developer.wordpress.org/plugins/)
+- [WordPress Block Editor Handbook](https://developer.wordpress.org/block-editor/)
+- [WordPress Coding Standards](https://developer.wordpress.org/coding-standards/)
+
+### WordPress Security (MANDATORY - NO EXCEPTIONS)
+
+Security is non-negotiable in WordPress development. ALL code must implement these protections.
+
+#### 1. ABSPATH Check
+
+**Rule**: EVERY PHP file must start with an ABSPATH check to prevent direct access.
+
+**✅ REQUIRED**:
+```php
+<?php
+/**
+ * File description
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+    exit; // Exit if accessed directly.
+}
+
+// Rest of file...
+```
+
+**❌ NEVER**:
+```php
+<?php
+// Missing ABSPATH check - file can be accessed directly!
+
+class My_Class {
+    // ...
+}
+```
+
+#### 2. Nonce Verification
+
+**Rule**: ALL forms and AJAX requests must use nonces to prevent CSRF attacks.
+
+**✅ GOOD - Form with Nonce**:
+```php
+// Rendering form
+<form method="post">
+    <?php wp_nonce_field( 'my_action_nonce', 'my_nonce_field' ); ?>
+    <input type="text" name="my_input" />
+    <button type="submit">Submit</button>
+</form>
+
+// Processing form
+if ( isset( $_POST['my_nonce_field'] ) ) {
+    // Verify nonce
+    if ( ! wp_verify_nonce( $_POST['my_nonce_field'], 'my_action_nonce' ) ) {
+        wp_die( 'Security check failed' );
+    }
+
+    // Process form data
+    $input = sanitize_text_field( $_POST['my_input'] );
+}
+```
+
+**✅ GOOD - AJAX with Nonce**:
+```php
+// JavaScript
+jQuery.post(ajaxurl, {
+    action: 'my_ajax_action',
+    nonce: myPlugin.nonce,
+    data: 'value'
+});
+
+// PHP Handler
+public function handle_ajax() {
+    check_ajax_referer( 'my_nonce_action', 'nonce' );
+
+    // Process AJAX request
+    wp_send_json_success( $data );
+}
+```
+
+#### 3. Data Escaping (Output)
+
+**Rule**: ALL data output to HTML must be escaped based on context.
+
+| Context | Function | Example |
+|---------|----------|---------|
+| HTML Content | `esc_html()` | `<p><?php echo esc_html( $user_input ); ?></p>` |
+| HTML Attributes | `esc_attr()` | `<input value="<?php echo esc_attr( $value ); ?>" />` |
+| URLs | `esc_url()` | `<a href="<?php echo esc_url( $link ); ?>">Link</a>` |
+| JavaScript | `esc_js()` | `<script>var data = '<?php echo esc_js( $data ); ?>';</script>` |
+| Textarea | `esc_textarea()` | `<textarea><?php echo esc_textarea( $content ); ?></textarea>` |
+
+**✅ GOOD**:
+```php
+<h1><?php echo esc_html( $title ); ?></h1>
+<a href="<?php echo esc_url( $part_url ); ?>" class="<?php echo esc_attr( $class ); ?>">
+    <?php echo esc_html( $part_name ); ?>
+</a>
+```
+
+**❌ BAD**:
+```php
+<h1><?php echo $title; ?></h1>  <!-- XSS vulnerability! -->
+<a href="<?php echo $part_url; ?>" class="<?php echo $class; ?>">
+    <?php echo $part_name; ?>
+</a>
+```
+
+#### 4. Data Sanitization (Input)
+
+**Rule**: ALL user input must be sanitized before processing or storage.
+
+| Data Type | Function | Use Case |
+|-----------|----------|----------|
+| Text | `sanitize_text_field()` | Input fields, short text |
+| Textarea | `sanitize_textarea_field()` | Multiline text |
+| Email | `sanitize_email()` | Email addresses |
+| URL | `esc_url_raw()` | URLs before saving |
+| Filename | `sanitize_file_name()` | File uploads |
+| Key | `sanitize_key()` | Array keys, option names |
+| HTML | `wp_kses_post()` | Rich text content |
+
+**✅ GOOD**:
+```php
+$sku = sanitize_text_field( $_POST['sku'] );
+$description = sanitize_textarea_field( $_POST['description'] );
+$email = sanitize_email( $_POST['user_email'] );
+$website = esc_url_raw( $_POST['website'] );
+
+// Save to database
+update_post_meta( $post_id, '_csf_sku', $sku );
+```
+
+**❌ BAD**:
+```php
+$sku = $_POST['sku'];  // SQL injection risk!
+update_post_meta( $post_id, '_csf_sku', $sku );
+```
+
+#### 5. Capability Checks
+
+**Rule**: ALL admin operations must verify user permissions.
+
+**✅ GOOD**:
+```php
+public function handle_import() {
+    // Check user has required capability
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( 'You do not have permission to access this page.' );
+    }
+
+    // Verify nonce
+    check_admin_referer( 'csf_import_action', 'csf_import_nonce' );
+
+    // Process import
+    $this->import_parts();
+}
+```
+
+**❌ BAD**:
+```php
+public function handle_import() {
+    // Missing capability check - any logged-in user can import!
+    $this->import_parts();
+}
+```
+
+#### 6. SQL Query Safety
+
+**Rule**: ALWAYS use `$wpdb->prepare()` for SQL queries with variables.
+
+**✅ GOOD**:
+```php
+global $wpdb;
+
+$sku = 'CSF-12345';
+$results = $wpdb->get_results(
+    $wpdb->prepare(
+        "SELECT * FROM {$wpdb->postmeta} WHERE meta_key = '_csf_sku' AND meta_value = %s",
+        $sku
+    )
+);
+```
+
+**❌ BAD**:
+```php
+global $wpdb;
+
+$sku = $_GET['sku'];
+// SQL injection vulnerability!
+$results = $wpdb->get_results(
+    "SELECT * FROM {$wpdb->postmeta} WHERE meta_key = '_csf_sku' AND meta_value = '$sku'"
+);
+```
+
+### WordPress Coding Standards
+
+#### File Structure and Naming
+
+**Rules**:
+1. **File names**: Lowercase with hyphens: `class-my-plugin.php`
+2. **Class names**: PascalCase with underscores: `My_Plugin_Class`
+3. **Function names**: Lowercase with underscores: `my_plugin_function()`
+4. **Constants**: Uppercase with underscores: `MY_PLUGIN_CONSTANT`
+5. **Prefix everything**: Avoid conflicts with other plugins
+
+**✅ GOOD**:
+```php
+// File: class-csf-parts-importer.php
+
+class CSF_Parts_Importer {
+    const DEFAULT_BATCH_SIZE = 50;
+
+    public function import_parts( $file_path ) {
+        $parts = $this->parse_json_file( $file_path );
+        return $this->process_parts_batch( $parts );
+    }
+
+    private function parse_json_file( $file_path ) {
+        // Implementation
+    }
+}
+```
+
+#### Code Style
+
+**Indentation**: Use **tabs** (not spaces) - WordPress convention
+
+**Spacing**:
+```php
+// ✅ GOOD - WordPress style
+if ( true === $condition ) {
+    do_something( $arg1, $arg2 );
+}
+
+// ❌ BAD - Not WordPress style
+if (true === $condition) {
+    do_something($arg1, $arg2);
+}
+```
+
+**Yoda Conditions**: Put constant/literal on left side
+
+```php
+// ✅ GOOD - Yoda conditions
+if ( 'active' === $status ) { }
+if ( 10 < $count ) { }
+if ( true === $is_valid ) { }
+
+// ❌ BAD - Variable on left
+if ( $status === 'active' ) { }
+if ( $count > 10 ) { }
+if ( $is_valid === true ) { }
+```
+
+**Array Syntax**: Use long array syntax for compatibility
+
+```php
+// ✅ GOOD - WordPress style
+$parts = array(
+    'sku'   => 'CSF-12345',
+    'name'  => 'Radiator',
+    'price' => 299.99,
+);
+
+// ❌ BAD - Short syntax (use only in modern WordPress)
+$parts = [
+    'sku' => 'CSF-12345',
+];
+```
+
+#### PHP Compatibility
+
+**Rule**: Support minimum PHP version defined in plugin header.
+
+**✅ Check PHP version**:
+```php
+// In main plugin file
+if ( version_compare( PHP_VERSION, '8.1', '<' ) ) {
+    add_action( 'admin_notices', function() {
+        echo '<div class="error"><p>';
+        echo 'CSF Parts Catalog requires PHP 8.1 or higher. You are running ' . PHP_VERSION;
+        echo '</p></div>';
+    });
+    return;
+}
+```
+
+**❌ Common PHP 8.2 Issues to Avoid**:
+
+```php
+// ❌ BAD - Passing null to string parameter (PHP 8.2 deprecated)
+$result = str_replace( 'old', 'new', null );  // Warning!
+
+// ✅ GOOD - Check for null first
+$result = ! empty( $subject ) ? str_replace( 'old', 'new', $subject ) : '';
+
+// ❌ BAD - strpos with null
+if ( strpos( null, 'needle' ) ) { }  // Deprecated warning
+
+// ✅ GOOD - Check for null/empty
+if ( ! empty( $haystack ) && strpos( $haystack, 'needle' ) !== false ) { }
+```
+
+### WordPress Plugin Architecture
+
+#### Singleton Pattern for Main Plugin Class
+
+**Rule**: Use singleton pattern for the main plugin class to ensure single instance.
+
+**✅ GOOD**:
+```php
+class CSF_Parts_Plugin {
+    private static $instance = null;
+
+    public static function get_instance() {
+        if ( null === self::$instance ) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    private function __construct() {
+        $this->init();
+    }
+
+    private function init() {
+        // Initialize plugin
+    }
+}
+
+// Usage in main plugin file
+function run_csf_parts() {
+    return CSF_Parts_Plugin::get_instance();
+}
+run_csf_parts();
+```
+
+**❌ BAD**:
+```php
+// Multiple instances possible
+$plugin = new CSF_Parts_Plugin();
+```
+
+#### Hooks and Filters (Don't Modify Core)
+
+**Rule**: NEVER modify WordPress core. Use hooks and filters.
+
+**✅ GOOD - Use Hooks**:
+```php
+// Add custom post type
+add_action( 'init', array( $this, 'register_post_types' ) );
+
+// Modify content
+add_filter( 'the_content', array( $this, 'add_parts_info' ) );
+
+// Custom action for extensibility
+do_action( 'csf_parts_imported', $part_id, $part_data );
+```
+
+**❌ BAD**:
+```php
+// Modifying WordPress core file
+// wp-includes/post.php <-- NEVER DO THIS
+```
+
+#### Activation and Deactivation Hooks
+
+**✅ REQUIRED**:
+```php
+register_activation_hook( __FILE__, 'csf_parts_activate' );
+register_deactivation_hook( __FILE__, 'csf_parts_deactivate' );
+
+function csf_parts_activate() {
+    // Register post types and taxonomies
+    CSF_Parts_Post_Types::register();
+    CSF_Parts_Taxonomies::register();
+
+    // Flush rewrite rules
+    flush_rewrite_rules();
+
+    // Create default options
+    add_option( 'csf_parts_version', CSF_PARTS_VERSION );
+}
+
+function csf_parts_deactivate() {
+    // Flush rewrite rules
+    flush_rewrite_rules();
+
+    // Do NOT delete user data on deactivation
+    // Only delete on uninstall.php
+}
+```
+
+#### Database Schema Versioning
+
+**Rule**: Version control your database schema and provide upgrade paths.
+
+**✅ GOOD**:
+```php
+public function maybe_upgrade_database() {
+    $current_version = get_option( 'csf_parts_db_version', '1.0' );
+
+    if ( version_compare( $current_version, CSF_PARTS_DB_VERSION, '<' ) ) {
+        $this->upgrade_database( $current_version );
+        update_option( 'csf_parts_db_version', CSF_PARTS_DB_VERSION );
+    }
+}
+
+private function upgrade_database( $from_version ) {
+    if ( version_compare( $from_version, '1.1', '<' ) ) {
+        // Upgrade to 1.1
+        $this->upgrade_to_1_1();
+    }
+
+    if ( version_compare( $from_version, '1.2', '<' ) ) {
+        // Upgrade to 1.2
+        $this->upgrade_to_1_2();
+    }
+}
+```
+
+### Block Editor (Gutenberg)
+
+#### Build Tooling
+
+**Rule**: Use `@wordpress/scripts` for consistent build process.
+
+**package.json**:
+```json
+{
+  "scripts": {
+    "build": "wp-scripts build",
+    "start": "wp-scripts start"
+  },
+  "devDependencies": {
+    "@wordpress/scripts": "^26.0.0"
+  }
+}
+```
+
+#### Block Registration
+
+**✅ GOOD - block.json First**:
+```json
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "csf-parts/single-product",
+  "title": "CSF Single Product",
+  "category": "csf-parts",
+  "icon": "cart",
+  "attributes": {
+    "sku": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "editorScript": "file:./index.js",
+  "render": "file:./render.php"
+}
+```
+
+#### Server-Side Rendering
+
+**Rule**: Use server-side rendering for dynamic content.
+
+**✅ GOOD**:
+```php
+// render.php
+<?php
+$sku = $attributes['sku'] ?? '';
+
+if ( empty( $sku ) ) {
+    return '<p>No product selected.</p>';
+}
+
+$part = get_posts( array(
+    'post_type'  => 'csf_part',
+    'meta_query' => array(
+        array(
+            'key'   => '_csf_sku',
+            'value' => $sku,
+        ),
+    ),
+) );
+
+if ( empty( $part ) ) {
+    return sprintf( '<p>Part not found: %s</p>', esc_html( $sku ) );
+}
+
+// Render part...
+?>
+```
+
+### WordPress Specific Anti-Patterns
+
+**❌ NEVER**:
+
+1. **Direct database access without $wpdb**:
+   ```php
+   // BAD
+   mysqli_query( "SELECT * FROM wp_posts" );
+   ```
+
+2. **Hardcoded table names**:
+   ```php
+   // BAD
+   "SELECT * FROM wp_posts"
+
+   // GOOD
+   "SELECT * FROM {$wpdb->posts}"
+   ```
+
+3. **Missing text domain in i18n**:
+   ```php
+   // BAD
+   __( 'Hello' );
+
+   // GOOD
+   __( 'Hello', 'csf-parts' );
+   ```
+
+4. **Enqueuing scripts incorrectly**:
+   ```php
+   // BAD
+   echo '<script src="my-script.js"></script>';
+
+   // GOOD
+   wp_enqueue_script( 'my-script', plugin_dir_url( __FILE__ ) . 'my-script.js' );
+   ```
+
+5. **Not using WordPress HTTP API**:
+   ```php
+   // BAD
+   $response = file_get_contents( 'https://api.example.com' );
+
+   // GOOD
+   $response = wp_remote_get( 'https://api.example.com' );
+   ```
+
+### WordPress Development Checklist
+
+Before committing WordPress code:
+
+- [ ] Every PHP file has ABSPATH check
+- [ ] All forms use nonces
+- [ ] All output is escaped (esc_html, esc_attr, esc_url)
+- [ ] All input is sanitized (sanitize_text_field, etc.)
+- [ ] All admin operations check capabilities
+- [ ] SQL queries use $wpdb->prepare()
+- [ ] Code follows WordPress coding standards (tabs, Yoda conditions)
+- [ ] No PHP 8.2 deprecation warnings (check for null values)
+- [ ] Main plugin class uses singleton pattern
+- [ ] Hooks used instead of core modifications
+- [ ] Activation/deactivation hooks properly implemented
+- [ ] Block Editor blocks use block.json
+- [ ] Internationalization functions include text domain
+- [ ] Scripts/styles enqueued properly (not hardcoded)
 
 ## Code Quality and Linting
 

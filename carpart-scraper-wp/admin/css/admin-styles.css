@@ -1,0 +1,387 @@
+/**
+ * CSF Parts Admin Styles
+ *
+ * Styles for admin pages following WordPress admin design patterns.
+ *
+ * @package CSF_Parts_Catalog
+ * @since   1.0.0
+ */
+
+/* ==========================================================================
+   Import Page Styles
+   ========================================================================== */
+
+.csf-import-wrapper {
+	max-width: 1200px;
+}
+
+.csf-import-section {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	padding: 20px;
+	margin-bottom: 20px;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.csf-import-section h2 {
+	margin-top: 0;
+	font-size: 18px;
+	font-weight: 600;
+	color: #1d2327;
+	border-bottom: 1px solid #dcdcde;
+	padding-bottom: 12px;
+	margin-bottom: 16px;
+}
+
+/* Upload Form */
+#csf-upload-form {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+#csf-json-file {
+	padding: 5px;
+	border: 1px solid #8c8f94;
+	border-radius: 3px;
+	background: #fff;
+	max-width: 400px;
+}
+
+#csf-upload-btn {
+	margin: 0;
+}
+
+/* Import Options */
+.csf-import-options {
+	margin: 16px 0;
+	padding: 16px;
+	background: #f6f7f7;
+	border-left: 4px solid #2271b1;
+	border-radius: 3px;
+}
+
+.csf-import-options label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 6px;
+	color: #1d2327;
+}
+
+.csf-import-options select {
+	max-width: 200px;
+	margin-top: 4px;
+}
+
+.csf-import-options .description {
+	margin-top: 6px;
+	font-style: italic;
+}
+
+/* Progress Bar */
+.csf-progress-bar-wrapper {
+	margin: 16px 0;
+}
+
+.csf-progress-bar {
+	width: 100%;
+	height: 30px;
+	background: #e0e0e0;
+	border-radius: 4px;
+	overflow: hidden;
+	position: relative;
+	box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.csf-progress-bar-fill {
+	background: linear-gradient(90deg, #2271b1 0%, #135e96 100%);
+	height: 100%;
+	transition: width 0.3s ease;
+	border-radius: 4px 0 0 4px;
+	box-shadow: 0 0 10px rgba(34, 113, 177, 0.3);
+}
+
+#csf-progress-message {
+	margin-top: 12px;
+	font-weight: 600;
+	font-size: 14px;
+	color: #2271b1;
+	text-align: center;
+}
+
+/* Results Display */
+#csf-import-results {
+	margin-top: 20px;
+}
+
+.csf-results-table {
+	width: 100%;
+	margin-top: 16px;
+	border-collapse: collapse;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.csf-results-table th,
+.csf-results-table td {
+	padding: 12px 16px;
+	text-align: left;
+	border: 1px solid #c3c4c7;
+}
+
+.csf-results-table th {
+	background: #f6f7f7;
+	font-weight: 600;
+	color: #1d2327;
+	border-bottom: 2px solid #c3c4c7;
+}
+
+.csf-results-table tr:nth-child(even) {
+	background: #f9f9f9;
+}
+
+.csf-results-table tr:hover {
+	background: #f0f6fc;
+}
+
+/* Error and Warning Lists */
+.csf-error-list,
+.csf-warning-list {
+	margin: 16px 0;
+	padding-left: 24px;
+	list-style-type: disc;
+}
+
+.csf-error-list li {
+	color: #d63638;
+	margin-bottom: 6px;
+	line-height: 1.5;
+}
+
+.csf-warning-list li {
+	color: #dba617;
+	margin-bottom: 6px;
+	line-height: 1.5;
+}
+
+/* Status Messages */
+#csf-upload-status,
+#csf-import-status {
+	margin-top: 16px;
+}
+
+.csf-status-badge {
+	display: inline-block;
+	padding: 4px 12px;
+	border-radius: 12px;
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.csf-status-badge.success {
+	background: #d5e8d4;
+	color: #2e7d32;
+	border: 1px solid #2e7d32;
+}
+
+.csf-status-badge.error {
+	background: #fce4e4;
+	color: #d63638;
+	border: 1px solid #d63638;
+}
+
+.csf-status-badge.warning {
+	background: #fff3cd;
+	color: #856404;
+	border: 1px solid #856404;
+}
+
+.csf-status-badge.processing {
+	background: #e3f2fd;
+	color: #0d47a1;
+	border: 1px solid #0d47a1;
+	animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+	0%, 100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.6;
+	}
+}
+
+/* ==========================================================================
+   Settings Page Styles
+   ========================================================================== */
+
+.csf-settings-section {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	padding: 20px;
+	margin-bottom: 20px;
+	border-radius: 4px;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.csf-settings-section h2 {
+	margin-top: 0;
+	padding-bottom: 10px;
+	border-bottom: 1px solid #dcdcde;
+}
+
+.csf-settings-row {
+	padding: 16px 0;
+	border-bottom: 1px solid #f0f0f1;
+}
+
+.csf-settings-row:last-child {
+	border-bottom: none;
+}
+
+.csf-settings-row label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 8px;
+	color: #1d2327;
+}
+
+.csf-settings-row input[type="text"],
+.csf-settings-row input[type="number"],
+.csf-settings-row select {
+	max-width: 400px;
+}
+
+.csf-settings-row .description {
+	margin-top: 6px;
+	font-size: 13px;
+	color: #646970;
+}
+
+/* ==========================================================================
+   Import Log Styles
+   ========================================================================== */
+
+.csf-log-table {
+	width: 100%;
+	margin-top: 16px;
+	border-collapse: collapse;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.csf-log-table th,
+.csf-log-table td {
+	padding: 12px 16px;
+	text-align: left;
+	border: 1px solid #c3c4c7;
+	font-size: 13px;
+}
+
+.csf-log-table th {
+	background: #f6f7f7;
+	font-weight: 600;
+	color: #1d2327;
+	border-bottom: 2px solid #c3c4c7;
+}
+
+.csf-log-table tr:nth-child(even) {
+	background: #f9f9f9;
+}
+
+.csf-log-table tr:hover {
+	background: #f0f6fc;
+}
+
+.csf-log-table .log-date {
+	white-space: nowrap;
+	color: #646970;
+}
+
+.csf-log-table .log-stats {
+	font-family: 'Courier New', monospace;
+	font-size: 12px;
+}
+
+.csf-log-table .log-stats .created {
+	color: #2e7d32;
+	font-weight: 600;
+}
+
+.csf-log-table .log-stats .updated {
+	color: #2271b1;
+	font-weight: 600;
+}
+
+.csf-log-table .log-stats .errors {
+	color: #d63638;
+	font-weight: 600;
+}
+
+/* ==========================================================================
+   Utility Classes
+   ========================================================================== */
+
+.csf-text-success {
+	color: #2e7d32;
+}
+
+.csf-text-error {
+	color: #d63638;
+}
+
+.csf-text-warning {
+	color: #856404;
+}
+
+.csf-text-muted {
+	color: #646970;
+}
+
+.csf-mt-2 {
+	margin-top: 16px;
+}
+
+.csf-mb-2 {
+	margin-bottom: 16px;
+}
+
+.csf-text-center {
+	text-align: center;
+}
+
+/* ==========================================================================
+   Responsive Styles
+   ========================================================================== */
+
+@media screen and (max-width: 782px) {
+	.csf-import-section {
+		padding: 16px;
+	}
+
+	#csf-upload-form {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	#csf-json-file {
+		max-width: 100%;
+	}
+
+	.csf-results-table,
+	.csf-log-table {
+		font-size: 12px;
+	}
+
+	.csf-results-table th,
+	.csf-results-table td,
+	.csf-log-table th,
+	.csf-log-table td {
+		padding: 8px 10px;
+	}
+}

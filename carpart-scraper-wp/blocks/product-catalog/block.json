@@ -1,0 +1,159 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "csf-parts/product-catalog",
+	"title": "CSF Product Catalog",
+	"category": "csf-parts",
+	"icon": "cart",
+	"description": "Display automotive parts with optional filtering by vehicle, category, and more. Configure defaults for curated showcases or enable filters for user search.",
+	"keywords": ["parts", "catalog", "vehicle", "search", "filter"],
+	"textdomain": "csf-parts",
+	"attributes": {
+		"defaultYears": {
+			"type": "array",
+			"default": []
+		},
+		"defaultMakes": {
+			"type": "array",
+			"default": []
+		},
+		"defaultModels": {
+			"type": "array",
+			"default": []
+		},
+		"defaultCategories": {
+			"type": "array",
+			"default": []
+		},
+		"showFilters": {
+			"type": "boolean",
+			"default": true
+		},
+		"showYearFilter": {
+			"type": "boolean",
+			"default": true
+		},
+		"showMakeFilter": {
+			"type": "boolean",
+			"default": true
+		},
+		"showModelFilter": {
+			"type": "boolean",
+			"default": true
+		},
+		"showCategoryFilter": {
+			"type": "boolean",
+			"default": false
+		},
+		"perPage": {
+			"type": "number",
+			"default": 12
+		},
+		"columns": {
+			"type": "object",
+			"default": {
+				"mobile": 2,
+				"tablet": 3,
+				"desktop": 4
+			}
+		},
+		"gap": {
+			"type": "object",
+			"default": {
+				"mobile": 16,
+				"tablet": 20,
+				"desktop": 24
+			}
+		},
+		"buttonText": {
+			"type": "string",
+			"default": "Find Parts"
+		},
+		"enableAjax": {
+			"type": "boolean",
+			"default": true
+		},
+		"paginationType": {
+			"type": "string",
+			"default": "numbered",
+			"enum": ["numbered", "endless", "loadmore", "none"]
+		},
+		"imageAspectRatio": {
+			"type": "string",
+			"default": "1/1",
+			"enum": ["auto", "1/1", "4/3", "3/2", "16/9"]
+		},
+		"hoverEffect": {
+			"type": "string",
+			"default": "lift",
+			"enum": ["none", "lift", "zoom", "shadow"]
+		},
+		"borderRadius": {
+			"type": "number",
+			"default": 4
+		},
+		"borderWidth": {
+			"type": "number",
+			"default": 1
+		},
+		"borderColor": {
+			"type": "string",
+			"default": "#dddddd"
+		},
+		"cardShadow": {
+			"type": "string",
+			"default": "sm",
+			"enum": ["none", "sm", "md", "lg", "xl"]
+		},
+		"blockPadding": {
+			"type": "object",
+			"default": {
+				"top": 0,
+				"right": 0,
+				"bottom": 0,
+				"left": 0
+			}
+		},
+		"blockMargin": {
+			"type": "object",
+			"default": {
+				"top": 0,
+				"right": 0,
+				"bottom": 0,
+				"left": 0
+			}
+		},
+		"hideOnMobile": {
+			"type": "boolean",
+			"default": false
+		},
+		"hideOnTablet": {
+			"type": "boolean",
+			"default": false
+		},
+		"hideOnDesktop": {
+			"type": "boolean",
+			"default": false
+		},
+		"scrollAnimation": {
+			"type": "string",
+			"default": "none",
+			"enum": ["none", "fade", "slideUp", "slideLeft"]
+		},
+		"colorScheme": {
+			"type": "string",
+			"default": "default",
+			"enum": ["default", "light", "dark", "brand"]
+		}
+	},
+	"supports": {
+		"html": false,
+		"align": ["wide", "full"],
+		"spacing": {
+			"margin": true,
+			"padding": true
+		}
+	},
+	"editorScript": "file:../build/product-catalog/index.js",
+	"render": "file:./render.php"
+}

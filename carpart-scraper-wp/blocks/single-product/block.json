@@ -1,0 +1,44 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "csf-parts/single-product",
+	"title": "CSF Single Product",
+	"category": "widgets",
+	"icon": "cart",
+	"description": "Display a single automotive part with details",
+	"keywords": ["part", "product", "automotive", "csf"],
+	"version": "1.0.0",
+	"textdomain": "csf-parts",
+	"attributes": {
+		"partId": {
+			"type": "number",
+			"default": 0
+		},
+		"sku": {
+			"type": "string",
+			"default": ""
+		},
+		"showPrice": {
+			"type": "boolean",
+			"default": true
+		},
+		"showSpecs": {
+			"type": "boolean",
+			"default": true
+		},
+		"showFeatures": {
+			"type": "boolean",
+			"default": true
+		}
+	},
+	"supports": {
+		"html": false,
+		"align": ["wide", "full"],
+		"color": {
+			"background": true,
+			"text": true
+		}
+	},
+	"editorScript": "file:../build/single-product/index.js",
+	"render": "file:./render.php"
+}

@@ -132,10 +132,23 @@ temp/
 tmp/
 .cache/
 
-# WordPress (for local testing)
-wordpress/
-wp-config.php
-wp-content/uploads/
+# WordPress (DDEV local development)
+# WordPress core is downloaded by DDEV, not version controlled
+carpart-scraper-wp/wordpress/
+carpart-scraper-wp/wp-config.php
+carpart-scraper-wp/wp-content/
+
+# DDEV runtime files (config is version controlled)
+.ddev/.homeadditions/
+.ddev/.global_commands/
+.ddev/.gitignore
+.ddev/db_snapshots/
+.ddev/import-db/
+.ddev/import.yaml
+.ddev/.ddev-docker-*
+.ddev/.webimageBuild
+.ddev/traefik/
+.ddev/.sshimageBuild
 
 # Playwright
 playwright/.auth/
@@ -179,3 +192,5 @@ credentials.json
 # Claude Code (keep settings, ignore temp files)
 .claude/.cache/
 .claude/temp/
+carpart-scraper-wp/blocks/node_modules/
+carpart-scraper-wp/vendor/

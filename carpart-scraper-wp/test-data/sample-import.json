@@ -1,0 +1,128 @@
+{
+  "metadata": {
+    "export_date": "2025-10-29T06:53:00Z",
+    "total_parts": 3,
+    "version": "2.0",
+    "source": "CSF MyCarParts Scraper",
+    "note": "Based on actual CSF website structure - NO price, NO stock, NO manufacturer fields"
+  },
+  "parts": [
+    {
+      "sku": "3411",
+      "name": "1 Row Plastic Tank Aluminum Core",
+      "description": "",
+      "short_description": "",
+      "price": null,
+      "category": "Radiator",
+      "manufacturer": "",
+      "in_stock": true,
+      "position": "",
+      "specifications": {
+        "Bottom Hose Fitting (in)": "1 5/16 Left (in)",
+        "Box Height (in)": "5 1/16",
+        "Box Length (in)": "28 1/2",
+        "Box Weight (lbs)": "8",
+        "Box Width (in)": "21 9/16",
+        "Core Length (in)": "14 3/4 (in)",
+        "Core Material": "Aluminum",
+        "Core Thickness (in)": "5/8 (in)",
+        "Core Width (in)": "25 7/8 (in)",
+        "Cross-flow/Down-flow": "Down Flow",
+        "Csf Cap Number": "4514",
+        "Hazardous Material": "No",
+        "Inlet Length (in)": "26 7/16",
+        "Inlet Width (in)": "1 5/8",
+        "No. Of Rows": "1",
+        "Outlet Length (in)": "26 7/16",
+        "Outlet Width (in)": "1 5/8",
+        "Radiator Cap Supplied": "No",
+        "Tank Material": "Plastic",
+        "Top Hose Fitting (in)": "1 5/16 Left (in)"
+      },
+      "features": [
+        "OEM specified Plastic Tank-Aluminum Core Construction",
+        "Tanks are made from Virgin Grade Engineered plastic resins, which are \"Glass Filled\" for added Strength & Durability",
+        "Gaskets are made from Special Grade \"EPDM\" rubber to withstand extreme temperatures of up to -120 Degrees F",
+        "Tubes - Welded Type or Latest Generation \"B-Tube\" Design",
+        "Fins (Heart of Radiator) - High Performance \"Multi-Louvered Design\" - OEM Spec",
+        "100% leak tested before leaving factory at 150% of operating pressure",
+        "Industry Best Packaging - \"10 Foot Drop Test\" Standard",
+        "Drop-in Fit",
+        "High Performance Transmission Cooler with special Built-in Turburlator, when applicable",
+        "All components are installed, torqued, & tested on Radiator during assembly"
+      ],
+      "tech_notes": "O.E.M. style Plastic tanks & Aluminum core.",
+      "compatibility": [],
+      "images": [
+        "https://illumaware-digital-assets.s3.us-east-2.amazonaws.com/catalog196/applications/1720/large/large_3411.jpg",
+        "https://illumaware-digital-assets.s3.us-east-2.amazonaws.com/catalog196/applications/1731/large/large_3411_1_wm.jpg"
+      ],
+      "scraped_at": "2025-10-29T06:53:31Z"
+    },
+    {
+      "sku": "10881",
+      "name": "",
+      "description": "",
+      "short_description": "",
+      "price": null,
+      "category": "A/C Condenser",
+      "manufacturer": "",
+      "in_stock": true,
+      "position": "",
+      "specifications": {
+        "Box Height (in)": "20",
+        "Box Length (in)": "27",
+        "Box Weight (lbs)": "5 1/6",
+        "Box Width (in)": "4",
+        "Construction": "parallel flow",
+        "Core Length (in)": "20 6/7 (in)",
+        "Core Thickness (in)": "1/2 (in)",
+        "Core Width (in)": "12 1/2 (in)",
+        "Hazardous Material": "No",
+        "Inlet Tube": "block fitting",
+        "Outlet Tube": "block fitting"
+      },
+      "features": [],
+      "tech_notes": "",
+      "compatibility": [],
+      "images": [
+        "https://illumaware-digital-assets.s3.us-east-2.amazonaws.com/catalog196/applications/5784/large/large_10881.jpg",
+        "https://illumaware-digital-assets.s3.us-east-2.amazonaws.com/catalog196/applications/5862/large/large_10881_1_wm.jpg"
+      ],
+      "scraped_at": "2025-10-29T06:53:33Z"
+    },
+    {
+      "sku": "6057",
+      "name": "",
+      "description": "",
+      "short_description": "",
+      "price": null,
+      "category": "Intercooler",
+      "manufacturer": "",
+      "in_stock": true,
+      "position": "",
+      "specifications": {
+        "Box Height (in)": "7",
+        "Box Length (in)": "41",
+        "Box Weight (lbs)": "10",
+        "Box Width (in)": "9",
+        "Core Length (in)": "24 5/8 (in)",
+        "Core Material": "Aluminum",
+        "Core Thickness (in)": "2 7/16 (in)",
+        "Core Width (in)": "5 5/8 (in)",
+        "Hazardous Material": "No",
+        "Inlet Tube (in)": "2 3/8",
+        "Outlet Tube (in)": "2 3/8",
+        "Tank Material": "Plastic"
+      },
+      "features": [],
+      "tech_notes": "O.E.M. Style Tube & Fin Core Design with quck-connect inlet &outlet pipe",
+      "compatibility": [],
+      "images": [
+        "https://illumaware-digital-assets.s3.us-east-2.amazonaws.com/catalog196/applications/2625/large/large_6057.jpg",
+        "https://illumaware-digital-assets.s3.us-east-2.amazonaws.com/catalog196/applications/2632/large/large_6057_1_wm.jpg"
+      ],
+      "scraped_at": "2025-10-29T06:53:35Z"
+    }
+  ]
+}
