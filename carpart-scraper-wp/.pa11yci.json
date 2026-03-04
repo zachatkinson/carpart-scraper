@@ -1,0 +1,66 @@
+{
+  "defaults": {
+    "standard": "WCAG2AA",
+    "timeout": 10000,
+    "wait": 2000,
+    "chromeLaunchConfig": {
+      "args": ["--no-sandbox", "--disable-setuid-sandbox"]
+    },
+    "runners": ["axe", "htmlcs"],
+    "ignore": [
+      "list"
+    ]
+  },
+  "urls": [
+    {
+      "url": "https://csf-parts-catalog.ddev.site/",
+      "screenCapture": "./pa11y-screenshots/home-light.png"
+    },
+    {
+      "url": "https://csf-parts-catalog.ddev.site/parts-demo/",
+      "screenCapture": "./pa11y-screenshots/catalog-light.png"
+    },
+    {
+      "url": "https://csf-parts-catalog.ddev.site/parts/csf6057/",
+      "screenCapture": "./pa11y-screenshots/part-page-light.png"
+    },
+    {
+      "url": "https://csf-parts-catalog.ddev.site/parts/csf6057/?csf_year=2013&csf_make=BMW&csf_model=335i",
+      "screenCapture": "./pa11y-screenshots/part-highlighted-light.png",
+      "actions": [
+        "wait for element .csf-fitment-highlighted to be visible"
+      ]
+    },
+    {
+      "url": "https://csf-parts-catalog.ddev.site/",
+      "screenCapture": "./pa11y-screenshots/home-dark.png",
+      "page": {
+        "emulateMediaFeatures": [{"name": "prefers-color-scheme", "value": "dark"}]
+      }
+    },
+    {
+      "url": "https://csf-parts-catalog.ddev.site/parts-demo/",
+      "screenCapture": "./pa11y-screenshots/catalog-dark.png",
+      "chromeLaunchConfig": {
+        "args": ["--no-sandbox", "--disable-setuid-sandbox", "--force-dark-mode"]
+      }
+    },
+    {
+      "url": "https://csf-parts-catalog.ddev.site/parts/csf6057/",
+      "screenCapture": "./pa11y-screenshots/part-page-dark.png",
+      "chromeLaunchConfig": {
+        "args": ["--no-sandbox", "--disable-setuid-sandbox", "--force-dark-mode"]
+      }
+    },
+    {
+      "url": "https://csf-parts-catalog.ddev.site/parts/csf6057/?csf_year=2013&csf_make=BMW&csf_model=335i",
+      "screenCapture": "./pa11y-screenshots/part-highlighted-dark.png",
+      "chromeLaunchConfig": {
+        "args": ["--no-sandbox", "--disable-setuid-sandbox", "--force-dark-mode"]
+      },
+      "actions": [
+        "wait for element .csf-fitment-highlighted to be visible"
+      ]
+    }
+  ]
+}

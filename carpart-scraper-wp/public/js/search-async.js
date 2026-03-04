@@ -234,23 +234,35 @@ class CSFAsyncSearch {
 					${part.image ? `
 						<div class="csf-part-card__image">
 							<img src="${this.escapeHtml(part.image)}" alt="${this.escapeHtml(part.name)}" loading="lazy" />
+							<span class="csf-part-card__badge">${this.escapeHtml(part.category)}</span>
 						</div>
 					` : `
 						<div class="csf-part-card__image csf-part-card__image--placeholder">
 							<svg width="48" height="48" viewBox="0 0 20 20" fill="currentColor" opacity="0.2">
 								<path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/>
 							</svg>
+							<span class="csf-part-card__badge">${this.escapeHtml(part.category)}</span>
 						</div>
 					`}
 					<div class="csf-part-card__content">
-						<p class="csf-part-card__category">${this.escapeHtml(part.category)}</p>
 						<h3 class="csf-part-card__title">${this.escapeHtml(part.name)}</h3>
-						<p class="csf-part-card__sku">SKU: ${this.escapeHtml(part.sku)}</p>
-						${part.manufacturer ? `<p class="csf-part-card__manufacturer">${this.escapeHtml(part.manufacturer)}</p>` : ''}
-						<div class="csf-part-card__footer">
-							<span class="csf-part-card__price">${price}</span>
-							<span class="csf-part-card__stock csf-part-card__stock--${stockClass}">${stockText}</span>
-						</div>
+						${part.dimensions ? `
+							<div class="csf-dimensions-section">
+								<p class="csf-dimensions-section__label">Dimensions</p>
+								<p class="csf-dimensions-section__value">${part.dimensions}</p>
+							</div>
+						` : ''}
+						${part.makes && part.makes.length > 0 ? `
+							<div class="csf-fitment-section">
+								<p class="csf-fitment-section__label">Fits Models By</p>
+								<div class="csf-part-card__makes">
+									${part.makes.slice(0, 4).map(make =>
+										`<span class="csf-part-card__make-badge">${this.escapeHtml(make)}</span>`
+									).join('')}
+									${part.makes.length > 4 ? `<span class="csf-part-card__make-badge csf-part-card__make-badge--more">+${part.makes.length - 4}</span>` : ''}
+								</div>
+							</div>
+						` : ''}
 					</div>
 				</a>
 			</article>

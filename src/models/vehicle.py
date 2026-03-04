@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.models.validators import normalize_text, validate_csf_sku
+
 
 class Vehicle(BaseModel):
     """Vehicle model.
@@ -18,9 +20,11 @@ class Vehicle(BaseModel):
         model: Vehicle model (e.g., 'A4', '3 Series')
         year: Model year
         submodel: Optional submodel/trim (e.g., 'Quattro', 'M-Sport')
-        engine: Engine specification (e.g., '2.0L L4', '3.0L V6')
+        engine: Engine specification (e.g., '2.0L L4 1993cc', '3.0L V6 2996cc')
         fuel_type: Fuel type (e.g., 'Gasoline', 'Diesel', 'Electric', 'Hybrid')
         aspiration: Engine aspiration (e.g., 'Turbocharged', 'Naturally Aspirated')
+        qualifiers: List of vehicle qualifiers/packages
+            (e.g., 'w/ Towing Package', 'Manual Transmission')
     """
 
     make: str = Field(..., min_length=1, max_length=100, description="Vehicle make")
@@ -30,10 +34,11 @@ class Vehicle(BaseModel):
     engine: str | None = Field(None, max_length=100, description="Engine specification")
     fuel_type: str | None = Field(None, max_length=50, description="Fuel type")
     aspiration: str | None = Field(None, max_length=50, description="Engine aspiration")
+    qualifiers: list[str] = Field(default_factory=list, description="Vehicle qualifiers/packages")
 
     @field_validator("make", "model")
     @classmethod
-    def normalize_text(cls, v: str) -> str:
+    def normalize_make_model(cls, v: str) -> str:
         """Normalize make/model text.
 
         Args:
@@ -42,7 +47,7 @@ class Vehicle(BaseModel):
         Returns:
             Title-cased text
         """
-        return v.strip().title()
+        return normalize_text(v)
 
     @field_validator("year")
     @classmethod
@@ -118,11 +123,7 @@ class VehicleCompatibility(BaseModel):
         Raises:
             ValueError: If SKU doesn't start with 'CSF-'
         """
-        v = v.upper().strip()
-        if not v.startswith("CSF-"):
-            msg = "SKU must start with 'CSF-'"
-            raise ValueError(msg)
-        return v
+        return validate_csf_sku(v)
 
     model_config = {
         "frozen": True,

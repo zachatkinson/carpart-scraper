@@ -177,9 +177,21 @@ ignore = [
 "__init__.py" = [
     "D104",   # missing docstring in public package
 ]
-"test_hierarchy.py" = [
-    "T201",   # print statements ok in manual test script
-    "SLF001", # private member access ok for internal testing
+"run_scrape.py" = [
+    "T201",    # CLI script uses print for user-facing output
+    "INP001",  # standalone script, not a package
+]
+"scrape_catalog.py" = [
+    "T201",    # CLI script uses print for user-facing output
+    "INP001",  # standalone script, not a package
+]
+"enrich_details.py" = [
+    "T201",    # CLI script uses print for user-facing output
+    "INP001",  # standalone script, not a package
+]
+"merge_for_import.py" = [
+    "T201",    # CLI script uses print for user-facing output
+    "INP001",  # standalone script, not a package
 ]
 "tests/performance/**/*.py" = [
     "T201",   # print statements ok in performance tests

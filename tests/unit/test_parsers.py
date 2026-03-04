@@ -277,10 +277,10 @@ class TestCSFParser:
         assert "Aspiration" in specs
         assert specs["Aspiration"] == "Turbocharged"
 
-    def test_extract_part_data_from_application_page_extracts_images(
+    def test_extract_part_data_from_application_page_returns_empty_images(
         self, sample_html_application_page: str
     ) -> None:
-        """Test extract_part_data() extracts primary image from application page."""
+        """Test extract_part_data() returns empty images (extracted from detail page instead)."""
         # Arrange
         parser = CSFParser()
         soup = parser.parse(sample_html_application_page)
@@ -288,13 +288,10 @@ class TestCSFParser:
         # Act
         result = parser.extract_part_data(soup)
 
-        # Assert
+        # Assert - images are now extracted from detail page gallery only
         images = result["images"]
         assert isinstance(images, list)
-        assert len(images) == 1
-        assert images[0]["is_primary"] is True
-        assert images[0]["url"].startswith("https://illumaware-digital-assets.s3")
-        assert "3951" in images[0]["url"]
+        assert len(images) == 0
 
     def test_extract_part_data_from_application_page_sets_manufacturer(
         self, sample_html_application_page: str
@@ -799,18 +796,23 @@ class TestCSFParser:
         # Assert
         assert specs["Core Width"] == "Original Value"  # Not overwritten
 
-    def test_extract_full_description_returns_h5_text(self) -> None:
-        """Test _extract_full_description() returns h5 element text."""
+    def test_extract_full_description_returns_h5_from_col6(self) -> None:
+        """Test _extract_full_description() extracts h5 text from div.col-6."""
         # Arrange
         parser = CSFParser()
-        html = "<html><body><h5>High-performance radiator description</h5></body></html>"
+        html = """<html><body>
+            <div class="col-6">
+                <h5>High-performance radiator description</h5>
+            </div>
+        </body></html>"""
         soup = parser.parse(html)
 
         # Act
         result = parser._extract_full_description(soup)  # noqa: SLF001
 
         # Assert
-        assert result == "High-performance radiator description"
+        assert result is not None
+        assert "High-performance radiator description" in result
 
     def test_extract_full_description_returns_none_when_h5_empty(self) -> None:
         """Test _extract_full_description() returns None when h5 is empty."""
@@ -1069,3 +1071,110 @@ class TestAJAXResponseParser:
 
         # Assert
         assert result is None
+
+    def test_parse_dropdown_response_extracts_ids_and_text(self) -> None:
+        """Test _parse_dropdown_response extracts IDs from matching hrefs."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = (
+            '$("#btnYear").html("<ul>'
+            '<li><a href=\\"remote:/get_model_by_make_year/192\\">2025</a></li>'
+            '<li><a href=\\"remote:/get_model_by_make_year/193\\">2024</a></li>'
+            '</ul>")'
+        )
+
+        # Act
+        result = parser._parse_dropdown_response(js_code, "get_model_by_make_year", "years")  # noqa: SLF001
+
+        # Assert
+        assert result == {192: "2025", 193: "2024"}
+
+    def test_parse_dropdown_response_skips_non_matching_hrefs(self) -> None:
+        """Test _parse_dropdown_response skips links that don't match pattern."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = (
+            '$("#el").html("<ul>'
+            '<li><a href=\\"/other/path/123\\">Other</a></li>'
+            '<li><a href=\\"/applications/456\\">Match</a></li>'
+            '</ul>")'
+        )
+
+        # Act
+        result = parser._parse_dropdown_response(js_code, "/applications/", "models")  # noqa: SLF001
+
+        # Assert
+        assert result == {456: "Match"}
+
+    def test_parse_dropdown_response_skips_invalid_ids(self) -> None:
+        """Test _parse_dropdown_response skips non-integer IDs with warning."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = (
+            '$("#el").html("<ul>'
+            '<li><a href=\\"/applications/abc\\">Invalid</a></li>'
+            '<li><a href=\\"/applications/789\\">Valid</a></li>'
+            '</ul>")'
+        )
+
+        # Act
+        result = parser._parse_dropdown_response(js_code, "/applications/", "models")  # noqa: SLF001
+
+        # Assert
+        assert result == {789: "Valid"}
+
+    def test_parse_dropdown_response_returns_empty_for_no_matches(self) -> None:
+        """Test _parse_dropdown_response returns empty dict when no hrefs match."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = '$("#el").html("<ul><li><a href=\\"/other/path\\">Nope</a></li></ul>")'
+
+        # Act
+        result = parser._parse_dropdown_response(js_code, "/applications/", "models")  # noqa: SLF001
+
+        # Assert
+        assert result == {}
+
+    def test_parse_year_response_end_to_end(self) -> None:
+        """Test parse_year_response extracts years from jQuery dropdown response."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = (
+            '$("#btnYear").next().html("<ul class=\'list-inline\'>'
+            '<li><a data-remote=\\"true\\" '
+            'href=\\"remote:/get_model_by_make_year/192\\">2025</a></li>'
+            '<li><a data-remote=\\"true\\" '
+            'href=\\"remote:/get_model_by_make_year/100\\">2024</a></li>'
+            '</ul>")'
+        )
+
+        # Act
+        result = parser.parse_year_response(js_code)
+
+        # Assert
+        assert 192 in result
+        assert result[192] == "2025"
+        assert 100 in result
+        assert result[100] == "2024"
+
+    def test_parse_model_response_end_to_end(self) -> None:
+        """Test parse_model_response extracts models from jQuery dropdown response."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = (
+            '$("#btnModel").next().html("<ul class=\'list-inline\'>'
+            '<li><a data-remote=\\"true\\" '
+            'href=\\"/applications/8430\\">Accord</a></li>'
+            '<li><a data-remote=\\"true\\" '
+            'href=\\"/applications/8431\\">Civic</a></li>'
+            '</ul>")'
+        )
+
+        # Act
+        result = parser.parse_model_response(js_code)
+
+        # Assert
+        assert 8430 in result
+        assert result[8430] == "Accord"
+        assert 8431 in result
+        assert result[8431] == "Civic"

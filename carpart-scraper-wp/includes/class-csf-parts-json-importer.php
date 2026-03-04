@@ -68,14 +68,14 @@ class CSF_Parts_JSON_Importer {
 	public function import_from_file( string $file_path ): array {
 		// Validate file exists.
 		if ( ! file_exists( $file_path ) ) {
-			$this->results['errors'][] = __( 'File not found.', CSF_Parts_Constants::TEXT_DOMAIN );
+			$this->results['errors'][] = 'File not found.';
 			return $this->results;
 		}
 
 		// Read and decode JSON.
 		$json_content = file_get_contents( $file_path );
 		if ( false === $json_content ) {
-			$this->results['errors'][] = __( 'Failed to read file.', CSF_Parts_Constants::TEXT_DOMAIN );
+			$this->results['errors'][] = 'Failed to read file.';
 			return $this->results;
 		}
 
@@ -83,7 +83,7 @@ class CSF_Parts_JSON_Importer {
 		if ( json_last_error() !== JSON_ERROR_NONE ) {
 			$this->results['errors'][] = sprintf(
 				/* translators: %s: JSON error message */
-				__( 'Invalid JSON: %s', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'Invalid JSON: %s',
 				json_last_error_msg()
 			);
 			return $this->results;
@@ -118,19 +118,19 @@ class CSF_Parts_JSON_Importer {
 
 		// Check for required top-level keys.
 		if ( ! isset( $data['parts'] ) || ! is_array( $data['parts'] ) ) {
-			$errors[] = __( 'Missing or invalid "parts" array.', CSF_Parts_Constants::TEXT_DOMAIN );
+			$errors[] = 'Missing or invalid "parts" array.';
 		}
 
 		// Validate metadata if present.
 		if ( isset( $data['metadata'] ) ) {
 			if ( ! is_array( $data['metadata'] ) ) {
-				$errors[] = __( 'Invalid "metadata" structure.', CSF_Parts_Constants::TEXT_DOMAIN );
+				$errors[] = 'Invalid "metadata" structure.';
 			}
 		}
 
 		// Validate at least one part exists.
 		if ( empty( $data['parts'] ) ) {
-			$errors[] = __( 'No parts found in JSON file.', CSF_Parts_Constants::TEXT_DOMAIN );
+			$errors[] = 'No parts found in JSON file.';
 		}
 
 		return array(
@@ -181,7 +181,7 @@ class CSF_Parts_JSON_Importer {
 			$this->results['skipped']++;
 			$this->results['warnings'][] = sprintf(
 				/* translators: %s: validation errors */
-				__( 'Skipped invalid part: %s', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'Skipped invalid part: %s',
 				implode( ', ', $validation['errors'] )
 			);
 			return;
@@ -190,13 +190,16 @@ class CSF_Parts_JSON_Importer {
 		// Check if part exists.
 		$existing = $this->database->get_part_by_sku( $part_data['sku'] );
 
+		// Clean up data before saving.
+		$part_data = $this->cleanup_part_data( $part_data );
+
 		// Upsert into database (handles both insert and update).
 		$result = $this->database->upsert_part( $part_data );
 
 		if ( false === $result ) {
 			$this->results['errors'][] = sprintf(
 				/* translators: %s: SKU */
-				__( 'Failed to import part: %s', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'Failed to import part: %s',
 				$part_data['sku']
 			);
 			return;
@@ -208,6 +211,55 @@ class CSF_Parts_JSON_Importer {
 		} else {
 			$this->results['created']++;
 		}
+	}
+
+	/**
+	 * Clean up part data before saving.
+	 *
+	 * Removes trash data like " Eng." suffix from engine strings and fixes duplicate CSF prefixes in names.
+	 *
+	 * @since 2.0.0
+	 * @param array $part_data Part data to clean.
+	 * @return array Cleaned part data.
+	 */
+	private function cleanup_part_data( array $part_data ): array {
+		// Normalize verbose CSF category names to cleaner display names.
+		if ( isset( $part_data['category'] ) && is_string( $part_data['category'] ) ) {
+			$category_map = array(
+				'Drive Motor Inverter Cooler' => 'Inverter Cooler',
+			);
+
+			if ( isset( $category_map[ $part_data['category'] ] ) ) {
+				$part_data['category'] = $category_map[ $part_data['category'] ];
+			}
+		}
+
+		// Map 'full_description' to 'description' if present (Python enrichment uses this key).
+		if ( empty( $part_data['description'] ) && ! empty( $part_data['full_description'] ) ) {
+			$part_data['description'] = $part_data['full_description'];
+		}
+
+		// Clean up name - fix duplicate CSF prefix (CSFCSF-3764 -> CSF3764).
+		if ( isset( $part_data['name'] ) && is_string( $part_data['name'] ) ) {
+			// Remove duplicate CSF prefix if present (CSFCSF-3764 -> CSF-3764).
+			$part_data['name'] = preg_replace( '/^CSFCSF-/', 'CSF-', $part_data['name'] );
+
+			// Remove hyphens from SKU format in name (CSF-3764 -> CSF3764).
+			$part_data['name'] = str_replace( array( 'CSF-', '-' ), array( 'CSF', '' ), $part_data['name'] );
+		}
+
+		// Clean up compatibility data - remove " Eng." suffix from engine strings.
+		if ( isset( $part_data['compatibility'] ) && is_array( $part_data['compatibility'] ) ) {
+			foreach ( $part_data['compatibility'] as &$vehicle ) {
+				if ( isset( $vehicle['engine'] ) && is_string( $vehicle['engine'] ) ) {
+					// Remove " Eng." suffix (with leading space).
+					$vehicle['engine'] = preg_replace( '/ Eng\.$/', '', $vehicle['engine'] );
+				}
+			}
+			unset( $vehicle ); // Break reference.
+		}
+
+		return $part_data;
 	}
 
 	/**
@@ -225,13 +277,10 @@ class CSF_Parts_JSON_Importer {
 
 		// Required fields: Only SKU is truly required (name is optional).
 		if ( empty( $part_data['sku'] ) ) {
-			$errors[] = __( 'Missing required field: sku', CSF_Parts_Constants::TEXT_DOMAIN );
+			$errors[] = 'Missing required field: sku';
 		}
 
-		// Validate price if present (NULL is allowed for parts without pricing).
-		if ( isset( $part_data['price'] ) && ! is_null( $part_data['price'] ) && ! is_numeric( $part_data['price'] ) ) {
-			$errors[] = __( 'Invalid price value.', CSF_Parts_Constants::TEXT_DOMAIN );
-		}
+		// Price validation removed - this is a catalog system, price is informational only
 
 		return array(
 			'valid'  => empty( $errors ),

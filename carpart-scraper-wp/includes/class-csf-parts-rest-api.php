@@ -161,32 +161,32 @@ class CSF_Parts_REST_API {
 	private function get_parts_query_params(): array {
 		return array(
 			'search'   => array(
-				'description' => __( 'Search query for part name or SKU.', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'description' => 'Search query for part name or SKU.',
 				'type'        => 'string',
 			),
 			'category' => array(
-				'description' => __( 'Filter by category name.', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'description' => 'Filter by category name.',
 				'type'        => 'string',
 			),
 			'make'     => array(
-				'description' => __( 'Filter by vehicle make.', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'description' => 'Filter by vehicle make.',
 				'type'        => 'string',
 			),
 			'model'    => array(
-				'description' => __( 'Filter by vehicle model.', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'description' => 'Filter by vehicle model.',
 				'type'        => 'string',
 			),
 			'year'     => array(
-				'description' => __( 'Filter by vehicle year.', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'description' => 'Filter by vehicle year.',
 				'type'        => 'integer',
 			),
 			'per_page' => array(
-				'description' => __( 'Number of results per page.', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'description' => 'Number of results per page.',
 				'type'        => 'integer',
 				'default'     => 20,
 			),
 			'page'     => array(
-				'description' => __( 'Page number.', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'description' => 'Page number.',
 				'type'        => 'integer',
 				'default'     => 1,
 			),
@@ -269,7 +269,7 @@ class CSF_Parts_REST_API {
 		if ( ! $part ) {
 			return new WP_Error(
 				'part_not_found',
-				__( 'Part not found.', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'Part not found.',
 				array( 'status' => 404 )
 			);
 		}
@@ -434,19 +434,53 @@ class CSF_Parts_REST_API {
 	 */
 	private function format_part( object $part, bool $include_details = false ): array {
 		// Decode JSON fields.
-		$images = ! empty( $part->images ) ? json_decode( $part->images, true ) : array();
+		$images        = ! empty( $part->images ) ? json_decode( $part->images, true ) : array();
+		$compatibility = ! empty( $part->compatibility ) ? json_decode( $part->compatibility, true ) : array();
+
+		// Display name: always use CSF{sku} format for consistency.
+		$display_name = 'CSF' . $part->sku;
+
+		// Extract unique makes from compatibility data.
+		$makes = array();
+		if ( is_array( $compatibility ) ) {
+			foreach ( $compatibility as $vehicle ) {
+				if ( isset( $vehicle['make'] ) && ! in_array( $vehicle['make'], $makes, true ) ) {
+					$makes[] = $vehicle['make'];
+				}
+			}
+		}
 
 		// Build basic part data.
+		// Extract primary image (prefer second image as it's typically the product photo, not technical drawing).
+		// Images can be array of strings or array of objects with 'url' key.
+		$primary_image = null;
+		if ( ! empty( $images ) ) {
+			// Prefer second image (product photo) if available, otherwise use first.
+			$image_index = isset( $images[1] ) ? 1 : 0;
+
+			if ( is_string( $images[ $image_index ] ) ) {
+				$primary_image = $images[ $image_index ];
+			} elseif ( isset( $images[ $image_index ]['url'] ) ) {
+				$primary_image = $images[ $image_index ]['url'];
+			}
+		}
+
+		// Extract dimensions from specifications.
+		$specifications = ! empty( $part->specifications ) ? json_decode( $part->specifications, true ) : array();
+		$dimensions     = $this->extract_dimensions( $specifications );
+
 		$formatted = array(
 			'id'           => intval( $part->id ),
 			'sku'          => $part->sku,
-			'name'         => $part->name,
+			'name'         => $display_name,
 			'category'     => $part->category,
 			'price'        => ! empty( $part->price ) ? floatval( $part->price ) : null,
 			'in_stock'     => (bool) $part->in_stock,
 			'manufacturer' => $part->manufacturer,
-			'image'        => ! empty( $images ) && isset( $images[0]['url'] ) ? $images[0]['url'] : null,
+			'image'        => $primary_image,
 			'link'         => $this->get_part_url( $part->category, $part->sku ),
+			'makes'        => $makes,
+			'dimensions'   => $dimensions,
 		);
 
 		// Add full details if requested.
@@ -473,19 +507,42 @@ class CSF_Parts_REST_API {
 	 * Get part URL (virtual URL).
 	 *
 	 * @since 2.0.0
-	 * @param string $category Part category.
+	 * @param string $category Part category (unused, kept for compatibility).
 	 * @param string $sku      Part SKU.
 	 * @return string Part URL.
 	 */
 	private function get_part_url( string $category, string $sku ): string {
-		// Singularize category (Radiators -> Radiator).
-		$category_singular = rtrim( $category, 's' );
+		// Use shared helper function for URL generation.
+		return csf_get_part_url( $sku );
+	}
 
-		return home_url( sprintf(
-			'/parts/%s-%s',
-			sanitize_title( $category_singular ),
-			sanitize_title( $sku )
-		) );
+	/**
+	 * Extract dimensions from specifications.
+	 *
+	 * @since 2.0.0
+	 * @param array $specifications Specifications array.
+	 * @return string|null Formatted dimensions string or null.
+	 */
+	private function extract_dimensions( array $specifications ): ?string {
+		if ( empty( $specifications ) ) {
+			return null;
+		}
+
+		$length = $specifications['Box Length (in)'] ?? null;
+		$width  = $specifications['Box Width (in)'] ?? null;
+		$height = $specifications['Box Height (in)'] ?? null;
+
+		if ( ! $length || ! $width || ! $height ) {
+			return null;
+		}
+
+		// Convert fractions to HTML entities using shared helper function.
+		$length = csf_format_dimension_fractions( $length );
+		$width  = csf_format_dimension_fractions( $width );
+		$height = csf_format_dimension_fractions( $height );
+
+		// Format: L × W × H.
+		return sprintf( '%s" × %s" × %s"', $length, $width, $height );
 	}
 
 	/**

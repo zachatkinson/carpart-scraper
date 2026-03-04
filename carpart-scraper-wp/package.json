@@ -11,7 +11,13 @@
     "format": "wp-scripts format",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "test:a11y": "pa11y-ci",
+    "test:a11y:verbose": "pa11y-ci --reporter cli",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:inspect": "playwright test --grep 'Inspect current'",
+    "test:e2e:setup-colors": "playwright test --grep 'Setup Kadence'"
   },
   "keywords": [
     "wordpress",
@@ -24,12 +30,15 @@
   "author": "Development Team",
   "license": "MIT",
   "devDependencies": {
-    "@wordpress/scripts": "^30.26.0",
+    "@playwright/test": "^1.56.1",
     "@testing-library/react": "^16.1.0",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/ui": "^3.0.0",
-    "vitest": "^3.0.0",
-    "jsdom": "^25.0.1"
+    "@wordpress/scripts": "^30.26.0",
+    "jsdom": "^25.0.1",
+    "pa11y": "^9.0.1",
+    "pa11y-ci": "^4.0.1",
+    "vitest": "^3.0.0"
   },
   "dependencies": {
     "@wordpress/block-editor": "^15.6.0",

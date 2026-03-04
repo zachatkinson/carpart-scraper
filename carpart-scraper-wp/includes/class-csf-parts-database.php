@@ -68,7 +68,9 @@ class CSF_Parts_Database {
 			tech_notes text,
 			compatibility longtext NOT NULL,
 			images longtext,
+			interchange_numbers longtext,
 			scraped_at varchar(50),
+			last_synced datetime DEFAULT NULL,
 			created_at datetime DEFAULT CURRENT_TIMESTAMP,
 			updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY  (id),
@@ -81,7 +83,72 @@ class CSF_Parts_Database {
 		dbDelta( $sql_parts );
 
 		// Store schema version for future migrations.
-		update_option( 'csf_parts_db_version', '2.0.0' );
+		update_option( 'csf_parts_db_version', '2.2.0' );
+	}
+
+	/**
+	 * Run database migrations if needed.
+	 *
+	 * @since 2.1.0
+	 */
+	public function maybe_migrate(): void {
+		$current_version = get_option( 'csf_parts_db_version', '2.0.0' );
+
+		// Migration for 2.1.0: Add interchange_numbers column.
+		if ( version_compare( $current_version, '2.1.0', '<' ) ) {
+			$this->migrate_to_2_1_0();
+			update_option( 'csf_parts_db_version', '2.1.0' );
+		}
+
+		// Migration for 2.2.0: Add last_synced column.
+		if ( version_compare( $current_version, '2.2.0', '<' ) ) {
+			$this->migrate_to_2_2_0();
+			update_option( 'csf_parts_db_version', '2.2.0' );
+		}
+	}
+
+	/**
+	 * Migration to version 2.1.0: Add interchange_numbers column.
+	 *
+	 * @since 2.1.0
+	 */
+	private function migrate_to_2_1_0(): void {
+		// Check if column exists.
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$column_exists = $this->wpdb->get_results(
+			"SHOW COLUMNS FROM {$this->table_parts} LIKE 'interchange_numbers'"
+		);
+
+		// Add column if it doesn't exist.
+		if ( empty( $column_exists ) ) {
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$this->wpdb->query(
+				"ALTER TABLE {$this->table_parts}
+				ADD COLUMN interchange_numbers longtext AFTER images"
+			);
+		}
+	}
+
+	/**
+	 * Migration to version 2.2.0: Add last_synced column.
+	 *
+	 * @since 2.2.0
+	 */
+	private function migrate_to_2_2_0(): void {
+		// Check if column exists.
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$column_exists = $this->wpdb->get_results(
+			"SHOW COLUMNS FROM {$this->table_parts} LIKE 'last_synced'"
+		);
+
+		// Add column if it doesn't exist.
+		if ( empty( $column_exists ) ) {
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$this->wpdb->query(
+				"ALTER TABLE {$this->table_parts}
+				ADD COLUMN last_synced datetime DEFAULT NULL AFTER scraped_at"
+			);
+		}
 	}
 
 	/**
@@ -92,6 +159,24 @@ class CSF_Parts_Database {
 	public function drop_tables(): void {
 		$this->wpdb->query( "DROP TABLE IF EXISTS {$this->table_parts}" );
 		delete_option( 'csf_parts_db_version' );
+	}
+
+	/**
+	 * Get part by ID.
+	 *
+	 * @since 1.1.5
+	 * @param int $id Part ID.
+	 * @return object|null Part object or null if not found.
+	 */
+	public function get_part_by_id( int $id ): ?object {
+		$result = $this->wpdb->get_row(
+			$this->wpdb->prepare(
+				"SELECT * FROM {$this->table_parts} WHERE id = %d",
+				$id
+			)
+		);
+
+		return $result ?: null;
 	}
 
 	/**
@@ -124,21 +209,23 @@ class CSF_Parts_Database {
 
 		// Prepare data for database.
 		$db_data = array(
-			'sku'               => $data['sku'],
-			'name'              => $data['name'] ?? '',
-			'description'       => $data['description'] ?? '',
-			'short_description' => $data['short_description'] ?? '',
-			'category'          => $data['category'] ?? '',
-			'price'             => $data['price'] ?? null,
-			'manufacturer'      => $data['manufacturer'] ?? '',
-			'in_stock'          => isset( $data['in_stock'] ) ? (int) $data['in_stock'] : 1,
-			'position'          => $data['position'] ?? '',
-			'specifications'    => isset( $data['specifications'] ) ? wp_json_encode( $data['specifications'] ) : '',
-			'features'          => isset( $data['features'] ) ? wp_json_encode( $data['features'] ) : '',
-			'tech_notes'        => $data['tech_notes'] ?? '',
-			'compatibility'     => isset( $data['compatibility'] ) ? wp_json_encode( $data['compatibility'] ) : '',
-			'images'            => isset( $data['images'] ) ? wp_json_encode( $data['images'] ) : '',
-			'scraped_at'        => $data['scraped_at'] ?? '',
+			'sku'                 => $data['sku'],
+			'name'                => $data['name'] ?? '',
+			'description'         => $data['description'] ?? '',
+			'short_description'   => $data['short_description'] ?? '',
+			'category'            => $data['category'] ?? '',
+			'price'               => $data['price'] ?? null,
+			'manufacturer'        => $data['manufacturer'] ?? '',
+			'in_stock'            => isset( $data['in_stock'] ) ? (int) $data['in_stock'] : 1,
+			'position'            => $data['position'] ?? '',
+			'specifications'      => isset( $data['specifications'] ) ? wp_json_encode( $data['specifications'] ) : '',
+			'features'            => isset( $data['features'] ) ? wp_json_encode( $data['features'] ) : '',
+			'tech_notes'          => $data['tech_notes'] ?? '',
+			'compatibility'       => isset( $data['compatibility'] ) ? wp_json_encode( $data['compatibility'] ) : '',
+			'images'              => isset( $data['images'] ) ? wp_json_encode( $data['images'] ) : '',
+			'interchange_numbers' => isset( $data['interchange_numbers'] ) ? wp_json_encode( $data['interchange_numbers'] ) : '',
+			'scraped_at'          => $data['scraped_at'] ?? '',
+			'last_synced'         => current_time( 'mysql' ),
 		);
 
 		if ( $existing ) {
@@ -162,7 +249,9 @@ class CSF_Parts_Database {
 					'%s', // tech_notes.
 					'%s', // compatibility.
 					'%s', // images.
+					'%s', // interchange_numbers.
 					'%s', // scraped_at.
+					'%s', // last_synced.
 				),
 				array( '%d' )
 			);
@@ -188,7 +277,9 @@ class CSF_Parts_Database {
 					'%s', // tech_notes.
 					'%s', // compatibility.
 					'%s', // images.
+					'%s', // interchange_numbers.
 					'%s', // scraped_at.
+					'%s', // last_synced.
 				)
 			);
 
@@ -306,7 +397,9 @@ class CSF_Parts_Database {
 	 */
 	public function get_vehicle_makes(): array {
 		$query = "
-			SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.make')) as make
+			SELECT
+				JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.make')) as make,
+				COUNT(DISTINCT p.id) as count
 			FROM {$this->table_parts} p,
 			     JSON_TABLE(
 			         p.compatibility,
@@ -315,11 +408,15 @@ class CSF_Parts_Database {
 			         )
 			     ) v
 			WHERE p.compatibility IS NOT NULL
+			  AND p.compatibility != ''
+			  AND p.compatibility != '[]'
+			  AND JSON_VALID(p.compatibility)
 			  AND JSON_EXTRACT(v.value, '$.make') IS NOT NULL
+			GROUP BY make
 			ORDER BY make ASC
 		";
 
-		$results = $this->wpdb->get_col( $query );
+		$results = $this->wpdb->get_results( $query );
 
 		return $results ?: array();
 	}
@@ -342,10 +439,10 @@ class CSF_Parts_Database {
 			         )
 			     ) v
 			WHERE p.compatibility IS NOT NULL
-			  AND JSON_EXTRACT(v.value, '$.year') = %d
+			  AND JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.year')) = %s
 			  AND JSON_EXTRACT(v.value, '$.make') IS NOT NULL
 			ORDER BY make ASC",
-			$year
+			(string) $year
 		);
 
 		$results = $this->wpdb->get_col( $query );
@@ -373,6 +470,9 @@ class CSF_Parts_Database {
 				         )
 				     ) v
 				WHERE p.compatibility IS NOT NULL
+				  AND p.compatibility != ''
+				  AND p.compatibility != '[]'
+				  AND JSON_VALID(p.compatibility)
 				  AND JSON_EXTRACT(v.value, '$.model') IS NOT NULL
 				ORDER BY model ASC";
 			$results = $this->wpdb->get_col( $query );
@@ -391,11 +491,11 @@ class CSF_Parts_Database {
 				     ) v
 				WHERE p.compatibility IS NOT NULL
 				  AND JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.make')) = %s
-				  AND JSON_EXTRACT(v.value, '$.year') = %d
+				  AND JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.year')) = %s
 				  AND JSON_EXTRACT(v.value, '$.model') IS NOT NULL
 				ORDER BY model ASC",
 				$make,
-				$year
+				(string) $year
 			);
 		} else {
 			$query = $this->wpdb->prepare(
@@ -428,7 +528,9 @@ class CSF_Parts_Database {
 	 */
 	public function get_vehicle_years(): array {
 		$query = "
-			SELECT DISTINCT JSON_EXTRACT(v.value, '$.year') as year
+			SELECT
+				CAST(JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.year')) AS UNSIGNED) as year,
+				COUNT(DISTINCT p.id) as count
 			FROM {$this->table_parts} p,
 			     JSON_TABLE(
 			         p.compatibility,
@@ -437,11 +539,15 @@ class CSF_Parts_Database {
 			         )
 			     ) v
 			WHERE p.compatibility IS NOT NULL
+			  AND p.compatibility != ''
+			  AND p.compatibility != '[]'
+			  AND JSON_VALID(p.compatibility)
 			  AND JSON_EXTRACT(v.value, '$.year') IS NOT NULL
+			GROUP BY year
 			ORDER BY year DESC
 		";
 
-		$results = $this->wpdb->get_col( $query );
+		$results = $this->wpdb->get_results( $query );
 
 		return $results ?: array();
 	}
@@ -525,6 +631,12 @@ class CSF_Parts_Database {
 		$models     = $filters['models'] ?? $filters['model'] ?? array();
 		$years      = $filters['years'] ?? $filters['year'] ?? array();
 
+		// Sort options with whitelist validation.
+		$allowed_orderby = array( 'name', 'sku', 'category', 'created_at', 'updated_at', 'latest' );
+		$raw_orderby     = $filters['orderby'] ?? 'name';
+		$orderby         = in_array( $raw_orderby, $allowed_orderby, true ) ? $raw_orderby : 'name';
+		$order           = 'desc' === strtolower( $filters['order'] ?? 'asc' ) ? 'DESC' : 'ASC';
+
 		// Normalize to arrays (support both single values and arrays).
 		$categories = ! empty( $categories ) ? (array) $categories : array();
 		$makes      = ! empty( $makes ) ? (array) $makes : array();
@@ -537,10 +649,11 @@ class CSF_Parts_Database {
 		$where_clauses = array( '1=1' );
 		$prepare_args  = array();
 
-		// Search keyword.
+		// Search keyword (includes SKU, name, description, manufacturer, and interchange numbers).
 		if ( ! empty( $search ) ) {
-			$where_clauses[] = '(p.sku LIKE %s OR p.name LIKE %s OR p.description LIKE %s OR p.manufacturer LIKE %s)';
+			$where_clauses[] = '(p.sku LIKE %s OR p.name LIKE %s OR p.description LIKE %s OR p.manufacturer LIKE %s OR p.interchange_numbers LIKE %s)';
 			$search_term     = '%' . $this->wpdb->esc_like( $search ) . '%';
+			$prepare_args[]  = $search_term;
 			$prepare_args[]  = $search_term;
 			$prepare_args[]  = $search_term;
 			$prepare_args[]  = $search_term;
@@ -582,10 +695,10 @@ class CSF_Parts_Database {
 
 			// Years filter (array support).
 			if ( ! empty( $years ) ) {
-				// Convert years to integers.
-				$years           = array_map( 'intval', $years );
-				$placeholders    = implode( ',', array_fill( 0, count( $years ), '%d' ) );
-				$where_clauses[] = "JSON_EXTRACT(v.value, '$.year') IN ($placeholders)";
+				// Convert years to strings (JSON stores years as strings, not integers).
+				$years           = array_map( 'strval', $years );
+				$placeholders    = implode( ',', array_fill( 0, count( $years ), '%s' ) );
+				$where_clauses[] = "JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.year')) IN ($placeholders)";
 				$prepare_args    = array_merge( $prepare_args, $years );
 			}
 		}
@@ -604,7 +717,12 @@ class CSF_Parts_Database {
 		$total = (int) $this->wpdb->get_var( $count_query );
 
 		// Get parts.
-		$parts_query     = "SELECT DISTINCT p.* FROM {$from_clause} WHERE {$where_sql} ORDER BY p.name ASC LIMIT %d OFFSET %d";
+		// "latest" uses whichever is more recent: created_at or updated_at.
+		$order_clause = 'latest' === $orderby
+			? "GREATEST(p.created_at, p.updated_at) {$order}"
+			: "p.{$orderby} {$order}";
+
+		$parts_query     = "SELECT DISTINCT p.* FROM {$from_clause} WHERE {$where_sql} ORDER BY {$order_clause} LIMIT %d OFFSET %d";
 		$prepare_args[]  = $per_page;
 		$prepare_args[]  = $offset;
 

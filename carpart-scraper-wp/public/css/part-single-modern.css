@@ -1,0 +1,1029 @@
+/**
+ * Modern Part Page Styles - Shopify-inspired
+ *
+ * Clean, professional design for reference catalog pages
+ * Mobile-first, fully responsive
+ * Uses Kadence global palette directly for automatic dark mode support
+ *
+ * @package CSF_Parts_Catalog
+ * @since 2.0.0
+ */
+
+/* ==========================================================================
+   Component-Specific Variables
+   ========================================================================== */
+
+:root {
+	--csf-radius: 8px;
+	--csf-transition: all 0.3s ease;
+}
+
+/* ==========================================================================
+   Base Container
+   ========================================================================== */
+
+.csf-part-modern {
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: 0 20px;
+}
+
+.main-container {
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: 40px 20px;
+}
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+
+.site-header {
+	background: var(--global-palette9, var(--csf-surface));
+	border-bottom: 1px solid var(--csf-border);
+	padding: 16px 0;
+	position: sticky;
+	top: 0;
+	z-index: 100;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.header-container {
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: 0 20px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.site-logo {
+	font-size: 24px;
+	font-weight: 700;
+	color: var(--global-palette1, var(--csf-primary));
+	text-decoration: none;
+	transition: var(--csf-transition);
+}
+
+.site-logo:hover {
+	opacity: 0.8;
+}
+
+.site-nav a {
+	margin-left: 24px;
+	color: var(--global-palette3, var(--csf-text));
+	text-decoration: none;
+	font-weight: 500;
+	transition: var(--csf-transition);
+}
+
+.site-nav a:hover {
+	color: var(--global-palette2, var(--csf-secondary));
+}
+
+/* ==========================================================================
+   Breadcrumbs
+   ========================================================================== */
+
+.csf-breadcrumbs {
+	margin: 24px 0;
+	font-size: 14px;
+	color: var(--global-palette3, var(--csf-text-muted));
+}
+
+.csf-breadcrumbs ol {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.csf-breadcrumbs li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.csf-breadcrumbs li:not(:last-child)::after {
+	content: "›";
+	color: var(--global-palette3, var(--csf-text-muted));
+}
+
+.csf-breadcrumbs a {
+	color: var(--global-palette3, var(--csf-text-muted));
+	text-decoration: none;
+	transition: var(--csf-transition);
+}
+
+.csf-breadcrumbs a:hover {
+	color: var(--global-palette2, var(--csf-secondary));
+	text-decoration: underline;
+}
+
+/* ==========================================================================
+   Product Grid - Two Column Layout
+   ========================================================================== */
+
+.csf-product-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 60px;
+	margin: 40px 0 60px;
+}
+
+@media (max-width: 968px) {
+	.csf-product-grid {
+		grid-template-columns: 1fr;
+		gap: 40px;
+	}
+}
+
+/* ==========================================================================
+   Image Gallery
+   ========================================================================== */
+
+.csf-product-gallery {
+	position: sticky;
+	top: 100px;
+	align-self: flex-start;
+}
+
+.csf-gallery-main {
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius);
+	overflow: hidden;
+	background: var(--global-palette5, var(--csf-bg-alt));
+	aspect-ratio: 1 / 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 16px;
+}
+
+.csf-main-image {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	padding: 20px;
+}
+
+.csf-gallery-thumbs {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+	gap: 12px;
+}
+
+.csf-thumb {
+	border: 2px solid var(--csf-border);
+	border-radius: var(--csf-radius);
+	padding: 8px;
+	background: var(--global-palette9, var(--csf-surface));
+	cursor: pointer;
+	transition: var(--csf-transition);
+	aspect-ratio: 1 / 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.csf-thumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.csf-thumb:hover {
+	border-color: var(--global-palette10, var(--csf-accent));
+}
+
+.csf-thumb.active {
+	border-color: var(--global-palette10, var(--csf-accent));
+	background: var(--global-palette5, var(--csf-bg-alt));
+}
+
+.csf-no-image-placeholder {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 60px;
+	color: var(--global-palette3, var(--csf-text-muted));
+}
+
+.csf-no-image-placeholder svg {
+	width: 80px;
+	height: 80px;
+	margin-bottom: 16px;
+	opacity: 0.5;
+}
+
+/* ==========================================================================
+   Product Info
+   ========================================================================== */
+
+.csf-product-info {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+}
+
+.csf-category-badge {
+	display: inline-block;
+	align-self: flex-start;
+}
+
+.csf-category-badge a {
+	display: inline-block;
+	padding: 6px 14px;
+	background: var(--global-palette2, var(--csf-secondary));
+	color: #FCFCFC;
+	text-decoration: none;
+	border-radius: 20px;
+	font-size: 13px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	transition: var(--csf-transition);
+}
+
+.csf-category-badge a:hover {
+	background: var(--global-palette10, var(--csf-accent));
+	color: #FCFCFC;
+}
+
+.csf-product-title {
+	font-size: 36px;
+	font-weight: 700;
+	line-height: 1.2;
+	margin: 0;
+	color: var(--global-palette3, var(--csf-text)) !important;
+}
+
+@media (max-width: 768px) {
+	.csf-product-title {
+		font-size: 28px;
+	}
+}
+
+.csf-product-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+	font-size: 15px;
+	color: var(--global-palette3, var(--csf-text-muted));
+}
+
+.csf-separator {
+	color: var(--global-palette5, var(--csf-border));
+}
+
+/* ============================================================
+   YOUR VEHICLE BOX - Info Box Style
+   ============================================================ */
+.csf-your-vehicle-box {
+	background: linear-gradient(135deg, rgba(0, 153, 204, 0.08) 0%, rgba(0, 153, 204, 0.12) 100%);
+	border-left: 4px solid var(--global-palette2, var(--csf-secondary));
+	border-radius: var(--csf-radius);
+	padding: 20px;
+	margin-bottom: 24px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.your-vehicle-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	color: var(--global-palette2, var(--csf-secondary));
+	font-size: 18px;
+	font-weight: 700;
+	margin-bottom: 12px;
+}
+
+.your-vehicle-header svg {
+	flex-shrink: 0;
+}
+
+.your-vehicle-ymm {
+	font-size: 20px;
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text));
+	margin-bottom: 16px;
+}
+
+.your-vehicle-engine-selector {
+	margin-top: 16px;
+	padding-top: 16px;
+	border-top: 1px solid var(--global-palette7, var(--csf-border));
+}
+
+.your-vehicle-engine-selector label {
+	display: block;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text));
+	margin-bottom: 8px;
+}
+
+.csf-engine-variant-dropdown {
+	/* Only keep properties unique to engine dropdown */
+	/* Base styling comes from .csf-select class */
+	max-width: 400px;
+}
+
+/* Engine selection notice */
+.engine-notice {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 12px 14px;
+	margin-bottom: 16px;
+	background: var(--global-palette12, var(--csf-accent));
+	border-left: 3px solid var(--global-palette12, var(--csf-accent));
+	border-radius: 4px;
+	font-size: 14px;
+	line-height: 1.5;
+	color: var(--global-palette4, #1E1E1E);
+}
+
+.engine-notice svg {
+	flex-shrink: 0;
+	margin-top: 2px;
+	color: var(--global-palette4, #1E1E1E);
+}
+
+.engine-notice strong {
+	display: block;
+	margin-bottom: 2px;
+}
+
+.engine-help-text {
+	margin-top: 6px;
+	font-size: 13px;
+	color: var(--global-palette5, var(--csf-text-muted));
+	font-style: italic;
+}
+
+.your-vehicle-engine-single {
+	margin-top: 16px;
+	padding-top: 16px;
+	border-top: 1px solid var(--global-palette7, var(--csf-border));
+	display: flex;
+	gap: 8px;
+	align-items: baseline;
+}
+
+.your-vehicle-engine-single .engine-label {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text));
+}
+
+.your-vehicle-engine-single .engine-value {
+	font-size: 15px;
+	color: var(--global-palette3, var(--csf-text));
+	font-family: 'Courier New', monospace;
+}
+
+.csf-product-description-section {
+	margin: 24px 0;
+	padding: 20px 24px;
+	background: var(--global-palette5, var(--csf-bg-alt));
+	border-radius: var(--csf-radius);
+	border: 1px solid var(--csf-border);
+}
+
+.csf-product-description {
+	font-size: 15px;
+	line-height: 1.6;
+	color: var(--global-palette3, var(--csf-text));
+	margin: 0;
+}
+
+.csf-product-description h5 {
+	font-size: 18px;
+	font-weight: 700;
+	margin: 0 0 8px;
+	color: var(--global-palette3, var(--csf-text));
+}
+
+.csf-product-description p {
+	margin: 0 0 12px;
+}
+
+.csf-product-description p:last-child {
+	margin-bottom: 0;
+}
+
+.csf-product-description ul {
+	margin: 12px 0 0;
+	padding-left: 20px;
+	list-style: disc;
+}
+
+.csf-product-description ul li {
+	margin-bottom: 6px;
+	line-height: 1.5;
+}
+
+.csf-product-description ul li:last-child {
+	margin-bottom: 0;
+}
+
+.csf-quick-specs {
+	padding: 20px;
+	background: var(--global-palette5, var(--csf-bg-alt));
+	border-radius: var(--csf-radius);
+	border: 1px solid var(--csf-border);
+}
+
+.csf-quick-specs h3 {
+	margin: 0 0 16px;
+	font-size: 16px;
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text));
+}
+
+.csf-quick-specs ul {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: grid;
+	gap: 10px;
+}
+
+.csf-quick-specs li {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--csf-border);
+}
+
+.csf-quick-specs li:last-child {
+	border-bottom: none;
+}
+
+.spec-label {
+	font-weight: 500;
+	color: var(--global-palette3, var(--csf-text-muted));
+}
+
+.spec-value {
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text));
+}
+
+.csf-cta-section {
+	padding: 20px;
+	background: rgba(0, 153, 204, 0.1);
+	border: 1px solid var(--global-palette2, var(--csf-secondary));
+	border-radius: var(--csf-radius);
+	margin-top: 12px;
+}
+
+.csf-reference-note {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	margin: 0;
+	color: var(--global-palette2, var(--csf-secondary));
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.csf-reference-note svg {
+	flex-shrink: 0;
+	margin-top: 2px;
+}
+
+/* ==========================================================================
+   Tabs Section
+   ========================================================================== */
+
+.csf-tabs-section {
+	margin: 60px 0;
+}
+
+.csf-tabs-nav {
+	display: flex;
+	gap: 0;
+	border-bottom: 2px solid var(--csf-border);
+	margin-bottom: 32px;
+}
+
+.csf-tab-btn {
+	padding: 16px 24px;
+	background: transparent;
+	border: none;
+	border-bottom: 3px solid transparent;
+	color: var(--global-palette3, var(--csf-text-muted));
+	font-size: 15px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: var(--csf-transition);
+	white-space: nowrap;
+	margin-bottom: -2px;
+}
+
+.csf-tab-btn:hover {
+	color: var(--global-palette3, var(--csf-text));
+	background: var(--global-palette5, var(--csf-bg-alt));
+}
+
+.csf-tab-btn.active {
+	color: var(--global-palette2, var(--csf-secondary));
+	border-bottom-color: var(--global-palette2, var(--csf-secondary));
+}
+
+.csf-tabs-content {
+	position: relative;
+}
+
+.csf-tab-panel {
+	display: none;
+	animation: fadeIn 0.3s ease-in;
+}
+
+.csf-tab-panel.active {
+	display: block;
+}
+
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.csf-tab-panel h2 {
+	font-size: 24px;
+	font-weight: 700;
+	margin: 0 0 8px;
+	color: var(--global-palette3, var(--csf-text)) !important;
+}
+
+.tab-description {
+	color: var(--global-palette3, var(--csf-text-muted));
+	margin: 0 0 24px;
+}
+
+/* ==========================================================================
+   Fitment Grid
+   ========================================================================== */
+
+.csf-fitment-grid {
+	/* Use multi-column layout for true masonry behavior */
+	column-count: 1; /* Mobile: 1 column */
+	column-gap: 16px;
+	/* Remove any inherited margins that might offset columns */
+	margin: 0;
+	padding: 0;
+}
+
+/* Tablet: 2 columns */
+@media (min-width: 768px) {
+	.csf-fitment-grid {
+		column-count: 2;
+	}
+}
+
+/* Desktop: 3 columns for more space for badges */
+@media (min-width: 1024px) {
+	.csf-fitment-grid {
+		column-count: 3;
+	}
+}
+
+.csf-fitment-card {
+	position: relative;
+	background: var(--global-palette9, var(--csf-surface));
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius);
+	transition: var(--csf-transition);
+	overflow: hidden;
+	/* Prevent cards from breaking across columns */
+	break-inside: avoid;
+	margin: 0 0 16px 0; /* Explicit: no top margin, only bottom */
+	display: inline-block; /* Required for proper column flow */
+	width: 100%; /* Take full column width */
+}
+
+.csf-fitment-card:hover {
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	border-color: var(--global-palette2, var(--csf-secondary));
+}
+
+/* Apply subtle blue tint on hover to entire card (header + expanded content) */
+.csf-fitment-card:hover .fitment-card-header,
+.csf-fitment-card:hover .fitment-details {
+	background: color-mix(in srgb, var(--global-palette2, var(--csf-secondary)) 5%, transparent);
+}
+
+/* Highlighted vehicle (searched/selected) */
+.csf-fitment-highlighted {
+	position: relative;
+	background: color-mix(in srgb, var(--global-palette10, var(--csf-accent)) 15%, transparent);
+	border-color: var(--global-palette10, var(--csf-accent));
+	border-width: 2px;
+	box-shadow: 0 4px 12px color-mix(in srgb, var(--global-palette10, var(--csf-accent)) 20%, transparent);
+	animation: card-pulse 2s ease-in-out infinite;
+}
+
+@keyframes card-pulse {
+	0%, 100% {
+		box-shadow: 0 4px 12px color-mix(in srgb, var(--global-palette10, var(--csf-accent)) 20%, transparent),
+		            0 0 0 0 rgba(232, 149, 71, 0.4);
+	}
+	50% {
+		box-shadow: 0 4px 12px color-mix(in srgb, var(--global-palette10, var(--csf-accent)) 20%, transparent),
+		            0 0 0 6px rgba(232, 149, 71, 0);
+	}
+}
+
+/* Ensure text has sufficient contrast in highlighted card (WCAG AA compliant) */
+.csf-fitment-highlighted .fitment-make,
+.csf-fitment-highlighted .fitment-model {
+	color: var(--global-palette3, var(--csf-text));
+	font-weight: 700;
+}
+
+.csf-fitment-highlighted .fitment-years {
+	background: var(--global-palette9, var(--csf-surface));
+	color: var(--global-palette3, var(--csf-text));
+	font-weight: 600;
+}
+
+.fitment-match-badge {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	padding: 4px 12px;
+	background: var(--global-palette2, var(--csf-secondary));
+	color: #FCFCFC;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	border-radius: 20px;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Possible Match badge - more cautious orange/amber styling */
+.fitment-match-badge.fitment-possible-match {
+	background: var(--global-palette12, var(--csf-accent));
+	color: var(--global-palette4, #1E1E1E);
+}
+
+/* Badge confirmed state with animation */
+.fitment-match-badge.badge-confirmed {
+	animation: badgeConfirm 0.5s ease;
+}
+
+@keyframes badgeConfirm {
+	0% { transform: scale(1); }
+	50% { transform: scale(1.1); box-shadow: 0 4px 12px rgba(0, 153, 204, 0.3); }
+	100% { transform: scale(1); }
+}
+
+/* Engine confirmation message */
+.engine-confirmation {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 8px;
+	padding: 6px 10px;
+	background: var(--global-palette12, var(--csf-accent));
+	border-radius: 4px;
+	color: var(--global-palette4, #1E1E1E);
+	font-size: 13px;
+	font-weight: 600;
+	opacity: 0;
+	transition: opacity 0.3s ease;
+}
+
+.engine-confirmation.visible {
+	opacity: 1;
+}
+
+.engine-confirmation svg {
+	flex-shrink: 0;
+	color: var(--global-palette4, #1E1E1E);
+}
+
+.fitment-make {
+	font-size: 18px;
+	font-weight: 700;
+	color: var(--global-palette3, var(--csf-text));
+	margin-bottom: 4px;
+}
+
+.fitment-model {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text-muted));
+	margin-bottom: 8px;
+}
+
+/* Expandable Card Header (Button) */
+.fitment-card-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	padding: 20px;
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	text-align: left;
+}
+
+.fitment-card-header:focus {
+	outline: 2px solid var(--global-palette2, var(--csf-secondary));
+	outline-offset: -2px;
+}
+
+.fitment-header-content {
+	flex: 1;
+}
+
+.fitment-make-model {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
+.fitment-make {
+	font-size: 18px;
+	font-weight: 700;
+	color: var(--global-palette3, var(--csf-text));
+}
+
+.fitment-model {
+	font-size: 16px;
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text-muted));
+}
+
+.fitment-years {
+	font-size: 13px;
+	color: #FCFCFC;
+	padding: 4px 10px;
+	background: var(--global-palette1);
+	border-radius: 20px;
+	display: inline-block;
+	margin-bottom: 6px;
+}
+
+.fitment-variant-count {
+	font-size: 13px;
+	color: var(--global-palette3, var(--csf-text-muted));
+	font-weight: 500;
+}
+
+/* Expand/Collapse Icon */
+.fitment-expand-icon {
+	flex-shrink: 0;
+	color: var(--global-palette2, var(--csf-secondary));
+	transition: transform 0.3s ease;
+	margin-left: 12px;
+}
+
+.fitment-card-header[aria-expanded="true"] .fitment-expand-icon {
+	transform: rotate(180deg);
+}
+
+/* Expandable Details Panel */
+.fitment-details {
+	max-height: 0;
+	overflow: hidden;
+	transition: max-height 0.3s ease, padding 0.3s ease, background-color 0.2s ease;
+	padding: 0 20px;
+}
+
+.fitment-details[aria-hidden="false"] {
+	max-height: 1000px;
+	padding: 0 20px 20px;
+}
+
+/* Fitment Table */
+.fitment-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 14px;
+}
+
+.fitment-table thead th {
+	text-align: left;
+	padding: 10px 12px;
+	background: color-mix(in srgb, var(--global-palette2, var(--csf-secondary)) 8%, var(--global-palette9, var(--csf-surface)));
+	color: var(--global-palette3, var(--csf-text));
+	font-weight: 600;
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	border-bottom: 2px solid var(--global-palette2, var(--csf-secondary));
+}
+
+.fitment-table tbody tr {
+	border-bottom: 1px solid var(--csf-border);
+}
+
+.fitment-table tbody tr:last-child {
+	border-bottom: none;
+}
+
+.fitment-table tbody tr:hover {
+	background: color-mix(in srgb, var(--global-palette2, var(--csf-secondary)) 3%, transparent);
+}
+
+.fitment-table td {
+	padding: 12px;
+	vertical-align: top;
+}
+
+.fitment-engine {
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text));
+	font-family: 'Courier New', monospace;
+	white-space: nowrap;
+}
+
+.fitment-config {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.config-item {
+	display: inline-block;
+	padding: 4px 10px;
+	font-size: 12px;
+	font-weight: 600;
+	border-radius: 4px;
+	width: fit-content;
+	background: var(--global-palette10, var(--csf-accent));
+	color: #FCFCFC;
+	border: 1px solid color-mix(in srgb, var(--global-palette10, var(--csf-accent)) 80%, #000);
+}
+
+/* ==========================================================================
+   Specifications Grid
+   ========================================================================== */
+
+.csf-specs-grid {
+	display: grid;
+	gap: 1px;
+	background: var(--global-palette5, var(--csf-border));
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius);
+	overflow: hidden;
+}
+
+.csf-spec-row {
+	display: grid;
+	grid-template-columns: 1fr 2fr;
+	background: var(--global-palette9, var(--csf-surface));
+	gap: 1px;
+}
+
+.csf-spec-row dt,
+.csf-spec-row dd {
+	padding: 16px 20px;
+	margin: 0;
+}
+
+.csf-spec-row dt {
+	background: var(--global-palette5, var(--csf-bg-alt));
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text));
+}
+
+.csf-spec-row dd {
+	color: var(--global-palette3, var(--csf-text-muted));
+}
+
+@media (max-width: 768px) {
+	.csf-spec-row {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* ==========================================================================
+   Features List
+   ========================================================================== */
+
+.csf-features-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: grid;
+	gap: 16px;
+}
+
+.csf-features-list li {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 16px;
+	background: var(--global-palette5, var(--csf-bg-alt));
+	border-radius: var(--csf-radius);
+	font-size: 15px;
+	line-height: 1.5;
+	color: var(--global-palette3, var(--csf-text));
+}
+
+.csf-features-list svg {
+	flex-shrink: 0;
+	color: var(--global-palette6, var(--csf-success));
+	margin-top: 2px;
+}
+
+/* ==========================================================================
+   Interchange Grid
+   ========================================================================== */
+
+.csf-interchange-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 16px;
+}
+
+.csf-interchange-card {
+	padding: 16px;
+	background: var(--global-palette5, var(--csf-bg-alt));
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius);
+	text-align: center;
+}
+
+.interchange-type {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text-muted));
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	margin-bottom: 8px;
+}
+
+.interchange-number {
+	font-size: 16px;
+	font-weight: 700;
+	color: var(--global-palette3, var(--csf-text));
+	font-family: 'Courier New', monospace;
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+
+.site-footer {
+	background: var(--global-palette5, var(--csf-bg-alt));
+	border-top: 1px solid var(--csf-border);
+	padding: 40px 0;
+	margin-top: 80px;
+}
+
+.footer-container {
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: 0 20px;
+	text-align: center;
+	color: var(--global-palette3, var(--csf-text-muted));
+	font-size: 14px;
+}
+
+/* ==========================================================================
+   Mobile Responsive Adjustments
+   ========================================================================== */
+
+@media (max-width: 768px) {
+	.main-container {
+		padding: 20px 16px;
+	}
+
+	.csf-product-gallery {
+		position: static;
+	}
+
+	.csf-tabs-nav {
+		gap: 8px;
+	}
+
+	.csf-tab-btn {
+		padding: 12px 16px;
+		font-size: 14px;
+	}
+
+	.csf-fitment-grid,
+	.csf-interchange-grid {
+		grid-template-columns: 1fr;
+	}
+}

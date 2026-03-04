@@ -30,35 +30,69 @@ class CSF_Parts_Admin_Menu {
 	 * @since 1.0.0
 	 */
 	public function register_menu_pages(): void {
-		// Main settings page (submenu under Parts).
-		add_submenu_page(
-			'edit.php?post_type=' . CSF_Parts_Constants::POST_TYPE . '',
-			__( 'Settings', CSF_Parts_Constants::TEXT_DOMAIN ),
-			__( 'Settings', CSF_Parts_Constants::TEXT_DOMAIN ),
+		// Top-level menu page.
+		add_menu_page(
+			'CSF Parts',
+			'CSF Parts',
 			'manage_options',
-			'csf-parts-settings',
-			array( $this, 'render_settings_page' )
+			'csf-parts',
+			array( $this, 'render_parts_list_page' ),
+			'dashicons-cart',
+			30
+		);
+
+		// All Parts submenu (default).
+		add_submenu_page(
+			'csf-parts',
+			'All Parts',
+			'All Parts',
+			'manage_options',
+			'csf-parts',
+			array( $this, 'render_parts_list_page' )
 		);
 
 		// Import page.
 		add_submenu_page(
-			'edit.php?post_type=' . CSF_Parts_Constants::POST_TYPE . '',
-			__( 'Import Parts', CSF_Parts_Constants::TEXT_DOMAIN ),
-			__( 'Import', CSF_Parts_Constants::TEXT_DOMAIN ),
+			'csf-parts',
+			'Import Parts',
+			'Import',
 			'manage_options',
 			'csf-parts-import',
 			array( $this, 'render_import_page' )
 		);
 
+		// Settings page.
+		add_submenu_page(
+			'csf-parts',
+			'Settings',
+			'Settings',
+			'manage_options',
+			'csf-parts-settings',
+			array( $this, 'render_settings_page' )
+		);
+
 		// Import log page (hidden from menu).
 		add_submenu_page(
 			'',
-			__( 'Import Log', CSF_Parts_Constants::TEXT_DOMAIN ),
-			__( 'Import Log', CSF_Parts_Constants::TEXT_DOMAIN ),
+			'Import Log',
+			'Import Log',
 			'manage_options',
 			'csf-parts-import-log',
 			array( $this, 'render_import_log_page' )
 		);
+	}
+
+	/**
+	 * Render parts list page.
+	 *
+	 * @since 1.0.0
+	 */
+	public function render_parts_list_page(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html( 'You do not have permission to access this page.' ) );
+		}
+
+		require_once CSF_PARTS_PLUGIN_DIR . 'admin/views/parts-list-page.php';
 	}
 
 	/**
@@ -68,7 +102,7 @@ class CSF_Parts_Admin_Menu {
 	 */
 	public function render_settings_page(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have permission to access this page.', CSF_Parts_Constants::TEXT_DOMAIN ) );
+			wp_die( esc_html( 'You do not have permission to access this page.' ) );
 		}
 
 		require_once CSF_PARTS_PLUGIN_DIR . 'admin/views/settings-page.php';
@@ -81,7 +115,7 @@ class CSF_Parts_Admin_Menu {
 	 */
 	public function render_import_page(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have permission to access this page.', CSF_Parts_Constants::TEXT_DOMAIN ) );
+			wp_die( esc_html( 'You do not have permission to access this page.' ) );
 		}
 
 		require_once CSF_PARTS_PLUGIN_DIR . 'admin/views/import-page.php';
@@ -94,7 +128,7 @@ class CSF_Parts_Admin_Menu {
 	 */
 	public function render_import_log_page(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have permission to access this page.', CSF_Parts_Constants::TEXT_DOMAIN ) );
+			wp_die( esc_html( 'You do not have permission to access this page.' ) );
 		}
 
 		require_once CSF_PARTS_PLUGIN_DIR . 'admin/views/import-log-page.php';

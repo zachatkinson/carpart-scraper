@@ -51,7 +51,7 @@ class Directory_Import_Source implements Import_Source_Strategy {
 
 		if ( empty( $files ) ) {
 			throw new Exception(
-				__( 'No JSON files found in import directory', CSF_Parts_Constants::TEXT_DOMAIN )
+				'No JSON files found in import directory'
 			);
 		}
 
@@ -72,7 +72,7 @@ class Directory_Import_Source implements Import_Source_Strategy {
 	public function validate_configuration(): bool {
 		if ( empty( $this->directory_path ) ) {
 			throw new Exception(
-				__( 'Import directory is not configured', CSF_Parts_Constants::TEXT_DOMAIN )
+				'Import directory is not configured'
 			);
 		}
 
@@ -80,7 +80,7 @@ class Directory_Import_Source implements Import_Source_Strategy {
 			throw new Exception(
 				sprintf(
 					/* translators: %s: directory path */
-					__( 'Import directory does not exist: %s', CSF_Parts_Constants::TEXT_DOMAIN ),
+					'Import directory does not exist: %s',
 					$this->directory_path
 				)
 			);
@@ -88,13 +88,13 @@ class Directory_Import_Source implements Import_Source_Strategy {
 
 		if ( ! is_dir( $this->directory_path ) ) {
 			throw new Exception(
-				__( 'Import path is not a directory', CSF_Parts_Constants::TEXT_DOMAIN )
+				'Import path is not a directory'
 			);
 		}
 
 		if ( ! is_readable( $this->directory_path ) ) {
 			throw new Exception(
-				__( 'Import directory is not readable', CSF_Parts_Constants::TEXT_DOMAIN )
+				'Import directory is not readable'
 			);
 		}
 
@@ -154,7 +154,7 @@ class Directory_Import_Source implements Import_Source_Strategy {
 
 		if ( $file_path === $last_imported_file ) {
 			throw new Exception(
-				__( 'Latest file has already been imported', CSF_Parts_Constants::TEXT_DOMAIN )
+				'Latest file has already been imported'
 			);
 		}
 	}

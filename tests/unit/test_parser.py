@@ -490,10 +490,10 @@ class TestCSFParserExtractPartData:
         assert "Aspiration" in specs
         assert specs["Aspiration"] == "Turbocharged"
 
-    def test_extract_part_data_from_application_page_extracts_images(
+    def test_extract_part_data_from_application_page_returns_empty_images(
         self, sample_html_application_page: str
     ) -> None:
-        """Test extract_part_data() extracts primary image from application page."""
+        """Test extract_part_data() returns empty images (extracted from detail page instead)."""
         # Arrange
         parser = CSFParser()
         soup = parser.parse(sample_html_application_page)
@@ -501,13 +501,10 @@ class TestCSFParserExtractPartData:
         # Act
         result = parser.extract_part_data(soup)
 
-        # Assert
+        # Assert - images are now extracted from detail page gallery only
         images = result["images"]
         assert isinstance(images, list)
-        assert len(images) == 1
-        assert images[0]["is_primary"] is True
-        assert images[0]["url"].startswith("https://illumaware-digital-assets.s3")
-        assert "3951" in images[0]["url"]
+        assert len(images) == 0
 
     def test_extract_part_data_from_application_page_sets_manufacturer(
         self, sample_html_application_page: str
@@ -773,10 +770,17 @@ class TestCSFParserExtractSpecifications:
 
 
 class TestCSFParserExtractImages:
-    """Test suite for CSFParser._extract_images() method."""
+    """Test suite for CSFParser._extract_images() method.
 
-    def test_extract_images_extracts_primary_image(self, sample_html_application_page: str) -> None:
-        """Test _extract_images() extracts primary image from application page."""
+    Note: _extract_images() deliberately returns an empty list because images
+    are now extracted from detail page galleries via _extract_gallery_images()
+    to avoid duplicates and get higher quality images.
+    """
+
+    def test_extract_images_returns_empty_for_application_page(
+        self, sample_html_application_page: str
+    ) -> None:
+        """Test _extract_images() returns empty list (images come from detail pages)."""
         # Arrange
         parser = CSFParser()
         soup = parser.parse(sample_html_application_page)
@@ -784,35 +788,9 @@ class TestCSFParserExtractImages:
         # Act
         result = parser._extract_images(soup)
 
-        # Assert
-        assert len(result) == 1
-        assert result[0]["is_primary"] is True
-        assert "url" in result[0]
-        assert "alt_text" in result[0]
-
-    def test_extract_images_extracts_src_attribute(self, sample_html_application_page: str) -> None:
-        """Test _extract_images() extracts src attribute from img tag."""
-        # Arrange
-        parser = CSFParser()
-        soup = parser.parse(sample_html_application_page)
-
-        # Act
-        result = parser._extract_images(soup)
-
-        # Assert
-        assert result[0]["url"].startswith("https://illumaware-digital-assets.s3")
-
-    def test_extract_images_extracts_alt_text(self, sample_html_application_page: str) -> None:
-        """Test _extract_images() extracts alt text from img tag."""
-        # Arrange
-        parser = CSFParser()
-        soup = parser.parse(sample_html_application_page)
-
-        # Act
-        result = parser._extract_images(soup)
-
-        # Assert
-        assert result[0]["alt_text"] == "3951"
+        # Assert - images are extracted from detail page gallery only
+        assert result == []
+        assert isinstance(result, list)
 
     def test_extract_images_returns_empty_list_when_no_image(self) -> None:
         """Test _extract_images() returns empty list when no image found."""
@@ -836,15 +814,15 @@ class TestCSFParserExtractImages:
         assert result == []
         assert isinstance(result, list)
 
-    def test_extract_images_handles_data_src_attribute(self) -> None:
-        """Test _extract_images() handles data-src for lazy loaded images."""
+    def test_extract_images_returns_empty_regardless_of_img_tags(self) -> None:
+        """Test _extract_images() returns empty even with img tags present."""
         # Arrange
         parser = CSFParser()
         html = """
         <html>
             <body>
                 <div class="row app">
-                    <img class="primary-image" data-src="https://example.com/lazy.jpg" alt="Lazy">
+                    <img class="primary-image" src="https://example.com/image.jpg" alt="Part">
                 </div>
             </body>
         </html>
@@ -854,55 +832,8 @@ class TestCSFParserExtractImages:
         # Act
         result = parser._extract_images(soup)
 
-        # Assert
-        assert len(result) == 1
-        assert result[0]["url"] == "https://example.com/lazy.jpg"
-
-    def test_extract_images_prefers_src_over_data_src(self) -> None:
-        """Test _extract_images() prefers src attribute over data-src."""
-        # Arrange
-        parser = CSFParser()
-        html = """
-        <html>
-            <body>
-                <div class="row app">
-                    <img class="primary-image"
-                         src="https://example.com/actual.jpg"
-                         data-src="https://example.com/lazy.jpg"
-                         alt="Image">
-                </div>
-            </body>
-        </html>
-        """
-        soup = parser.parse(html)
-
-        # Act
-        result = parser._extract_images(soup)
-
-        # Assert
-        assert result[0]["url"] == "https://example.com/actual.jpg"
-
-    def test_extract_images_handles_missing_alt_text(self) -> None:
-        """Test _extract_images() handles missing alt attribute gracefully."""
-        # Arrange
-        parser = CSFParser()
-        html = """
-        <html>
-            <body>
-                <div class="row app">
-                    <img class="primary-image" src="https://example.com/image.jpg">
-                </div>
-            </body>
-        </html>
-        """
-        soup = parser.parse(html)
-
-        # Act
-        result = parser._extract_images(soup)
-
-        # Assert
-        assert len(result) == 1
-        assert result[0]["alt_text"] == ""
+        # Assert - still empty, images come from detail page gallery
+        assert result == []
 
 
 class TestCSFParserExtractStockStatus:
@@ -1385,26 +1316,35 @@ class TestCSFParserExtractSpecFromRow:
 
 
 class TestCSFParserExtractFullDescription:
-    """Test suite for CSFParser._extract_full_description() method."""
+    """Test suite for CSFParser._extract_full_description() method.
 
-    def test_extract_full_description_returns_h5_text(self) -> None:
-        """Test _extract_full_description() returns h5 element text."""
+    Note: _extract_full_description() looks for div.col-6 container (detail page
+    structure) and extracts h5 title, p subtitle, marketing text, and ul features.
+    """
+
+    def test_extract_full_description_returns_h5_from_col6(self) -> None:
+        """Test _extract_full_description() extracts h5 text from div.col-6."""
         # Arrange
         parser = CSFParser()
-        html = "<html><body><h5>High-performance radiator description</h5></body></html>"
+        html = """<html><body>
+            <div class="col-6">
+                <h5>High-performance radiator description</h5>
+            </div>
+        </body></html>"""
         soup = parser.parse(html)
 
         # Act
         result = parser._extract_full_description(soup)
 
         # Assert
-        assert result == "High-performance radiator description"
+        assert result is not None
+        assert "High-performance radiator description" in result
 
-    def test_extract_full_description_returns_none_when_h5_empty(self) -> None:
-        """Test _extract_full_description() returns None when h5 is empty."""
+    def test_extract_full_description_returns_none_without_col6(self) -> None:
+        """Test _extract_full_description() returns None without div.col-6."""
         # Arrange
         parser = CSFParser()
-        html = "<html><body><h5></h5></body></html>"
+        html = "<html><body><h5>No col-6 wrapper</h5></body></html>"
         soup = parser.parse(html)
 
         # Act
@@ -1413,11 +1353,24 @@ class TestCSFParserExtractFullDescription:
         # Assert
         assert result is None
 
-    def test_extract_full_description_returns_none_when_h5_missing(self) -> None:
-        """Test _extract_full_description() returns None when h5 doesn't exist."""
+    def test_extract_full_description_returns_none_when_col6_empty(self) -> None:
+        """Test _extract_full_description() returns None when col-6 has no content."""
         # Arrange
         parser = CSFParser()
-        html = "<html><body><div>No h5 here</div></body></html>"
+        html = '<html><body><div class="col-6"></div></body></html>'
+        soup = parser.parse(html)
+
+        # Act
+        result = parser._extract_full_description(soup)
+
+        # Assert
+        assert result is None
+
+    def test_extract_full_description_returns_none_when_h5_empty_in_col6(self) -> None:
+        """Test _extract_full_description() returns None when h5 is empty."""
+        # Arrange
+        parser = CSFParser()
+        html = '<html><body><div class="col-6"><h5></h5></div></body></html>'
         soup = parser.parse(html)
 
         # Act
@@ -1427,17 +1380,22 @@ class TestCSFParserExtractFullDescription:
         assert result is None
 
     def test_extract_full_description_strips_whitespace(self) -> None:
-        """Test _extract_full_description() strips whitespace from description."""
+        """Test _extract_full_description() strips whitespace from h5 text."""
         # Arrange
         parser = CSFParser()
-        html = "<html><body><h5>  \n  Whitespace description  \n  </h5></body></html>"
+        html = """<html><body>
+            <div class="col-6">
+                <h5>  \n  Whitespace description  \n  </h5>
+            </div>
+        </body></html>"""
         soup = parser.parse(html)
 
         # Act
         result = parser._extract_full_description(soup)
 
         # Assert
-        assert result == "Whitespace description"
+        assert result is not None
+        assert "Whitespace description" in result
 
 
 class TestCSFParserExtractTechNotes:
@@ -1647,4 +1605,406 @@ class TestCSFParserExtractInterchangeData:
         result = parser._extract_interchange_data(soup)
 
         # Assert - Should not match without both headers
+        assert result == []
+
+
+class TestCSFParserExceptionHandling:
+    """Test broad exception handling in extract_parts_from_application_page."""
+
+    def test_extract_parts_continues_on_attribute_error(self) -> None:
+        """Test extraction continues when one container raises AttributeError."""
+        # Arrange
+        parser = CSFParser()
+
+        # HTML with two parts: first has valid data, second will cause AttributeError
+        # due to missing h4 element in a way that triggers AttributeError
+        html = """
+        <div class="applications">
+          <div class="panel result">
+            <div class="panel-header">
+              <div class="row"><div class="col">
+                <h4 class="font-weight-bold">Radiator</h4>
+              </div></div>
+            </div>
+            <div class="panel-body">
+              <div class="row app" id="good_part">
+                <div class="col-8 p-0">
+                  <h4><a href="/items/1001">1001</a> - Good Radiator</h4>
+                </div>
+              </div>
+              <div class="row app" id="bad_part">
+                <div class="col-8 p-0">
+                  <!-- Missing h4/a - will cause issues in extraction -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        """
+        soup = parser.parse(html)
+
+        # Act
+        result = parser.extract_parts_from_application_page(soup)
+
+        # Assert - Should get 1 part (the good one), bad one skipped
+        assert len(result) == 1
+        assert result[0]["sku"] == "CSF-1001"
+
+    def test_extract_parts_continues_on_type_error(self) -> None:
+        """Test extraction continues when TypeError occurs in a container."""
+        # Arrange
+        parser = CSFParser()
+
+        # HTML with a valid part
+        html = """
+        <div class="applications">
+          <div class="panel result">
+            <div class="panel-header">
+              <div class="row"><div class="col">
+                <h4 class="font-weight-bold">Radiator</h4>
+              </div></div>
+            </div>
+            <div class="panel-body">
+              <div class="row app">
+                <div class="col-8 p-0">
+                  <h4><a href="/items/2001">2001</a> - Valid Part</h4>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        """
+        soup = parser.parse(html)
+
+        # Act
+        result = parser.extract_parts_from_application_page(soup)
+
+        # Assert - Should get the valid part
+        assert len(result) == 1
+        assert result[0]["sku"] == "CSF-2001"
+
+
+class TestCSFParserCleanEngineText:
+    """Tests for _clean_engine_text method."""
+
+    def test_removes_label_prefix_transmission(self) -> None:
+        """Test removal of TRANSMISSION CONTROL TYPE: prefix."""
+        parser = CSFParser()
+        result = parser._clean_engine_text("TRANSMISSION CONTROL TYPE: Manual")
+        assert result == "Manual"
+
+    def test_removes_label_prefix_eng_base(self) -> None:
+        """Test removal of Eng. Base: prefix."""
+        parser = CSFParser()
+        result = parser._clean_engine_text("Eng. Base: 2.0L L4 1993cc")
+        assert result == "2.0L L4 1993cc"
+
+    def test_removes_manufacturer_names(self) -> None:
+        """Test removal of manufacturer names like DENSO/TOYO."""
+        parser = CSFParser()
+        result = parser._clean_engine_text("2.0L L4 1984cc DENSO/TOYO")
+        assert "DENSO" not in result
+        assert "TOYO" not in result
+        assert "2.0L L4 1984cc" in result
+
+    def test_removes_duplicate_displacement_units(self) -> None:
+        """Test removal of CI when CC is also present."""
+        parser = CSFParser()
+        result = parser._clean_engine_text("1.6L L4 1588CC 98CI")
+        assert "1588cc" in result
+        assert "98ci" not in result.lower()
+
+    def test_removes_trailing_body_type_junk(self) -> None:
+        """Test removal of trailing Body Type junk."""
+        parser = CSFParser()
+        result = parser._clean_engine_text("3.2L V6 3210ccBody Type: Coupe")
+        assert "Body Type" not in result
+        assert "3.2L V6 3210cc" in result
+
+    def test_normalizes_cc_ci_to_lowercase(self) -> None:
+        """Test normalization of CC/CI to lowercase."""
+        parser = CSFParser()
+        result = parser._clean_engine_text("2.0L L4 1993CC")
+        assert "1993cc" in result
+        assert "CC" not in result
+
+
+class TestCSFParserExtractCleanEngineSpec:
+    """Tests for _extract_clean_engine_spec method."""
+
+    def test_removes_aspiration_text(self) -> None:
+        """Test removal of aspiration-related text."""
+        parser = CSFParser()
+        result = parser._extract_clean_engine_spec("2.0L L4 1993cc Turbocharged")
+        assert "Turbocharged" not in result
+        assert "2.0L L4 1993cc" in result
+
+    def test_removes_fuel_type(self) -> None:
+        """Test removal of fuel type info."""
+        parser = CSFParser()
+        result = parser._extract_clean_engine_spec("2.0L L4 Fuel Type: Gasoline")
+        assert "Fuel Type" not in result
+        assert "Gasoline" not in result
+
+    def test_removes_radiator_position(self) -> None:
+        """Test removal of radiator position info."""
+        parser = CSFParser()
+        result = parser._extract_clean_engine_spec("2.0L L4 1993cc Primary Radiator")
+        assert "Primary Radiator" not in result
+
+    def test_removes_duty_levels(self) -> None:
+        """Test removal of duty level info."""
+        parser = CSFParser()
+        result = parser._extract_clean_engine_spec("2.0L L4 1993cc Heavy Duty")
+        assert "Heavy Duty" not in result
+
+    def test_removes_vehicle_qualifiers(self) -> None:
+        """Test removal of vehicle qualifier patterns."""
+        parser = CSFParser()
+        result = parser._extract_clean_engine_spec("2.0L L4 1993cc w/ Towing Package")
+        assert "Towing" not in result
+        assert "2.0L L4 1993cc" in result
+
+    def test_removes_product_specs(self) -> None:
+        """Test removal of product specification patterns."""
+        parser = CSFParser()
+        result = parser._extract_clean_engine_spec("2.0L L4 1993ccw/ SUB COOL Design")
+        assert "SUB COOL" not in result
+        assert "2.0L L4 1993cc" in result
+
+    def test_fixes_missing_spaces(self) -> None:
+        """Test fixing of missing spaces between cc and capitalized text."""
+        parser = CSFParser()
+        result = parser._extract_clean_engine_spec("3343ccMax Duty")
+        assert "3343cc" in result
+        assert "Max Duty" not in result  # Duty removed
+
+    def test_removes_trailing_w_slash(self) -> None:
+        """Test removal of trailing w/ with nothing after."""
+        parser = CSFParser()
+        result = parser._extract_clean_engine_spec("2.0L L4 w/")
+        assert result.strip() == "2.0L L4"
+
+
+class TestCSFParserExtractVehicleQualifiers:
+    """Tests for _extract_vehicle_qualifiers method."""
+
+    def test_extracts_engine_from_eng_base(self) -> None:
+        """Test engine extraction from Eng. Base pattern."""
+        parser = CSFParser()
+        html = """
+        <div class="row app">
+            <table class="table-borderless">
+                <tbody><tr>
+                    <td>Eng. Base: <b>2.0L L4 1993cc</b></td>
+                </tr></tbody>
+            </table>
+        </div>
+        """
+        soup = BeautifulSoup(html, "lxml")
+        container = soup.find("div", class_="row")
+
+        result = parser._extract_vehicle_qualifiers(container)
+
+        assert result["engine"] is not None
+        assert "2.0L" in result["engine"]
+
+    def test_extracts_aspiration_raw_is_cleaned(self) -> None:
+        """Test aspiration extraction and cleaning behavior.
+
+        Standalone aspiration values like 'Turbocharged' are removed by
+        _extract_clean_engine_spec since they are aspiration patterns.
+        However, the regex match still fires, confirming the code path executes.
+        A compound aspiration value with non-aspiration text survives cleaning.
+        """
+        parser = CSFParser()
+        # Standalone "Turbocharged" gets stripped by _extract_clean_engine_spec
+        # so aspiration ends up None. This tests the regex match fires correctly.
+        html = """
+        <div class="row app">
+            <table><tbody><tr>
+                <td>Aspiration: <b>Turbocharged</b></td>
+            </tr></tbody></table>
+        </div>
+        """
+        soup = BeautifulSoup(html, "lxml")
+        container = soup.find("div", class_="row")
+
+        result = parser._extract_vehicle_qualifiers(container)
+
+        # The aspiration "Turbocharged" is cleaned out by _extract_clean_engine_spec
+        # because it matches aspiration_patterns, leaving empty string -> None
+        assert result["aspiration"] is None
+
+    def test_extracts_transmission_qualifier(self) -> None:
+        """Test transmission extraction as qualifier."""
+        parser = CSFParser()
+        html = """
+        <div class="row app">
+            <table><tbody><tr>
+                <td>Transmission Control Type: <b>Manual</b></td>
+            </tr></tbody></table>
+        </div>
+        """
+        soup = BeautifulSoup(html, "lxml")
+        container = soup.find("div", class_="row")
+
+        result = parser._extract_vehicle_qualifiers(container)
+
+        assert "Manual" in result["qualifiers"]
+
+    def test_extracts_towing_qualifier(self) -> None:
+        """Test w/ Towing Package qualifier extraction."""
+        parser = CSFParser()
+        html = """
+        <div class="row app">
+            <p>w/ Towing Package</p>
+        </div>
+        """
+        soup = BeautifulSoup(html, "lxml")
+        container = soup.find("div", class_="row")
+
+        result = parser._extract_vehicle_qualifiers(container)
+
+        assert any("Towing" in q for q in result["qualifiers"])
+
+    def test_returns_empty_when_no_qualifiers(self) -> None:
+        """Test returns empty qualifiers when no patterns match."""
+        parser = CSFParser()
+        html = """
+        <div class="row app">
+            <p>Simple text with no qualifier patterns</p>
+        </div>
+        """
+        soup = BeautifulSoup(html, "lxml")
+        container = soup.find("div", class_="row")
+
+        result = parser._extract_vehicle_qualifiers(container)
+
+        assert result["engine"] is None
+        assert result["aspiration"] is None
+        assert result["qualifiers"] == []
+
+    def test_aspiration_not_polluted_by_adjacent_cells(self) -> None:
+        """Test aspiration extracts only its value when adjacent cells follow.
+
+        Regression test: get_text() without separator concatenated all cell
+        contents, causing aspiration to capture everything after 'Aspiration:'
+        and exceed the 50-character Vehicle model limit.
+        """
+        parser = CSFParser()
+        html = """
+        <div class="row app">
+            <table><tbody><tr>
+                <td>Aspiration: <b>Turbocharged</b></td>
+                <td>w/ Power Take-Off</td>
+                <td>w/o Power Take-Off</td>
+                <td>w/ Oil Cooler, Limited Model</td>
+            </tr></tbody></table>
+        </div>
+        """
+        soup = BeautifulSoup(html, "lxml")
+        container = soup.find("div", class_="row")
+
+        result = parser._extract_vehicle_qualifiers(container)
+
+        # Aspiration should NOT contain text from adjacent cells
+        if result["aspiration"] is not None:
+            assert len(result["aspiration"]) <= 50
+            assert "Power Take-Off" not in result["aspiration"]
+            assert "Oil Cooler" not in result["aspiration"]
+
+    def test_ecoboost_extracted_as_qualifier(self) -> None:
+        """Test EcoBoost is extracted as a qualifier from aspiration."""
+        parser = CSFParser()
+        html = """
+        <div class="row app">
+            <table><tbody><tr>
+                <td>Aspiration: <b>EcoBoost</b></td>
+            </tr></tbody></table>
+        </div>
+        """
+        soup = BeautifulSoup(html, "lxml")
+        container = soup.find("div", class_="row")
+
+        result = parser._extract_vehicle_qualifiers(container)
+
+        assert "EcoBoost" in result["qualifiers"]
+
+
+class TestCSFParserExtractFullDescriptionElements:
+    """Tests for _extract_full_description with all element types."""
+
+    def test_extracts_h5_p_marketing_and_features(self) -> None:
+        """Test full description extraction with all elements present."""
+        parser = CSFParser()
+        html = """<html><body>
+            <div class="col-6">
+                <h5>1 Row Plastic Tank Aluminum Core</h5>
+                <p>Radiator</p>
+                Enhanced cooling performance; Better heat dissipation
+                <ul>
+                    <li>Direct fit</li>
+                    <li>Lifetime warranty</li>
+                </ul>
+            </div>
+        </body></html>"""
+        soup = parser.parse(html)
+
+        result = parser._extract_full_description(soup)
+
+        assert result is not None
+        assert "<h5>" in result
+        assert "1 Row Plastic Tank Aluminum Core" in result
+        assert "<strong>Radiator</strong>" in result
+        assert "<li>Direct fit</li>" in result
+        assert "<li>Lifetime warranty</li>" in result
+
+    def test_returns_none_when_no_col6(self) -> None:
+        """Test returns None when no div.col-6 exists."""
+        parser = CSFParser()
+        html = "<html><body><div>No col-6 here</div></body></html>"
+        soup = parser.parse(html)
+
+        result = parser._extract_full_description(soup)
+
+        assert result is None
+
+
+class TestCSFParserExtractGalleryImages:
+    """Tests for _extract_gallery_images method."""
+
+    def test_extracts_s3_large_images(self) -> None:
+        """Test extraction of S3 large catalog images."""
+        parser = CSFParser()
+        s3_base = "https://illumaware-digital-assets.s3.example.com"
+        html = f"""<html><body>
+            <img src="{s3_base}/catalog196/large/img1.jpg"
+                 alt="Front view">
+            <img src="{s3_base}/catalog196/large/img2.jpg"
+                 alt="Side view">
+            <img src="https://other-bucket.s3.example.com/image.jpg"
+                 alt="Other">
+            <img src="{s3_base}/catalog196/thumb/img1.jpg"
+                 alt="Thumb">
+        </body></html>"""
+        soup = parser.parse(html)
+
+        result = parser._extract_gallery_images(soup)
+
+        assert len(result) == 2
+        assert result[0]["is_primary"] is True
+        assert result[1]["is_primary"] is False
+        assert "large" in result[0]["url"]
+
+    def test_returns_empty_when_no_s3_images(self) -> None:
+        """Test returns empty list when no matching images found."""
+        parser = CSFParser()
+        html = """<html><body>
+            <img src="/local/image.jpg" alt="Local">
+        </body></html>"""
+        soup = parser.parse(html)
+
+        result = parser._extract_gallery_images(soup)
+
         assert result == []

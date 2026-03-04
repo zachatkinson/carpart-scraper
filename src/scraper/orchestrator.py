@@ -6,9 +6,10 @@ fetching, parsing, deduplication, and export of automotive parts data.
 
 import hashlib
 import json
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import structlog
 
@@ -17,6 +18,7 @@ from src.models.part import Part
 from src.models.vehicle import Vehicle, VehicleCompatibility
 from src.scraper.ajax_parser import AJAXResponseParser
 from src.scraper.fetcher import RespectfulFetcher
+from src.scraper.image_processor import ImageProcessor
 from src.scraper.parser import CSFParser
 from src.scraper.validator import DataValidator
 
@@ -78,11 +80,132 @@ MAKES = {
 }
 
 
+@dataclass
+class FailureRecord:
+    """Record of a single scraping failure.
+
+    Attributes:
+        phase: Which phase failed (hierarchy, application, detail)
+        identifier: What failed (make name, application ID, SKU)
+        error_type: Exception class name
+        error_message: Error description
+        is_retryable: Whether the error is likely transient
+    """
+
+    phase: str
+    identifier: str
+    error_type: str
+    error_message: str
+    is_retryable: bool
+
+
+@dataclass
+class FailureTracker:
+    """Tracks all failures during a scraping run.
+
+    Provides recording, summarization, and querying of failures
+    for post-run reporting and completeness analysis.
+    """
+
+    failures: list[FailureRecord] = field(default_factory=list)
+
+    def record(
+        self,
+        phase: str,
+        identifier: str,
+        error_type: str,
+        error_message: str,
+        is_retryable: bool = True,
+    ) -> None:
+        """Record a failure.
+
+        Args:
+            phase: Phase where failure occurred
+            identifier: What failed
+            error_type: Exception class name
+            error_message: Error description
+            is_retryable: Whether the error is transient
+        """
+        self.failures.append(
+            FailureRecord(
+                phase=phase,
+                identifier=identifier,
+                error_type=error_type,
+                error_message=error_message,
+                is_retryable=is_retryable,
+            )
+        )
+
+    def get_summary(self) -> dict[str, Any]:
+        """Get failure summary grouped by phase.
+
+        Returns:
+            Dict with total_failures, by_phase counts, retryable/permanent counts
+        """
+        by_phase: dict[str, int] = {}
+        retryable_count = 0
+        permanent_count = 0
+
+        for failure in self.failures:
+            by_phase[failure.phase] = by_phase.get(failure.phase, 0) + 1
+            if failure.is_retryable:
+                retryable_count += 1
+            else:
+                permanent_count += 1
+
+        return {
+            "total_failures": len(self.failures),
+            "by_phase": by_phase,
+            "retryable": retryable_count,
+            "permanent": permanent_count,
+        }
+
+    def get_failed_identifiers(self, phase: str) -> list[str]:
+        """Get all failed identifiers for a given phase.
+
+        Args:
+            phase: Phase to filter by
+
+        Returns:
+            List of identifier strings that failed in this phase
+        """
+        return [f.identifier for f in self.failures if f.phase == phase]
+
+    def to_dicts(self) -> list[dict[str, Any]]:
+        """Serialize all failure records to dicts.
+
+        Returns:
+            List of serialized failure records
+        """
+        return [
+            {
+                "phase": f.phase,
+                "identifier": f.identifier,
+                "error_type": f.error_type,
+                "error_message": f.error_message,
+                "is_retryable": f.is_retryable,
+            }
+            for f in self.failures
+        ]
+
+
+class DeduplicationResult(NamedTuple):
+    """Result of deduplication with change detection.
+
+    Attributes:
+        new_skus: SKUs seen for the first time in this session
+        changed_skus: SKUs whose content hash differs from previous export
+    """
+
+    new_skus: set[str]
+    changed_skus: set[str]
+
+
 class ScraperOrchestrator:
     """Orchestrates the full scraping workflow.
 
     Coordinates all phases of scraping:
-    1. Hierarchy enumeration (makes → years → models → applications)
+    1. Hierarchy enumeration (makes -> years -> models -> applications)
     2. Deduplication by SKU
     3. Detail page fetching
     4. Export to JSON
@@ -94,36 +217,51 @@ class ScraperOrchestrator:
         exporter: JSON data exporter
         output_dir: Directory for exports
         incremental: Whether to use incremental export mode
+        failure_tracker: Tracks all failures during scraping
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         output_dir: Path | str = "exports",
         incremental: bool = False,
         delay_override: float | None = None,
         checkpoint_dir: Path | str = "checkpoints",
+        fetcher: RespectfulFetcher | None = None,
+        ajax_parser: AJAXResponseParser | None = None,
+        html_parser: CSFParser | None = None,
+        validator: DataValidator | None = None,
+        exporter: JSONExporter | None = None,
+        image_processor: ImageProcessor | None = None,
     ) -> None:
-        """Initialize orchestrator.
+        """Initialize orchestrator with dependency injection.
 
         Args:
             output_dir: Directory for exports (default: "exports")
             incremental: Use incremental export mode (default: False)
             delay_override: Override default delay between requests (default: None)
             checkpoint_dir: Directory for checkpoint files (default: "checkpoints")
+            fetcher: HTTP fetcher instance (default: creates RespectfulFetcher)
+            ajax_parser: AJAX response parser (default: creates AJAXResponseParser)
+            html_parser: HTML parser (default: creates CSFParser)
+            validator: Data validator (default: creates DataValidator)
+            exporter: JSON exporter (default: creates JSONExporter)
+            image_processor: Image processor for AVIF conversion (default: creates ImageProcessor)
 
         Note:
-            The delay_override parameter is currently ignored as RespectfulFetcher
-            uses Final constants. A future enhancement could modify the fetcher
-            to accept delay parameters in its constructor.
+            Dependencies are injected via constructor for testability and flexibility.
+            If not provided, default implementations are created automatically.
         """
-        self.fetcher = RespectfulFetcher()
+        # Inject dependencies (create defaults if not provided)
+        self.fetcher = fetcher or RespectfulFetcher()
+        self.ajax_parser = ajax_parser or AJAXResponseParser()
+        self.html_parser = html_parser or CSFParser()
+        self.validator = validator or DataValidator()
+        self.exporter = exporter or JSONExporter(output_dir=output_dir)
+        self.image_processor = image_processor or ImageProcessor()
+
         # Note: delay_override is reserved for future use when fetcher supports it
         self.delay_override = delay_override
 
-        self.ajax_parser = AJAXResponseParser()
-        self.html_parser = CSFParser()
-        self.validator = DataValidator()
-        self.exporter = JSONExporter(output_dir=output_dir)
         self.output_dir = Path(output_dir)
         self.checkpoint_dir = Path(checkpoint_dir)
         self.incremental = incremental
@@ -136,6 +274,9 @@ class ScraperOrchestrator:
         self.vehicle_compat: dict[str, list[Vehicle]] = {}
         self.parts_scraped = 0
         self.processed_application_ids: set[int] = set()
+
+        # Failure tracking
+        self.failure_tracker = FailureTracker()
 
         logger.info(
             "orchestrator_initialized",
@@ -197,7 +338,10 @@ class ScraperOrchestrator:
     def _build_hierarchy(
         self, make_filter: str | None = None, year_filter: int | None = None
     ) -> list[dict[str, Any]]:
-        """Build complete vehicle hierarchy.
+        """Build complete vehicle hierarchy with error handling.
+
+        Individual make or year failures are recorded and skipped,
+        allowing the rest of the hierarchy to be built successfully.
 
         Args:
             make_filter: Filter by make name (e.g., "Honda")
@@ -236,16 +380,49 @@ class ScraperOrchestrator:
         )
 
         for make_id, make_name in makes_to_process:
-            # Enumerate years for this make
-            years = self._enumerate_years(make_id, make_name)
+            try:
+                # Enumerate years for this make
+                years = self._enumerate_years(make_id, make_name)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "hierarchy_years_failed",
+                    make=make_name,
+                    make_id=make_id,
+                    error_type=type(e).__name__,
+                    error=str(e),
+                )
+                self.failure_tracker.record(
+                    phase="hierarchy",
+                    identifier=f"make:{make_name}",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                )
+                continue
 
             # Filter years if requested
             if year_filter:
                 years = {yid: yr for yid, yr in years.items() if int(yr) == year_filter}
 
             for year_id, year in years.items():
-                # Enumerate models for this year/make
-                models = self._enumerate_models(year_id, year, make_name)
+                try:
+                    # Enumerate models for this year/make
+                    models = self._enumerate_models(year_id, year, make_name)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(
+                        "hierarchy_models_failed",
+                        make=make_name,
+                        year=year,
+                        year_id=year_id,
+                        error_type=type(e).__name__,
+                        error=str(e),
+                    )
+                    self.failure_tracker.record(
+                        phase="hierarchy",
+                        identifier=f"year:{make_name}/{year}",
+                        error_type=type(e).__name__,
+                        error_message=str(e),
+                    )
+                    continue
 
                 for application_id, model in models.items():
                     hierarchy.append(
@@ -264,7 +441,7 @@ class ScraperOrchestrator:
 
     def _scrape_application_page(
         self, application_id: int, vehicle_config: dict[str, Any]
-    ) -> list[Part]:
+    ) -> tuple[list[Part], list[dict[str, Any]]]:
         """Scrape parts from a vehicle application page.
 
         Args:
@@ -272,11 +449,11 @@ class ScraperOrchestrator:
             vehicle_config: Vehicle configuration dict with make, model, year
 
         Returns:
-            List of Part objects found on the page
+            Tuple of (Part objects, raw part data dicts with engine_qualifier)
 
         Example:
             >>> config = {"make": "Honda", "model": "Accord", "year": "2020"}
-            >>> parts = orchestrator._scrape_application_page(8430, config)
+            >>> parts, parts_data = orchestrator._scrape_application_page(8430, config)
             >>> len(parts) > 0
             True
         """
@@ -291,7 +468,7 @@ class ScraperOrchestrator:
         # Fetch page with JavaScript rendering
         html = self.fetcher.fetch_with_browser(url)
 
-        # Parse parts from application page (returns list of dicts)
+        # Parse parts from application page (returns list of dicts with engine_qualifier)
         soup = self.html_parser.parse(html)
         parts_data = self.html_parser.extract_parts_from_application_page(soup)
 
@@ -304,26 +481,36 @@ class ScraperOrchestrator:
             parts_found=len(parts),
         )
 
-        return parts
+        return parts, parts_data
 
-    def _deduplicate_and_track(self, parts: list[Part], vehicle: Vehicle) -> set[str]:
+    def _deduplicate_and_track(
+        self,
+        parts: list[Part],
+        vehicle: Vehicle,
+        previous_hashes: dict[str, str] | None = None,
+    ) -> DeduplicationResult:
         """Deduplicate parts by SKU and track vehicle compatibility.
 
         Uses last-write-wins strategy: always updates part data with latest
         information when re-scraping. Prevents duplicate vehicles in compatibility.
+        When previous_hashes is provided, also detects changed parts by comparing
+        content hashes.
 
         Args:
             parts: List of parts from application page
             vehicle: Vehicle configuration for compatibility tracking
+            previous_hashes: Optional dict of SKU -> content hash from previous export.
+                When provided, parts whose hash differs are tracked as changed.
 
         Returns:
-            Set of new SKUs (parts not seen before in this session)
+            DeduplicationResult with new_skus and changed_skus sets
 
         Note:
             This method updates self.unique_parts and self.vehicle_compat
             in place for memory efficiency.
         """
         new_skus: set[str] = set()
+        changed_skus: set[str] = set()
 
         for part in parts:
             sku = part.sku
@@ -332,6 +519,12 @@ class ScraperOrchestrator:
             if sku not in self.unique_parts:
                 new_skus.add(sku)
                 logger.debug("new_part_found", sku=sku, name=part.name)
+            elif previous_hashes and sku in previous_hashes:
+                # Check if content changed compared to previous export
+                current_hash = self._content_hash(part)
+                if current_hash != previous_hashes[sku]:
+                    changed_skus.add(sku)
+                    logger.debug("part_changed", sku=sku, name=part.name)
 
             # Always update with latest data (last-write-wins)
             self.unique_parts[sku] = part
@@ -340,28 +533,33 @@ class ScraperOrchestrator:
             if sku not in self.vehicle_compat:
                 self.vehicle_compat[sku] = []
 
-            # Check if this exact vehicle is already tracked
+            # Check if this exact vehicle (including engine) is already tracked
             vehicle_exists = any(
-                v.make == vehicle.make and v.model == vehicle.model and v.year == vehicle.year
+                v.make == vehicle.make
+                and v.model == vehicle.model
+                and v.year == vehicle.year
+                and v.engine == vehicle.engine
                 for v in self.vehicle_compat[sku]
             )
 
             if not vehicle_exists:
                 self.vehicle_compat[sku].append(vehicle)
+                engine_info = f" ({vehicle.engine})" if vehicle.engine else ""
                 logger.debug(
                     "vehicle_compatibility_added",
                     sku=sku,
-                    vehicle=f"{vehicle.year} {vehicle.make} {vehicle.model}",
+                    vehicle=f"{vehicle.year} {vehicle.make} {vehicle.model}{engine_info}",
                 )
 
         logger.info(
             "deduplication_complete",
             parts_processed=len(parts),
             new_parts=len(new_skus),
+            changed_parts=len(changed_skus),
             total_unique=len(self.unique_parts),
         )
 
-        return new_skus
+        return DeduplicationResult(new_skus=new_skus, changed_skus=changed_skus)
 
     def _fetch_detail_page(self, sku: str) -> dict[str, Any]:
         """Fetch and parse detail page for a part.
@@ -377,7 +575,9 @@ class ScraperOrchestrator:
             >>> "specifications" in detail
             True
         """
-        url = f"https://csf.mycarparts.com/items/{sku}"
+        # Extract numeric part from SKU (CSF-3562 -> 3562)
+        sku_number = sku.replace("CSF-", "").replace("csf-", "")
+        url = f"https://csf.autocaredata.com/items/{sku_number}"
         logger.info("fetching_detail_page", sku=sku, url=url)
 
         # Fetch page with JavaScript rendering
@@ -430,31 +630,65 @@ class ScraperOrchestrator:
         if detail_data.get("tech_notes"):
             updated_data["tech_notes"] = detail_data["tech_notes"]
 
+        if detail_data.get("interchange_data"):
+            # Add interchange numbers (convert dict to ReferenceNumber objects)
+            updated_data["interchange_numbers"] = detail_data["interchange_data"]
+
+        # Merge gallery images (filter to only "large" size, skip thumbnails)
+        if detail_data.get("additional_images"):
+            large_images = [
+                img for img in detail_data["additional_images"] if img.get("size") == "large"
+            ]
+
+            # Replace images with gallery images (already includes primary image first)
+            if large_images:
+                # Process images: download from S3 and convert to AVIF immediately
+                processed_images = self.image_processor.process_images(sku, large_images)
+                updated_data["images"] = processed_images
+
         # Create new Part with enriched data
         enriched_part = Part(**updated_data)
         self.unique_parts[sku] = enriched_part
 
-        logger.debug("part_enriched", sku=sku)
+        logger.debug("part_enriched", sku=sku, gallery_images=len(updated_data.get("images", [])))
 
-    def _create_vehicle_from_config(self, config: dict[str, Any]) -> Vehicle:
+    def _create_vehicle_from_config(
+        self, config: dict[str, Any], vehicle_qualifiers: dict[str, Any] | None = None
+    ) -> Vehicle:
         """Create Vehicle object from configuration dict.
 
         Args:
             config: Vehicle configuration with make, model, year
+            vehicle_qualifiers: Optional dict with 'engine', 'aspiration', 'qualifiers' keys
 
         Returns:
             Vehicle object
 
         Example:
             >>> config = {"make": "Honda", "model": "Accord", "year": "2020"}
-            >>> vehicle = orchestrator._create_vehicle_from_config(config)
+            >>> quals = {
+            ...     "engine": "2.0L L4 1993cc",
+            ...     "aspiration": "Turbocharged",
+            ...     "qualifiers": ["Manual"]
+            ... }
+            >>> vehicle = orchestrator._create_vehicle_from_config(config, quals)
             >>> vehicle.make
             'Honda'
+            >>> vehicle.engine
+            '2.0L L4 1993cc'
+            >>> vehicle.aspiration
+            'Turbocharged'
         """
+        if vehicle_qualifiers is None:
+            vehicle_qualifiers = {}
+
         return Vehicle(
             make=config["make"],
             model=config["model"],
             year=int(config["year"]),
+            engine=vehicle_qualifiers.get("engine"),
+            aspiration=vehicle_qualifiers.get("aspiration"),
+            qualifiers=vehicle_qualifiers.get("qualifiers", []),
         )
 
     def _get_hierarchy_fingerprint(self, hierarchy: list[dict[str, Any]]) -> str:
@@ -477,6 +711,86 @@ class ScraperOrchestrator:
 
         logger.debug("hierarchy_fingerprint_generated", fingerprint=fingerprint)
         return fingerprint
+
+    @staticmethod
+    def _content_hash(part: Part) -> str:
+        """MD5 hash of content-relevant Part fields for change detection.
+
+        Excludes volatile fields (scraped_at) and fields enriched separately
+        (description, tech_notes, interchange_numbers) so that a re-scrape of the
+        application page produces the same hash even if detail enrichment hasn't run yet.
+
+        Args:
+            part: Part to hash
+
+        Returns:
+            MD5 hex digest of content-relevant fields
+        """
+        content = {
+            "sku": part.sku,
+            "name": part.name,
+            "price": str(part.price) if part.price else None,
+            "category": part.category,
+            "specifications": part.specifications,
+            "images": [img.model_dump() for img in part.images],
+            "manufacturer": part.manufacturer,
+            "in_stock": part.in_stock,
+            "features": part.features,
+            "position": part.position,
+        }
+        return hashlib.md5(  # noqa: S324
+            json.dumps(content, sort_keys=True).encode()
+        ).hexdigest()
+
+    def load_previous_export(self, export_path: Path | None = None) -> dict[str, str]:
+        """Load previous parts.json and compute content hashes as baseline.
+
+        Pre-populates self.unique_parts so un-scraped parts are preserved in output.
+        Also loads previous compatibility.json to preserve vehicle compatibility data.
+        Returns hash map for change detection during deduplication.
+
+        Args:
+            export_path: Path to previous parts.json (default: self.output_dir / "parts.json")
+
+        Returns:
+            Dict mapping SKU -> content hash from previous export
+        """
+        path = export_path or (self.output_dir / "parts.json")
+
+        if not path.exists():
+            logger.info("no_previous_export_found", path=str(path))
+            return {}
+
+        data = json.loads(path.read_text())
+        previous_hashes: dict[str, str] = {}
+
+        for item in data:
+            try:
+                part = Part(**item)
+                self.unique_parts[part.sku] = part
+                previous_hashes[part.sku] = self._content_hash(part)
+            except (ValueError, TypeError, KeyError) as e:
+                logger.warning("previous_part_load_failed", sku=item.get("sku"), error=str(e))
+                continue
+
+        logger.info(
+            "previous_export_loaded",
+            parts_loaded=len(previous_hashes),
+            path=str(path),
+        )
+
+        # Load previous compatibility.json too
+        compat_path = path.parent / "compatibility.json"
+        if compat_path.exists():
+            compat_data = json.loads(compat_path.read_text())
+            for entry in compat_data:
+                sku = entry.get("sku", "")
+                vehicles = entry.get("vehicles", [])
+                if sku and sku not in self.vehicle_compat:
+                    self.vehicle_compat[sku] = [Vehicle(**v) for v in vehicles]
+            logger.info("previous_compatibility_loaded", entries=len(compat_data))
+
+        return previous_hashes
 
     def _load_last_fingerprint(
         self, make_filter: str | None = None, year_filter: int | None = None
@@ -606,16 +920,15 @@ class ScraperOrchestrator:
     def _save_checkpoint(self, make_filter: str | None, year_filter: int | None) -> Path:
         """Save current scraping state to checkpoint file.
 
+        Includes actual parts data and vehicle compatibility so resume
+        does not need to re-fetch already scraped pages.
+
         Args:
             make_filter: Make filter used in scraping
             year_filter: Year filter used in scraping
 
         Returns:
             Path to checkpoint file
-
-        Note:
-            Checkpoint includes processed application IDs and current statistics.
-            Parts and compatibility data are saved separately via export.
         """
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         filters = []
@@ -628,6 +941,15 @@ class ScraperOrchestrator:
         checkpoint_name = f"checkpoint_{filter_str}_{timestamp}.json"
         checkpoint_path = self.checkpoint_dir / checkpoint_name
 
+        # Serialize parts data for checkpoint
+        parts_data = {sku: part.model_dump(mode="json") for sku, part in self.unique_parts.items()}
+
+        # Serialize vehicle compatibility
+        compat_data = {
+            sku: [v.model_dump(mode="json") for v in vehicles]
+            for sku, vehicles in self.vehicle_compat.items()
+        }
+
         checkpoint_data = {
             "timestamp": timestamp,
             "make_filter": make_filter,
@@ -636,16 +958,27 @@ class ScraperOrchestrator:
             "unique_parts_count": len(self.unique_parts),
             "parts_scraped": self.parts_scraped,
             "vehicles_tracked": sum(len(v) for v in self.vehicle_compat.values()),
+            "parts_data": parts_data,
+            "vehicle_compat": compat_data,
+            "failure_records": self.failure_tracker.to_dicts(),
         }
 
         with checkpoint_path.open("w") as f:
-            json.dump(checkpoint_data, f, indent=2)
+            json.dump(checkpoint_data, f, indent=2, default=str)
 
-        logger.info("checkpoint_saved", path=str(checkpoint_path), **checkpoint_data)
+        logger.info(
+            "checkpoint_saved",
+            path=str(checkpoint_path),
+            unique_parts_count=len(self.unique_parts),
+            parts_scraped=self.parts_scraped,
+        )
         return checkpoint_path
 
     def _load_checkpoint(self, checkpoint_path: Path | str) -> dict[str, Any]:
         """Load scraping state from checkpoint file.
+
+        Restores parts data and vehicle compatibility if present in checkpoint
+        (backward-compatible with old checkpoints that lack these fields).
 
         Args:
             checkpoint_path: Path to checkpoint file
@@ -673,6 +1006,24 @@ class ScraperOrchestrator:
         except KeyError as e:
             msg = f"Invalid checkpoint file: {e}"
             raise ValueError(msg) from e
+
+        # Restore parts data if present (backward-compatible)
+        if "parts_data" in checkpoint_data:
+            for sku, part_dict in checkpoint_data["parts_data"].items():
+                self.unique_parts[sku] = Part(**part_dict)
+            logger.info(
+                "checkpoint_parts_restored",
+                count=len(checkpoint_data["parts_data"]),
+            )
+
+        # Restore vehicle compatibility if present (backward-compatible)
+        if "vehicle_compat" in checkpoint_data:
+            for sku, vehicles_list in checkpoint_data["vehicle_compat"].items():
+                self.vehicle_compat[sku] = [Vehicle(**v) for v in vehicles_list]
+            logger.info(
+                "checkpoint_compat_restored",
+                count=len(checkpoint_data["vehicle_compat"]),
+            )
 
         logger.info(
             "checkpoint_loaded",
@@ -725,14 +1076,15 @@ class ScraperOrchestrator:
 
         Workflow:
         1. [Optional] Check for catalog changes (if check_changes=True)
-        2. Build vehicle hierarchy (makes → years → models → applications)
+        2. Build vehicle hierarchy (makes -> years -> models -> applications)
         3. For each application:
            a. Scrape application page for parts list
            b. Deduplicate by SKU and track vehicle compatibility (last-write-wins)
            c. Save checkpoint every N applications
         4. For each SKU:
            a. Fetch detail page for new SKUs (if fetch_details_new_only=True)
-           b. OR fetch details for all SKUs (if fetch_details=True and fetch_details_new_only=False)
+           b. OR fetch details for all SKUs (if fetch_details=True and
+              fetch_details_new_only=False)
            c. Enrich part with detailed specifications
 
         Args:
@@ -745,22 +1097,7 @@ class ScraperOrchestrator:
             fetch_details_new_only: Only fetch details for new SKUs (default: True)
 
         Returns:
-            Dict with scraping statistics including:
-            - unique_parts: Total unique parts tracked
-            - new_parts: Parts added in this run
-            - catalog_changed: Whether hierarchy changed (if check_changes=True)
-            - details_fetched_count: Number of detail pages fetched
-
-        Example:
-            >>> # Daily intelligent scrape
-            >>> orchestrator = ScraperOrchestrator()
-            >>> stats = orchestrator.scrape_all(
-            ...     make_filter="Honda",
-            ...     check_changes=True,
-            ...     fetch_details_new_only=True
-            ... )
-            >>> if not stats['catalog_changed']:
-            ...     print("No changes detected, scrape skipped")
+            Dict with scraping statistics including failure tracking info
         """
         logger.info(
             "scraping_started",
@@ -786,6 +1123,7 @@ class ScraperOrchestrator:
                     "applications_processed": 0,
                     "parts_scraped": self.parts_scraped,
                     "new_parts": 0,
+                    "changed_parts": 0,
                     "vehicles_tracked": sum(len(v) for v in self.vehicle_compat.values()),
                     "make_filter": make_filter,
                     "year_filter": year_filter,
@@ -793,6 +1131,9 @@ class ScraperOrchestrator:
                     "details_fetched_count": 0,
                     "catalog_changed": False,
                     "resumed": resume,
+                    "applications_failed": 0,
+                    "details_failed": 0,
+                    "failure_summary": self.failure_tracker.get_summary(),
                 }
 
         # Resume from checkpoint if requested
@@ -803,6 +1144,11 @@ class ScraperOrchestrator:
                 # Also load previously exported data if incremental mode
                 if self.incremental:
                     logger.info("incremental_mode_resume", checkpoint=str(checkpoint))
+
+        # Load previous export as baseline (if incremental)
+        previous_hashes: dict[str, str] = {}
+        if self.incremental:
+            previous_hashes = self.load_previous_export()
 
         # Phase 1: Build vehicle hierarchy
         hierarchy = self._build_hierarchy(make_filter=make_filter, year_filter=year_filter)
@@ -826,7 +1172,9 @@ class ScraperOrchestrator:
 
         # Phase 2: Scrape application pages and deduplicate
         new_skus_found: set[str] = set()
+        changed_skus_found: set[str] = set()
         applications_processed = 0
+        applications_failed = 0
 
         for idx, config in enumerate(hierarchy, 1):
             application_id = config["application_id"]
@@ -839,16 +1187,40 @@ class ScraperOrchestrator:
             )
 
             try:
-                # Scrape application page
-                parts = self._scrape_application_page(application_id, config)
+                # Scrape application page (returns parts and raw data with vehicle_qualifiers)
+                parts, parts_data = self._scrape_application_page(application_id, config)
                 self.parts_scraped += len(parts)
 
-                # Create vehicle for compatibility tracking
-                vehicle = self._create_vehicle_from_config(config)
+                # Group parts by vehicle qualifiers (engine + aspiration + qualifiers)
+                # Create separate Vehicle objects for each unique qualifier combination
+                qualifier_groups: dict[str, tuple[dict[str, Any], list[Part]]] = {}
+                for part, part_dict in zip(parts, parts_data, strict=True):
+                    vehicle_qualifiers = part_dict.get("vehicle_qualifiers", {})
 
-                # Deduplicate and track compatibility (last-write-wins)
-                new_skus = self._deduplicate_and_track(parts, vehicle)
-                new_skus_found.update(new_skus)
+                    # Create unique key from qualifiers
+                    engine = vehicle_qualifiers.get("engine") or ""
+                    aspiration = vehicle_qualifiers.get("aspiration") or ""
+                    quals = "|".join(vehicle_qualifiers.get("qualifiers", []))
+                    qualifier_key = f"{engine}::{aspiration}::{quals}"
+
+                    if qualifier_key not in qualifier_groups:
+                        qualifier_groups[qualifier_key] = (vehicle_qualifiers, [])
+                    qualifier_groups[qualifier_key][1].append(part)
+
+                # Track compatibility for each qualifier variant
+                for _qualifier_key, (
+                    vehicle_qualifiers,
+                    qualifier_parts,
+                ) in qualifier_groups.items():
+                    # Create vehicle with specific qualifiers
+                    vehicle = self._create_vehicle_from_config(config, vehicle_qualifiers)
+
+                    # Deduplicate and track compatibility (last-write-wins)
+                    result = self._deduplicate_and_track(
+                        qualifier_parts, vehicle, previous_hashes or None
+                    )
+                    new_skus_found.update(result.new_skus)
+                    changed_skus_found.update(result.changed_skus)
 
                 # Mark as processed
                 self.processed_application_ids.add(application_id)
@@ -864,32 +1236,55 @@ class ScraperOrchestrator:
                         self.export_data()
 
             except Exception as e:
+                applications_failed += 1
+                self.failure_tracker.record(
+                    phase="application",
+                    identifier=str(application_id),
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                )
                 logger.exception(
                     "application_scrape_failed",
                     application_id=application_id,
                     error=str(e),
+                    error_type=type(e).__name__,
                 )
                 continue
 
         logger.info(
             "workflow_phase_2_complete",
             applications_processed=applications_processed,
+            applications_failed=applications_failed,
             unique_parts=len(self.unique_parts),
             new_skus=len(new_skus_found),
+            changed_skus=len(changed_skus_found),
         )
+
+        # Log incremental summary if we loaded a previous export
+        if previous_hashes:
+            preserved_skus = set(previous_hashes.keys()) - new_skus_found - changed_skus_found
+            logger.info(
+                "incremental_summary",
+                new=len(new_skus_found),
+                changed=len(changed_skus_found),
+                preserved=len(preserved_skus),
+            )
 
         # Save final checkpoint
         self._save_checkpoint(make_filter, year_filter)
 
         # Phase 3: Fetch detail pages for parts
         details_fetched_count = 0
+        details_failed = 0
         if fetch_details:
             # Determine which SKUs to fetch details for
             if fetch_details_new_only:
-                skus_to_fetch = new_skus_found
+                skus_to_fetch = new_skus_found | changed_skus_found
                 logger.info(
                     "workflow_phase_3_started_new_only",
-                    new_skus_to_enrich=len(skus_to_fetch),
+                    new_skus_to_enrich=len(new_skus_found),
+                    changed_skus_to_enrich=len(changed_skus_found),
+                    total_to_enrich=len(skus_to_fetch),
                 )
             else:
                 skus_to_fetch = set(self.unique_parts.keys())
@@ -911,22 +1306,36 @@ class ScraperOrchestrator:
                         self._enrich_part_with_details(sku, detail_data)
                         details_fetched_count += 1
                     except Exception as e:
-                        logger.exception("detail_fetch_failed", sku=sku, error=str(e))
+                        details_failed += 1
+                        self.failure_tracker.record(
+                            phase="detail",
+                            identifier=sku,
+                            error_type=type(e).__name__,
+                            error_message=str(e),
+                        )
+                        logger.exception(
+                            "detail_fetch_failed",
+                            sku=sku,
+                            error=str(e),
+                            error_type=type(e).__name__,
+                        )
                         continue
 
                 logger.info(
                     "workflow_phase_3_complete",
                     parts_enriched=details_fetched_count,
+                    details_failed=details_failed,
                     new_only=fetch_details_new_only,
                 )
 
         # Compile statistics
-        stats = {
+        stats: dict[str, Any] = {
             "unique_parts": len(self.unique_parts),
             "total_applications": total_applications,
             "applications_processed": applications_processed,
             "parts_scraped": self.parts_scraped,
             "new_parts": len(new_skus_found),
+            "changed_parts": len(changed_skus_found),
             "vehicles_tracked": sum(len(v) for v in self.vehicle_compat.values()),
             "make_filter": make_filter,
             "year_filter": year_filter,
@@ -935,10 +1344,80 @@ class ScraperOrchestrator:
             "details_new_only": fetch_details_new_only,
             "catalog_changed": catalog_changed,
             "resumed": resume,
+            "applications_failed": applications_failed,
+            "details_failed": details_failed,
+            "failure_summary": self.failure_tracker.get_summary(),
         }
 
         logger.info("scraping_completed", **stats)
         return stats
+
+    def generate_completeness_report(
+        self, previous_export_path: Path | str | None = None
+    ) -> dict[str, Any]:
+        """Generate a report on scraping completeness.
+
+        Compares current scrape results against a previous export to detect
+        missing or new parts, and summarizes all failures.
+
+        Args:
+            previous_export_path: Path to previous parts.json for comparison
+
+        Returns:
+            Dict with completeness metrics:
+            - current_parts_count: int
+            - failed_makes: list of make names that failed
+            - failed_applications: list of application IDs that failed
+            - failed_details: list of SKUs that failed detail fetch
+            - failure_summary: dict with counts by phase
+            - missing_skus: list of SKUs in previous but not current (if compared)
+            - new_skus: list of SKUs in current but not previous (if compared)
+        """
+        report: dict[str, Any] = {
+            "current_parts_count": len(self.unique_parts),
+            "failed_makes": self.failure_tracker.get_failed_identifiers("hierarchy"),
+            "failed_applications": self.failure_tracker.get_failed_identifiers("application"),
+            "failed_details": self.failure_tracker.get_failed_identifiers("detail"),
+            "failure_summary": self.failure_tracker.get_summary(),
+        }
+
+        # Compare with previous export if provided
+        if previous_export_path is not None:
+            previous_path = Path(previous_export_path)
+            if previous_path.exists():
+                with previous_path.open() as f:
+                    previous_data = json.load(f)
+
+                previous_skus = set()
+                if isinstance(previous_data, list):
+                    previous_skus = {p.get("sku", "") for p in previous_data}
+                elif isinstance(previous_data, dict) and "parts" in previous_data:
+                    previous_skus = {p.get("sku", "") for p in previous_data["parts"]}
+
+                current_skus = set(self.unique_parts.keys())
+
+                missing = previous_skus - current_skus
+                new = current_skus - previous_skus
+
+                report["missing_skus"] = sorted(missing)
+                report["new_skus"] = sorted(new)
+                report["missing_count"] = len(missing)
+                report["new_count"] = len(new)
+
+                if missing:
+                    logger.warning(
+                        "completeness_missing_parts",
+                        missing_count=len(missing),
+                        missing_skus=sorted(missing)[:10],
+                    )
+            else:
+                logger.info(
+                    "previous_export_not_found",
+                    path=str(previous_path),
+                )
+
+        logger.info("completeness_report_generated", **report)
+        return report
 
     def export_data(self) -> dict[str, Path]:
         """Export scraped data to JSON files.

@@ -123,20 +123,59 @@ ehthumbs.db
 Thumbs.db
 *~
 
-# Project specific
+# Project specific - scraper output
 scraped_data/
+scraped_data_clean/
 exports/
 checkpoints/
 downloads/
 temp/
 tmp/
 .cache/
+images/
+html/
+test_output/
+test_scrape_output/
+test_20052_output/
+test_parser_fixes/
+
+# Deprecated files
+*.DEPRECATED
+
+# Temporary/one-off test scripts
+test_qualifier_refactor.py
+
+# WordPress core (separate repo or DDEV-managed)
+wordpress/
+
+# Broken symlinks
+html
 
 # WordPress (DDEV local development)
-# WordPress core is downloaded by DDEV, not version controlled
 carpart-scraper-wp/wordpress/
 carpart-scraper-wp/wp-config.php
 carpart-scraper-wp/wp-content/
+carpart-scraper-wp/node_modules/
+carpart-scraper-wp/blocks/node_modules/
+carpart-scraper-wp/vendor/
+carpart-scraper-wp/.ddev/
+
+# WordPress plugin - generated/temp files
+carpart-scraper-wp/*.png
+carpart-scraper-wp/*.json
+!carpart-scraper-wp/package.json
+!carpart-scraper-wp/composer.json
+!carpart-scraper-wp/block.json
+!carpart-scraper-wp/.pa11yci.json
+carpart-scraper-wp/playwright-report/
+carpart-scraper-wp/test-results/
+carpart-scraper-wp/screenshots/
+
+# WordPress plugin - one-off scripts (catch any future ones)
+carpart-scraper-wp/analyze-*.php
+carpart-scraper-wp/check-*.php
+carpart-scraper-wp/clean-*.php
+carpart-scraper-wp/get-*.php
 
 # DDEV runtime files (config is version controlled)
 .ddev/.homeadditions/
@@ -192,5 +231,3 @@ credentials.json
 # Claude Code (keep settings, ignore temp files)
 .claude/.cache/
 .claude/temp/
-carpart-scraper-wp/blocks/node_modules/
-carpart-scraper-wp/vendor/

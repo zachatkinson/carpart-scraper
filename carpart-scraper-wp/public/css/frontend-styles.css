@@ -12,38 +12,15 @@
    ========================================================================== */
 
 :root {
-	/* Colors */
-	--csf-primary: #0073aa;
-	--csf-primary-hover: #005a87;
-	--csf-secondary: #23282d;
-	--csf-success: #46b450;
-	--csf-warning: #ffb900;
-	--csf-error: #dc3232;
-	--csf-text: #23282d;
-	--csf-text-light: #6c7781;
-	--csf-border: #dcdcde;
-	--csf-background: #ffffff;
-	--csf-background-alt: #f6f7f7;
+	/* Colors and base layout tokens are defined in csf-color-system.css.
+	   These component-specific spacing overrides remain here. */
 
-	/* Spacing */
+	/* Spacing (component-specific scale) */
 	--csf-spacing-xs: 0.25rem;
 	--csf-spacing-sm: 0.5rem;
 	--csf-spacing-md: 1rem;
 	--csf-spacing-lg: 1.5rem;
 	--csf-spacing-xl: 2rem;
-
-	/* Border Radius */
-	--csf-radius-sm: 4px;
-	--csf-radius-md: 8px;
-	--csf-radius-lg: 12px;
-
-	/* Shadows */
-	--csf-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
-	--csf-shadow-md: 0 3px 6px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.12);
-	--csf-shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.15), 0 3px 6px rgba(0, 0, 0, 0.10);
-
-	/* Transitions */
-	--csf-transition: all 0.2s ease-in-out;
 }
 
 /* ==========================================================================
@@ -55,7 +32,7 @@
 	max-width: 1200px;
 	margin: 0 auto;
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-	color: var(--csf-text);
+	color: var(--global-palette3, var(--csf-text));
 	line-height: 1.6;
 }
 
@@ -80,13 +57,13 @@
 	border-radius: var(--csf-radius-md);
 	font-size: 1rem;
 	transition: var(--csf-transition);
-	background: var(--csf-background);
+	background: var(--global-palette9, var(--csf-surface));
 }
 
 .csf-search__input:focus {
 	outline: none;
-	border-color: var(--csf-primary);
-	box-shadow: 0 0 0 3px rgba(0, 115, 170, 0.1);
+	border-color: var(--global-palette2, var(--csf-secondary));
+	box-shadow: 0 0 0 3px var(--csf-focus-ring);
 }
 
 .csf-search__input-icon {
@@ -94,7 +71,7 @@
 	left: var(--csf-spacing-md);
 	top: 50%;
 	transform: translateY(-50%);
-	color: var(--csf-text-light);
+	color: var(--global-palette3, var(--csf-text-muted));
 	pointer-events: none;
 }
 
@@ -112,28 +89,30 @@
 	padding: var(--csf-spacing-sm) var(--csf-spacing-md);
 	border: 1px solid var(--csf-border);
 	border-radius: var(--csf-radius-sm);
-	background: var(--csf-background);
+	background: var(--global-palette9, var(--csf-surface));
 	font-size: 0.875rem;
 	transition: var(--csf-transition);
 }
 
 .csf-search__filter:focus {
 	outline: none;
-	border-color: var(--csf-primary);
+	border-color: var(--global-palette2, var(--csf-secondary));
+	box-shadow: 0 0 0 3px var(--csf-focus-ring);
 }
 
 .csf-search__filter:disabled {
-	background: var(--csf-background-alt);
-	cursor: not-allowed;
-	opacity: 0.6;
+	background: var(--global-palette5, var(--csf-bg-alt));
+	cursor: not-allowed !important;
+	opacity: 0.5;
+	color: var(--global-palette3, var(--csf-text-muted));
 }
 
 .csf-search__clear-filters {
 	padding: var(--csf-spacing-sm) var(--csf-spacing-md);
 	border: 1px solid var(--csf-border);
 	border-radius: var(--csf-radius-sm);
-	background: var(--csf-background);
-	color: var(--csf-text);
+	background: var(--global-palette9, var(--csf-surface));
+	color: var(--global-palette3, var(--csf-text));
 	font-size: 0.875rem;
 	cursor: pointer;
 	transition: var(--csf-transition);
@@ -141,13 +120,14 @@
 }
 
 .csf-search__clear-filters:hover:not(:disabled) {
-	background: var(--csf-background-alt);
-	border-color: var(--csf-text-light);
+	background: var(--global-palette5, var(--csf-bg-alt));
+	border-color: var(--csf-border-hover);
 }
 
 .csf-search__clear-filters:disabled {
 	opacity: 0.5;
-	cursor: not-allowed;
+	cursor: not-allowed !important;
+	color: var(--global-palette3, var(--csf-text-muted));
 }
 
 /* ==========================================================================
@@ -167,7 +147,7 @@
 .csf-search__results-count {
 	margin: 0;
 	font-size: 0.875rem;
-	color: var(--csf-text-light);
+	color: var(--global-palette3, var(--csf-text-muted));
 }
 
 /* ==========================================================================
@@ -181,14 +161,14 @@
 	justify-content: center;
 	padding: var(--csf-spacing-xl);
 	text-align: center;
-	color: var(--csf-text-light);
+	color: var(--global-palette3, var(--csf-text-muted));
 }
 
 .csf-search__spinner {
 	width: 48px;
 	height: 48px;
 	border: 4px solid var(--csf-border);
-	border-top-color: var(--csf-primary);
+	border-top-color: var(--global-palette1, var(--csf-primary));
 	border-radius: 50%;
 	animation: csf-spin 0.8s linear infinite;
 	margin-bottom: var(--csf-spacing-md);
@@ -223,7 +203,7 @@
 	justify-content: center;
 	padding: var(--csf-spacing-xl);
 	text-align: center;
-	color: var(--csf-error);
+	color: var(--global-palette8, var(--csf-error));
 }
 
 .csf-search__error svg {
@@ -237,14 +217,14 @@
 
 .csf-search__error p {
 	margin: 0 0 var(--csf-spacing-md);
-	color: var(--csf-text-light);
+	color: var(--global-palette3, var(--csf-text-muted));
 }
 
 .csf-search__retry {
 	padding: var(--csf-spacing-sm) var(--csf-spacing-lg);
 	border: none;
 	border-radius: var(--csf-radius-sm);
-	background: var(--csf-primary);
+	background: var(--global-palette1, var(--csf-primary));
 	color: white;
 	font-size: 0.875rem;
 	cursor: pointer;
@@ -266,7 +246,7 @@
 	justify-content: center;
 	padding: var(--csf-spacing-xl);
 	text-align: center;
-	color: var(--csf-text-light);
+	color: var(--global-palette3, var(--csf-text-muted));
 }
 
 .csf-search__empty svg {
@@ -276,7 +256,7 @@
 .csf-search__empty h3 {
 	margin: 0 0 var(--csf-spacing-sm);
 	font-size: 1.25rem;
-	color: var(--csf-text);
+	color: var(--global-palette3, var(--csf-text));
 }
 
 .csf-search__empty p {
@@ -299,7 +279,7 @@
    ========================================================================== */
 
 .csf-part-card {
-	background: var(--csf-background);
+	background: var(--global-palette9, var(--csf-surface));
 	border: 1px solid var(--csf-border);
 	border-radius: var(--csf-radius-md);
 	overflow: hidden;
@@ -307,11 +287,37 @@
 	height: 100%;
 	display: flex;
 	flex-direction: column;
+	opacity: 1;
+}
+
+/* Dim other cards when hovering over the grid */
+.csf-search__grid:hover .csf-part-card,
+.csf-grid-items:hover .csf-part-card {
+	opacity: 0.5;
+}
+
+/* Restore full opacity to the hovered card */
+.csf-search__grid:hover .csf-part-card:hover,
+.csf-grid-items:hover .csf-part-card:hover {
+	opacity: 1;
 }
 
 .csf-part-card:hover {
-	box-shadow: var(--csf-shadow-md);
 	transform: translateY(-2px);
+	animation: csf-card-glow 2s ease-in-out infinite;
+}
+
+@keyframes csf-card-glow {
+	0%, 100% {
+		box-shadow: 0 0 8px var(--csf-glow-color),
+		            0 0 16px var(--csf-focus-ring),
+		            0 4px 12px rgba(0, 0, 0, 0.1);
+	}
+	50% {
+		box-shadow: 0 0 16px var(--csf-glow-color-strong),
+		            0 0 32px var(--csf-glow-color),
+		            0 4px 12px rgba(0, 0, 0, 0.1);
+	}
 }
 
 .csf-part-card__link {
@@ -323,15 +329,16 @@
 }
 
 .csf-part-card__link:focus {
-	outline: 2px solid var(--csf-primary);
+	outline: 2px solid var(--global-palette1, var(--csf-primary));
 	outline-offset: 2px;
 }
 
 /* Card Image */
 .csf-part-card__image {
+	position: relative;
 	width: 100%;
 	aspect-ratio: 4 / 3;
-	background: var(--csf-background-alt);
+	background: var(--global-palette5, var(--csf-bg-alt));
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -350,7 +357,7 @@
 }
 
 .csf-part-card__image--placeholder {
-	background: linear-gradient(135deg, var(--csf-background-alt) 0%, var(--csf-border) 100%);
+	background: linear-gradient(135deg, var(--csf-bg-alt) 0%, var(--csf-border) 100%);
 }
 
 /* Card Content */
@@ -361,12 +368,85 @@
 	flex-direction: column;
 }
 
-.csf-part-card__category {
-	margin: 0 0 var(--csf-spacing-xs);
-	font-size: 0.75rem;
+.csf-part-card__badge {
+	position: absolute;
+	bottom: var(--csf-spacing-sm);
+	right: var(--csf-spacing-sm);
+	display: inline-block;
+	margin: 0;
+	padding: 0.25rem 0.75rem;
+	font-size: 0.7rem;
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
-	color: var(--csf-primary);
+	font-weight: 600;
+	border-radius: 12px;
+	background-color: var(--global-palette2, var(--csf-secondary));
+	color: #ffffff;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Dimensions Section */
+.csf-dimensions-section {
+	margin-bottom: var(--csf-spacing-sm);
+}
+
+.csf-dimensions-section__label {
+	margin: 0 0 var(--csf-spacing-xs) 0 !important;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--global-palette3, var(--csf-text-muted));
+}
+
+.csf-dimensions-section__value {
+	margin: 0;
+	font-size: 0.8125rem;
+	color: var(--global-palette3, var(--csf-text-secondary));
+	line-height: 1.5;
+}
+
+.csf-dimensions-section__value sup,
+.csf-dimensions-section__value sub {
+	font-size: 0.65em;
+	line-height: 0;
+}
+
+/* Fitment Section */
+.csf-fitment-section {
+	margin-bottom: var(--csf-spacing-sm);
+}
+
+.csf-fitment-section__label {
+	margin: 0 0 var(--csf-spacing-xs) 0 !important;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--global-palette3, var(--csf-text-muted));
+}
+
+/* Make Badges */
+.csf-part-card__makes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+}
+
+.csf-part-card__make-badge {
+	display: inline-block;
+	padding: 0.15rem 0.5rem;
+	font-size: 0.75rem;
+	font-weight: 500;
+	border-radius: 20px;
+	background-color: var(--global-palette10, #8F8F8F);
+	color: #FCFCFC;
+	border: none;
+	text-transform: uppercase;
+}
+
+.csf-part-card__make-badge--more {
+	opacity: 0.7;
 	font-weight: 600;
 }
 
@@ -375,7 +455,7 @@
 	font-size: 1rem;
 	font-weight: 600;
 	line-height: 1.4;
-	color: var(--csf-text);
+	color: var(--global-palette3, var(--csf-text));
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
@@ -385,14 +465,14 @@
 .csf-part-card__sku {
 	margin: 0 0 var(--csf-spacing-xs);
 	font-size: 0.875rem;
-	color: var(--csf-text-light);
+	color: var(--global-palette3, var(--csf-text-muted));
 	font-family: "Courier New", monospace;
 }
 
 .csf-part-card__manufacturer {
 	margin: 0 0 auto;
 	font-size: 0.875rem;
-	color: var(--csf-text-light);
+	color: var(--global-palette3, var(--csf-text-muted));
 }
 
 /* Card Footer */
@@ -408,7 +488,7 @@
 .csf-part-card__price {
 	font-size: 1.125rem;
 	font-weight: 700;
-	color: var(--csf-primary);
+	color: var(--global-palette1, var(--csf-primary));
 }
 
 .csf-part-card__stock {
@@ -422,12 +502,12 @@
 
 .csf-part-card__stock--in-stock {
 	background: rgba(70, 180, 80, 0.1);
-	color: var(--csf-success);
+	color: var(--global-palette6, var(--csf-success));
 }
 
 .csf-part-card__stock--out-of-stock {
 	background: rgba(220, 50, 50, 0.1);
-	color: var(--csf-error);
+	color: var(--global-palette8, var(--csf-error));
 }
 
 /* ==========================================================================
@@ -449,18 +529,18 @@
 	height: 40px;
 	padding: var(--csf-spacing-sm);
 	border: 1px solid var(--csf-border);
-	border-radius: var(--csf-radius-sm);
-	background: var(--csf-background);
-	color: var(--csf-text);
+	border-radius: 20px;
+	background: var(--global-palette9, var(--csf-surface));
+	color: var(--global-palette3, var(--csf-text));
 	font-size: 0.875rem;
 	cursor: pointer;
 	transition: var(--csf-transition);
 }
 
 .csf-pagination__button:hover:not(:disabled):not(.csf-pagination__button--active) {
-	background: var(--csf-background-alt);
-	border-color: var(--csf-primary);
-	color: var(--csf-primary);
+	background: var(--global-palette5, var(--csf-bg-alt));
+	border-color: var(--global-palette1, var(--csf-primary));
+	color: var(--global-palette1, var(--csf-primary));
 }
 
 .csf-pagination__button:disabled {
@@ -469,15 +549,15 @@
 }
 
 .csf-pagination__button--active {
-	background: var(--csf-primary);
-	color: white;
-	border-color: var(--csf-primary);
+	background: var(--global-palette1, var(--csf-primary));
+	color: #FCFCFC;
+	border-color: var(--global-palette1, var(--csf-primary));
 	font-weight: 600;
 }
 
 .csf-pagination__ellipsis {
 	padding: var(--csf-spacing-sm);
-	color: var(--csf-text-light);
+	color: var(--global-palette3, var(--csf-text-muted));
 }
 
 /* ==========================================================================
@@ -552,24 +632,115 @@
    Dark Mode Support
    ========================================================================== */
 
-@media (prefers-color-scheme: dark) {
-	:root {
-		--csf-primary: #0095d9;
-		--csf-primary-hover: #0073aa;
-		--csf-secondary: #f0f0f1;
-		--csf-text: #f0f0f1;
-		--csf-text-light: #b0b0b0;
-		--csf-border: #3c434a;
-		--csf-background: #1d2327;
-		--csf-background-alt: #2c3338;
-	}
+/* Dark mode is handled in csf-color-system.css via two mechanisms:
+   1. --csf-* token overrides on :root (standalone fallback)
+   2. --global-palette* scoped overrides on plugin containers (Kadence integration) */
 
-	.csf-search__input,
-	.csf-search__filter,
-	.csf-search__clear-filters,
-	.csf-part-card,
-	.csf-pagination__button {
-		color: var(--csf-text);
+/* ==========================================================================
+   Interchange Numbers Table
+   ========================================================================== */
+
+.csf-interchange {
+	margin-top: 2rem;
+	padding: 1.5rem;
+	background-color: var(--csf-bg-alt);
+	border: 1px solid var(--csf-border);
+	border-radius: 4px;
+}
+
+.csf-interchange h2 {
+	margin: 0 0 0.5rem;
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text));
+}
+
+.csf-interchange-description {
+	margin: 0 0 1rem;
+	font-size: 0.875rem;
+	color: var(--global-palette3, var(--csf-text-secondary));
+}
+
+.csf-interchange-table {
+	width: 100%;
+	border-collapse: collapse;
+	background-color: var(--csf-surface);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.csf-interchange-table thead {
+	background-color: var(--global-palette1, var(--csf-primary));
+	color: #fff;
+}
+
+.csf-interchange-table th {
+	padding: 0.75rem 1rem;
+	text-align: left;
+	font-weight: 600;
+	font-size: 0.875rem;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.csf-interchange-table td {
+	padding: 0.75rem 1rem;
+	border-top: 1px solid var(--csf-border);
+	color: var(--global-palette3, var(--csf-text));
+	font-size: 0.9375rem;
+}
+
+.csf-interchange-table tbody tr:hover {
+	background-color: var(--csf-bg-alt);
+}
+
+/* Dark mode handled by --csf-* tokens in csf-color-system.css */
+
+/* ==========================================================================
+   Loading Overlay
+   ========================================================================== */
+
+/* Loading overlay for filter updates */
+.csf-loading-overlay {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: var(--csf-overlay-bg);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+	border-radius: 4px;
+}
+
+/* Loading overlay dark mode handled by --csf-overlay-bg token */
+
+.csf-loading-overlay p {
+	margin-top: 1rem;
+	font-size: 1rem;
+	color: var(--global-palette3, var(--csf-text));
+	font-weight: 500;
+}
+
+/* Spinner animation */
+.csf-spinner {
+	width: 48px;
+	height: 48px;
+	border: 4px solid var(--csf-border);
+	border-top-color: var(--global-palette1, var(--csf-primary));
+	border-radius: 50%;
+	animation: csf-spin 0.8s linear infinite;
+}
+
+@keyframes csf-spin {
+	0% {
+		transform: rotate(0deg);
+	}
+	100% {
+		transform: rotate(360deg);
 	}
 }
 
@@ -594,7 +765,7 @@
 	.csf-search__retry:focus-visible,
 	.csf-part-card__link:focus-visible,
 	.csf-pagination__button:focus-visible {
-		outline: 2px solid var(--csf-primary);
+		outline: 2px solid var(--global-palette1, var(--csf-primary));
 		outline-offset: 2px;
 	}
 }

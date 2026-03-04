@@ -25,6 +25,7 @@ $show_year_filter   = $attributes['showYearFilter'] ?? true;
 $show_make_filter   = $attributes['showMakeFilter'] ?? true;
 $show_model_filter  = $attributes['showModelFilter'] ?? true;
 $show_category_filter = $attributes['showCategoryFilter'] ?? false;
+$show_results_count   = $attributes['showResultsCount'] ?? true;
 $per_page           = $attributes['perPage'] ?? 12;
 // Get responsive columns.
 $columns = wp_parse_args(
@@ -46,7 +47,9 @@ $gap = wp_parse_args(
 	)
 );
 
-$button_text         = $attributes['buttonText'] ?? __( 'Find Parts', 'csf-parts' );
+$order_by            = $attributes['orderBy'] ?? 'name';
+$order_direction     = $attributes['orderDirection'] ?? 'asc';
+$button_text         = $attributes['buttonText'] ?? 'Find Parts';
 $enable_ajax         = $attributes['enableAjax'] ?? true;
 $pagination_type     = $attributes['paginationType'] ?? 'numbered';
 $image_aspect_ratio  = $attributes['imageAspectRatio'] ?? '1/1';
@@ -95,8 +98,13 @@ $selected_year     = '';
 $selected_make     = '';
 $selected_model    = '';
 $selected_category = '';
+$search_query      = '';
 
 if ( $show_filters ) {
+	if ( isset( $_GET['csf_search'] ) && ! empty( $_GET['csf_search'] ) ) {
+		$search_query         = sanitize_text_field( wp_unslash( $_GET['csf_search'] ) );
+		$filters['search']    = $search_query;
+	}
 	if ( isset( $_GET['csf_year'] ) && ! empty( $_GET['csf_year'] ) ) {
 		$selected_year      = sanitize_text_field( wp_unslash( $_GET['csf_year'] ) );
 		$filters['years']   = array( $selected_year );
@@ -115,6 +123,10 @@ if ( $show_filters ) {
 	}
 }
 
+// Pass sort options.
+$filters['orderby'] = $order_by;
+$filters['order']   = $order_direction;
+
 // Query parts from database (V2).
 $result      = $database->query_parts( $filters, $per_page, $current_page );
 $parts       = $result['parts'] ?? array();
@@ -129,10 +141,12 @@ $categories = array();
 
 if ( $show_filters ) {
 	if ( $show_year_filter ) {
-		$years = $database->get_vehicle_years();
+		$years_data = $database->get_vehicle_years();
+		$years = array_map( function( $item ) { return $item->year; }, $years_data );
 	}
 	if ( $show_make_filter ) {
-		$makes = $database->get_vehicle_makes();
+		$makes_data = $database->get_vehicle_makes();
+		$makes = array_map( function( $item ) { return $item->make; }, $makes_data );
 	}
 	if ( $show_model_filter ) {
 		$models = $database->get_vehicle_models();
@@ -162,8 +176,8 @@ if ( $enable_ajax && in_array( $pagination_type, array( 'endless', 'loadmore' ),
 		array(
 			'ajaxUrl'         => admin_url( 'admin-ajax.php' ),
 			'nonce'           => wp_create_nonce( 'csf_parts_pagination' ),
-			'loadMoreSingle'  => __( 'Load More (%d page remaining)', 'csf-parts' ),
-			'loadMorePlural'  => __( 'Load More (%d pages remaining)', 'csf-parts' ),
+			'loadMoreSingle'  => 'Load More (%d page remaining)',
+			'loadMorePlural'  => 'Load More (%d pages remaining)',
 		)
 	);
 }
@@ -183,23 +197,39 @@ if ( $show_filters ) {
 		'csf-parts-filters',
 		'csfPartsFilters',
 		array(
-			'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
-			'nonce'       => wp_create_nonce( 'csf_parts_filter' ),
-			'selectMake'  => __( 'Select Make', 'csf-parts' ),
-			'selectModel' => __( 'Select Model', 'csf-parts' ),
-			'loading'     => __( 'Loading...', 'csf-parts' ),
-			'noMakes'     => __( 'No makes available', 'csf-parts' ),
-			'noModels'    => __( 'No models available', 'csf-parts' ),
-			'error'       => __( 'Error loading options', 'csf-parts' ),
+			'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
+			'nonce'          => wp_create_nonce( 'csf_parts_filter' ),
+			'selectMake'     => 'Select Make',
+			'selectModel'    => 'Select Model',
+			'loading'        => 'Loading...',
+			'loadingResults' => 'Loading results...',
+			'noMakes'        => 'No makes available',
+			'noModels'       => 'No models available',
+			'error'          => 'Error loading options',
+			'resultSingular' => 'Part Found',
+			'resultPlural'   => 'Parts Found',
 		)
 	);
 }
 
-// Helper function to generate part URL (V2 format: /parts/category-sku).
-$get_part_url = function( $category, $sku ) {
-	$category_slug = strtolower( str_replace( array( ' ', '/', '&' ), '-', $category ) );
-	$category_slug = preg_replace( '/-+/', '-', $category_slug );
-	return home_url( '/parts/' . $category_slug . '-' . $sku );
+// Helper function to generate part URL (V2 format: /parts/csf{sku}).
+$get_part_url = function( $category, $sku ) use ( $selected_year, $selected_make, $selected_model ) {
+	// Use shared helper for base URL generation.
+	$base_url = csf_get_part_url( $sku );
+
+	// Preserve filter parameters for vehicle highlighting on part page
+	$params = array();
+	if ( ! empty( $selected_year ) ) {
+		$params['csf_year'] = $selected_year;
+	}
+	if ( ! empty( $selected_make ) ) {
+		$params['csf_make'] = $selected_make;
+	}
+	if ( ! empty( $selected_model ) ) {
+		$params['csf_model'] = $selected_model;
+	}
+
+	return ! empty( $params ) ? add_query_arg( $params, $base_url ) : $base_url;
 };
 
 // Helper function to get primary image from JSON.
@@ -213,16 +243,51 @@ $get_primary_image = function( $images_json ) {
 		return null;
 	}
 
-	// Return first image URL.
-	$first_image = $images[0];
-	if ( is_string( $first_image ) ) {
-		return $first_image;
-	}
-	if ( is_array( $first_image ) && isset( $first_image['url'] ) ) {
-		return $first_image['url'];
+	// Prefer second image (product photo) if available, otherwise use first (technical drawing).
+	$image_index = isset( $images[1] ) ? 1 : 0;
+	$image = $images[ $image_index ];
+
+	$raw_url = null;
+	if ( is_string( $image ) ) {
+		$raw_url = $image;
+	} elseif ( is_array( $image ) && isset( $image['url'] ) ) {
+		$raw_url = $image['url'];
 	}
 
-	return null;
+	return $raw_url ? csf_resolve_image_url( $raw_url ) : null;
+};
+
+// Helper function to extract dimensions from specifications.
+$get_dimensions = function( $specifications_json ) {
+	if ( empty( $specifications_json ) ) {
+		return null;
+	}
+
+	$specs = json_decode( $specifications_json, true );
+	if ( ! is_array( $specs ) || empty( $specs ) ) {
+		return null;
+	}
+
+	$length = $specs['Core Length (in)'] ?? null;
+	$width  = $specs['Core Width (in)'] ?? null;
+	$height = $specs['Core Thickness (in)'] ?? null;
+
+	if ( ! $length || ! $width || ! $height ) {
+		return null;
+	}
+
+	// Strip " (in)" from values since we add " in the format string
+	$length = str_replace( ' (in)', '', $length );
+	$width  = str_replace( ' (in)', '', $width );
+	$height = str_replace( ' (in)', '', $height );
+
+	// Convert fractions to HTML entities using shared helper function.
+	$length = csf_format_dimension_fractions( $length );
+	$width  = csf_format_dimension_fractions( $width );
+	$height = csf_format_dimension_fractions( $height );
+
+	// Format: L × W × H.
+	return sprintf( '%s" × %s" × %s"', $length, $width, $height );
 };
 ?>
 <?php
@@ -252,7 +317,7 @@ $get_color_scheme_css = function( $scheme ) {
 		case 'dark':
 			return 'background: #2d3748; color: #f7fafc;';
 		case 'brand':
-			return 'background: #0073aa; color: #ffffff;';
+			return 'background: var(--global-palette2, #0099CC); color: var(--global-palette3, #0A0A0A);';
 		case 'default':
 		default:
 			return '';
@@ -379,104 +444,139 @@ if ( $hide_on_mobile ) {
 	);
 }
 
+// Pagination hover styles.
+$comprehensive_css .= sprintf(
+	'
+	/* Pagination button base styles with transition */
+	#%1$s .csf-pagination-btn {
+		transition: all 0.3s ease;
+	}
+
+	/* Pagination hover - all buttons except current page */
+	#%1$s .csf-pagination-btn:not(.csf-pagination-current):hover {
+		background: var(--global-palette10, #E7E5E4) !important;
+		color: var(--global-palette9, #FAFAF9) !important;
+	}
+
+	/* Current page - no background change on hover, just add subtle shadow */
+	#%1$s .csf-pagination-current:hover {
+		background: transparent !important;
+		color: var(--global-palette1, #C41C10) !important;
+		border-color: var(--global-palette1, #C41C10) !important;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	}
+	',
+	esc_attr( $block_id )
+);
+
 // Output CSS.
 echo '<style>' . $comprehensive_css . '</style>';
+
+// Get block wrapper attributes (includes alignment classes like alignfull, alignwide).
+$wrapper_attributes = get_block_wrapper_attributes(
+	array(
+		'class'                   => 'csf-product-catalog',
+		'id'                      => $block_id,
+		'data-ajax'               => $enable_ajax ? '1' : '0',
+		'data-pagination-type'    => $pagination_type,
+		'data-per-page'           => $per_page,
+		'data-columns-desktop'    => $columns['desktop'],
+		'data-default-categories' => ! empty( $default_categories ) ? esc_attr( wp_json_encode( $default_categories ) ) : '',
+	)
+);
 ?>
-<div class="csf-product-catalog" id="<?php echo esc_attr( $block_id ); ?>" data-ajax="<?php echo esc_attr( $enable_ajax ? '1' : '0' ); ?>" data-pagination-type="<?php echo esc_attr( $pagination_type ); ?>" data-per-page="<?php echo esc_attr( $per_page ); ?>" data-columns-desktop="<?php echo esc_attr( $columns['desktop'] ); ?>">
+<div <?php echo $wrapper_attributes; ?>>
 	<?php if ( $show_filters ) : ?>
 		<form class="csf-catalog-filters csf-filter-form" method="get" action="">
-			<div class="csf-filter-controls" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-bottom: 24px;">
+			<!-- Search Box -->
+			<div class="csf-search-box">
+				<label for="<?php echo esc_attr( $block_id ); ?>-search" class="csf-search-box__label">
+					<?php esc_html_e( 'Search by Part Number or OEM', 'csf-parts' ); ?>
+				</label>
+				<input
+					type="text"
+					name="csf_search"
+					id="<?php echo esc_attr( $block_id ); ?>-search"
+					class="csf-search-box__input"
+					placeholder="<?php esc_attr_e( 'Enter SKU, OEM, or Partslink number...', 'csf-parts' ); ?>"
+					value="<?php echo esc_attr( isset( $_GET['csf_search'] ) ? sanitize_text_field( wp_unslash( $_GET['csf_search'] ) ) : '' ); ?>"
+				/>
+				<p class="csf-search-box__help-text">
+					<?php esc_html_e( 'Search for parts by CSF part number, OEM number, or Partslink number. Results update automatically as you type.', 'csf-parts' ); ?>
+				</p>
+			</div>
+
+			<div class="csf-filter-controls">
 				<?php if ( $show_year_filter && ! empty( $years ) ) : ?>
-					<div class="csf-filter-group" style="flex: 1; min-width: 150px;">
-						<label for="<?php echo esc_attr( $block_id ); ?>-year" style="display: block; margin-bottom: 4px; font-weight: 600;">
-							<?php esc_html_e( 'Year', 'csf-parts' ); ?>
-						</label>
-						<select
-							name="csf_year"
-							id="<?php echo esc_attr( $block_id ); ?>-year"
-							class="csf-select"
-							style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"
-						>
-							<option value=""><?php esc_html_e( 'Select Year', 'csf-parts' ); ?></option>
-							<?php foreach ( $years as $year ) : ?>
-								<option value="<?php echo esc_attr( $year ); ?>" <?php selected( $selected_year, $year ); ?>>
-									<?php echo esc_html( $year ); ?>
-								</option>
-							<?php endforeach; ?>
-						</select>
-					</div>
+					<?php
+					// Use helper function for consistent dropdown rendering.
+					echo csf_render_select(
+						array(
+							'id'          => $block_id . '-year',
+							'name'        => 'csf_year',
+							'options'     => array_combine( $years, $years ),
+							'selected'    => $selected_year,
+							'label'       => __( 'Year', 'csf-parts' ),
+							'placeholder' => __( 'Select Year', 'csf-parts' ),
+						)
+					);
+					?>
 				<?php endif; ?>
 
 				<?php if ( $show_make_filter && ! empty( $makes ) ) : ?>
-					<div class="csf-filter-group" style="flex: 1; min-width: 150px;">
-						<label for="<?php echo esc_attr( $block_id ); ?>-make" style="display: block; margin-bottom: 4px; font-weight: 600;">
-							<?php esc_html_e( 'Make', 'csf-parts' ); ?>
-						</label>
-						<select
-							name="csf_make"
-							id="<?php echo esc_attr( $block_id ); ?>-make"
-							class="csf-select"
-							style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"
-						>
-							<option value=""><?php esc_html_e( 'Select Make', 'csf-parts' ); ?></option>
-							<?php foreach ( $makes as $make ) : ?>
-								<option value="<?php echo esc_attr( $make ); ?>" <?php selected( $selected_make, $make ); ?>>
-									<?php echo esc_html( $make ); ?>
-								</option>
-							<?php endforeach; ?>
-						</select>
-					</div>
+					<?php
+					// Use helper function for consistent dropdown rendering.
+					echo csf_render_select(
+						array(
+							'id'          => $block_id . '-make',
+							'name'        => 'csf_make',
+							'options'     => array_combine( $makes, $makes ),
+							'selected'    => $selected_make,
+							'label'       => __( 'Make', 'csf-parts' ),
+							'placeholder' => __( 'Select Make', 'csf-parts' ),
+						)
+					);
+					?>
 				<?php endif; ?>
 
 				<?php if ( $show_model_filter && ! empty( $models ) ) : ?>
-					<div class="csf-filter-group" style="flex: 1; min-width: 150px;">
-						<label for="<?php echo esc_attr( $block_id ); ?>-model" style="display: block; margin-bottom: 4px; font-weight: 600;">
-							<?php esc_html_e( 'Model', 'csf-parts' ); ?>
-						</label>
-						<select
-							name="csf_model"
-							id="<?php echo esc_attr( $block_id ); ?>-model"
-							class="csf-select"
-							style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"
-						>
-							<option value=""><?php esc_html_e( 'Select Model', 'csf-parts' ); ?></option>
-							<?php foreach ( $models as $model ) : ?>
-								<option value="<?php echo esc_attr( $model ); ?>" <?php selected( $selected_model, $model ); ?>>
-									<?php echo esc_html( $model ); ?>
-								</option>
-							<?php endforeach; ?>
-						</select>
-					</div>
+					<?php
+					// Use helper function for consistent dropdown rendering.
+					echo csf_render_select(
+						array(
+							'id'          => $block_id . '-model',
+							'name'        => 'csf_model',
+							'options'     => array_combine( $models, $models ),
+							'selected'    => $selected_model,
+							'label'       => __( 'Model', 'csf-parts' ),
+							'placeholder' => __( 'Select Model', 'csf-parts' ),
+						)
+					);
+					?>
 				<?php endif; ?>
 
 				<?php if ( $show_category_filter && ! empty( $categories ) ) : ?>
-					<div class="csf-filter-group" style="flex: 1; min-width: 150px;">
-						<label for="<?php echo esc_attr( $block_id ); ?>-category" style="display: block; margin-bottom: 4px; font-weight: 600;">
-							<?php esc_html_e( 'Category', 'csf-parts' ); ?>
-						</label>
-						<select
-							name="csf_category"
-							id="<?php echo esc_attr( $block_id ); ?>-category"
-							class="csf-select"
-							style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"
-						>
-							<option value=""><?php esc_html_e( 'Select Category', 'csf-parts' ); ?></option>
-							<?php foreach ( $categories as $category ) : ?>
-								<option value="<?php echo esc_attr( $category ); ?>" <?php selected( $selected_category, $category ); ?>>
-									<?php echo esc_html( $category ); ?>
-								</option>
-							<?php endforeach; ?>
-						</select>
-					</div>
+					<?php
+					// Use helper function for consistent dropdown rendering.
+					echo csf_render_select(
+						array(
+							'id'          => $block_id . '-category',
+							'name'        => 'csf_category',
+							'options'     => array_combine( $categories, $categories ),
+							'selected'    => $selected_category,
+							'label'       => __( 'Category', 'csf-parts' ),
+							'placeholder' => __( 'Select Category', 'csf-parts' ),
+						)
+					);
+					?>
 				<?php endif; ?>
 
 				<div class="csf-filter-submit">
 					<button
-						type="submit"
-						class="csf-btn csf-btn-primary"
-						style="padding: 8px 24px; background: #0073aa; color: #fff; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;"
+						type="button"
+						class="csf-btn csf-btn-reset"
 					>
-						<?php echo esc_html( $button_text ); ?>
+						<?php esc_html_e( 'Reset Filters', 'csf-parts' ); ?>
 					</button>
 				</div>
 			</div>
@@ -485,19 +585,21 @@ echo '<style>' . $comprehensive_css . '</style>';
 
 	<div class="csf-catalog-results">
 		<?php if ( ! empty( $parts ) ) : ?>
-			<div class="csf-results-header" style="margin-bottom: 16px;">
-				<h3 style="margin: 0; font-size: 18px;">
-					<?php
-					echo esc_html(
-						sprintf(
-							/* translators: %d: number of parts */
-							_n( '%d Part Found', '%d Parts Found', $total_parts, 'csf-parts' ),
-							$total_parts
-						)
-					);
-					?>
-				</h3>
-			</div>
+			<?php if ( $show_results_count ) : ?>
+				<div class="csf-results-header" style="margin-bottom: 16px;">
+					<h3 class="csf-results-header__title">
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: %d: number of parts */
+								_n( '%d Part Found', '%d Parts Found', $total_parts, 'csf-parts' ),
+								$total_parts
+							)
+						);
+						?>
+					</h3>
+				</div>
+			<?php endif; ?>
 
 			<div class="csf-grid-items">
 				<?php foreach ( $parts as $part ) : ?>
@@ -505,47 +607,79 @@ echo '<style>' . $comprehensive_css . '</style>';
 					// Generate part URL.
 					$part_url = $get_part_url( $part->category, $part->sku );
 
-					// Get display title (fallback to category-SKU if name is empty).
-					$display_title = ! empty( $part->name ) ? $part->name : $part->category . ' - ' . $part->sku;
+					// Display title: Use shared helper for consistent formatting.
+					$display_title = csf_format_sku_display( $part->sku );
 
 					// Get primary image.
 					$primary_image = $get_primary_image( $part->images );
 					?>
-					<div class="csf-grid-item" style="border: 1px solid #ddd; border-radius: 4px; padding: 16px;">
-						<?php if ( $primary_image ) : ?>
-							<div class="csf-item-image" style="margin-bottom: 12px;">
-								<a href="<?php echo esc_url( $part_url ); ?>">
+					<article class="csf-part-card">
+						<a href="<?php echo esc_url( $part_url ); ?>" class="csf-part-card__link">
+							<?php if ( $primary_image ) : ?>
+								<div class="csf-part-card__image">
 									<img
 										src="<?php echo esc_url( $primary_image ); ?>"
 										alt="<?php echo esc_attr( $display_title ); ?>"
-										style="width: 100%; height: auto; border-radius: 4px;"
+										loading="lazy"
 									/>
-								</a>
-							</div>
-						<?php endif; ?>
-						<div class="csf-item-content">
-							<h3 class="csf-item-title" style="margin: 0 0 8px; font-size: 16px;">
-								<a href="<?php echo esc_url( $part_url ); ?>" style="text-decoration: none; color: #333;">
-									<?php echo esc_html( $display_title ); ?>
-								</a>
-							</h3>
-							<p class="csf-item-sku" style="margin: 4px 0; font-size: 13px; color: #757575;">
-								<strong><?php esc_html_e( 'SKU:', 'csf-parts' ); ?></strong> <?php echo esc_html( $part->sku ); ?>
-							</p>
-							<?php if ( ! is_null( $part->price ) && $part->price > 0 ) : ?>
-								<p class="csf-item-price" style="margin: 4px 0; font-size: 14px; font-weight: 600; color: #2c3e50;">
-									$<?php echo esc_html( number_format( $part->price, 2 ) ); ?>
-								</p>
+									<?php if ( ! empty( $part->category ) ) : ?>
+										<span class="csf-part-card__badge"><?php echo esc_html( $part->category ); ?></span>
+									<?php endif; ?>
+								</div>
+							<?php else : ?>
+								<div class="csf-part-card__image csf-part-card__image--placeholder">
+									<svg width="48" height="48" viewBox="0 0 20 20" fill="currentColor" opacity="0.2">
+										<path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/>
+									</svg>
+									<?php if ( ! empty( $part->category ) ) : ?>
+										<span class="csf-part-card__badge"><?php echo esc_html( $part->category ); ?></span>
+									<?php endif; ?>
+								</div>
 							<?php endif; ?>
-							<a
-								href="<?php echo esc_url( $part_url ); ?>"
-								class="csf-item-link"
-								style="display: inline-block; margin-top: 8px; padding: 6px 12px; background: #0073aa; color: #fff; text-decoration: none; border-radius: 3px; font-size: 13px;"
-							>
-								<?php esc_html_e( 'View Details', 'csf-parts' ); ?>
-							</a>
-						</div>
-					</div>
+							<div class="csf-part-card__content">
+								<h3 class="csf-part-card__title"><?php echo esc_html( $display_title ); ?></h3>
+								<?php
+								// Display dimensions if available.
+								$dimensions = $get_dimensions( $part->specifications );
+								if ( ! empty( $dimensions ) ) :
+								?>
+									<div class="csf-dimensions-section">
+										<p class="csf-dimensions-section__label"><?php esc_html_e( 'Dimensions', 'csf-parts' ); ?></p>
+										<p class="csf-dimensions-section__value"><?php echo wp_kses( $dimensions, array( 'sup' => array(), 'sub' => array() ) ); ?></p>
+									</div>
+								<?php endif; ?>
+								<?php
+								// Display fitment section with make badges if compatibility data exists.
+								$compatibility_data = ! empty( $part->compatibility ) ? json_decode( $part->compatibility, true ) : array();
+								$part_makes = array();
+								if ( is_array( $compatibility_data ) ) {
+									foreach ( $compatibility_data as $vehicle ) {
+										if ( isset( $vehicle['make'] ) && ! in_array( $vehicle['make'], $part_makes, true ) ) {
+											$part_makes[] = $vehicle['make'];
+										}
+									}
+								}
+								if ( ! empty( $part_makes ) ) :
+								?>
+									<div class="csf-fitment-section">
+										<p class="csf-fitment-section__label"><?php esc_html_e( 'Fits Models By', 'csf-parts' ); ?></p>
+										<div class="csf-part-card__makes">
+											<?php
+											$max_badges = 4;
+											$display_makes = array_slice( $part_makes, 0, $max_badges );
+											foreach ( $display_makes as $make ) :
+											?>
+												<span class="csf-part-card__make-badge"><?php echo esc_html( $make ); ?></span>
+											<?php endforeach; ?>
+											<?php if ( count( $part_makes ) > $max_badges ) : ?>
+												<span class="csf-part-card__make-badge csf-part-card__make-badge--more">+<?php echo esc_html( count( $part_makes ) - $max_badges ); ?></span>
+											<?php endif; ?>
+										</div>
+									</div>
+								<?php endif; ?>
+							</div>
+						</a>
+					</article>
 				<?php endforeach; ?>
 			</div>
 		<?php elseif ( $show_filters && ( $selected_year || $selected_make || $selected_model || $selected_category ) ) : ?>
@@ -596,7 +730,7 @@ echo '<style>' . $comprehensive_css . '</style>';
 						<a
 							href="<?php echo esc_url( $get_page_url( $current_page - 1 ) ); ?>"
 							class="csf-pagination-btn csf-pagination-prev"
-							style="padding: 8px 16px; background: #0073aa; color: #fff; text-decoration: none; border-radius: 4px; font-size: 14px;"
+							style="padding: 8px 16px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease;"
 						>
 							<?php esc_html_e( '← Previous', 'csf-parts' ); ?>
 						</a>
@@ -614,12 +748,12 @@ echo '<style>' . $comprehensive_css . '</style>';
 						<a
 							href="<?php echo esc_url( $get_page_url( 1 ) ); ?>"
 							class="csf-pagination-btn"
-							style="padding: 8px 12px; background: #f0f0f0; color: #333; text-decoration: none; border-radius: 4px; font-size: 14px;"
+							style="padding: 8px 12px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease;"
 						>
 							1
 						</a>
 						<?php if ( $start > 2 ) : ?>
-							<span style="padding: 8px 4px; color: #757575;">...</span>
+							<span style="padding: 8px 4px; color: var(--global-palette3, #5A5A5A);">...</span>
 						<?php endif; ?>
 					<?php endif; ?>
 
@@ -627,7 +761,7 @@ echo '<style>' . $comprehensive_css . '</style>';
 						<?php if ( $i === $current_page ) : ?>
 							<span
 								class="csf-pagination-btn csf-pagination-current"
-								style="padding: 8px 12px; background: #0073aa; color: #fff; border-radius: 4px; font-size: 14px; font-weight: 600;"
+								style="padding: 8px 12px; background: transparent; color: var(--global-palette2, #0099CC); border: 2px solid var(--global-palette2, #0099CC); border-radius: 4px; font-size: 14px; font-weight: 600; transition: all 0.3s ease;"
 							>
 								<?php echo esc_html( $i ); ?>
 							</span>
@@ -635,7 +769,7 @@ echo '<style>' . $comprehensive_css . '</style>';
 							<a
 								href="<?php echo esc_url( $get_page_url( $i ) ); ?>"
 								class="csf-pagination-btn"
-								style="padding: 8px 12px; background: #f0f0f0; color: #333; text-decoration: none; border-radius: 4px; font-size: 14px;"
+								style="padding: 8px 12px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease;"
 							>
 								<?php echo esc_html( $i ); ?>
 							</a>
@@ -647,12 +781,12 @@ echo '<style>' . $comprehensive_css . '</style>';
 					if ( $end < $total_pages ) :
 						?>
 						<?php if ( $end < $total_pages - 1 ) : ?>
-							<span style="padding: 8px 4px; color: #757575;">...</span>
+							<span style="padding: 8px 4px; color: var(--global-palette3, #5A5A5A);">...</span>
 						<?php endif; ?>
 						<a
 							href="<?php echo esc_url( $get_page_url( $total_pages ) ); ?>"
 							class="csf-pagination-btn"
-							style="padding: 8px 12px; background: #f0f0f0; color: #333; text-decoration: none; border-radius: 4px; font-size: 14px;"
+							style="padding: 8px 12px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease;"
 						>
 							<?php echo esc_html( $total_pages ); ?>
 						</a>
@@ -662,7 +796,7 @@ echo '<style>' . $comprehensive_css . '</style>';
 						<a
 							href="<?php echo esc_url( $get_page_url( $current_page + 1 ) ); ?>"
 							class="csf-pagination-btn csf-pagination-next"
-							style="padding: 8px 16px; background: #0073aa; color: #fff; text-decoration: none; border-radius: 4px; font-size: 14px;"
+							style="padding: 8px 16px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease;"
 						>
 							<?php esc_html_e( 'Next →', 'csf-parts' ); ?>
 						</a>
@@ -678,7 +812,7 @@ echo '<style>' . $comprehensive_css . '</style>';
 							data-block-id="<?php echo esc_attr( $block_id ); ?>"
 							data-next-page="<?php echo esc_attr( $current_page + 1 ); ?>"
 							data-total-pages="<?php echo esc_attr( $total_pages ); ?>"
-							style="padding: 12px 32px; background: #0073aa; color: #fff; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;"
+							class="csf-search-box__button"
 						>
 							<?php
 							echo esc_html(

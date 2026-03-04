@@ -25,7 +25,7 @@ $database = new CSF_Parts_Database();
 $part     = $database->get_part_by_sku( $sku );
 
 if ( ! $part ) {
-	return '<p>' . esc_html__( 'Product not found.', 'csf-parts' ) . '</p>';
+	return '<p>' . esc_html( 'Product not found.' ) . '</p>';
 }
 
 // Parse JSON fields.
@@ -38,7 +38,8 @@ $compatibility = ! empty( $part->compatibility ) ? json_decode( $part->compatibi
 $primary_image = '';
 if ( ! empty( $images ) ) {
 	if ( is_array( $images ) ) {
-		$primary_image = is_string( $images[0] ) ? $images[0] : ( $images[0]['url'] ?? '' );
+		$raw_url       = is_string( $images[0] ) ? $images[0] : ( $images[0]['url'] ?? '' );
+		$primary_image = ! empty( $raw_url ) ? csf_resolve_image_url( $raw_url ) : '';
 	}
 }
 
@@ -57,25 +58,34 @@ if ( ! empty( $images ) ) {
 
 	<div class="csf-product-details">
 		<?php
-		// Display name if available, otherwise fall back to category + SKU.
-		$display_title = ! empty( $part->name ) ? $part->name : $part->category . ' - ' . $part->sku;
+		// Display title: Remove hyphen from SKU (CSF-3680 -> CSF3680).
+		$display_title = ! empty( $part->name ) ? $part->name : str_replace( '-', '', $part->sku );
 		?>
 		<h2 class="csf-product-title"><?php echo esc_html( $display_title ); ?></h2>
 
 		<div class="csf-product-meta">
-			<p class="csf-sku"><strong><?php esc_html_e( 'SKU:', 'csf-parts' ); ?></strong> <?php echo esc_html( $part->sku ); ?></p>
+			<p class="csf-sku"><strong><?php echo esc_html( 'SKU:' ); ?></strong> <?php echo esc_html( $part->sku ); ?></p>
 			<?php if ( $part->manufacturer ) : ?>
-				<p class="csf-manufacturer"><strong><?php esc_html_e( 'Manufacturer:', 'csf-parts' ); ?></strong> <?php echo esc_html( $part->manufacturer ); ?></p>
+				<p class="csf-manufacturer"><strong><?php echo esc_html( 'Manufacturer:' ); ?></strong> <?php echo esc_html( $part->manufacturer ); ?></p>
 			<?php endif; ?>
 			<?php if ( $part->category ) : ?>
-				<p class="csf-category"><strong><?php esc_html_e( 'Category:', 'csf-parts' ); ?></strong> <?php echo esc_html( $part->category ); ?></p>
+				<p class="csf-category">
+					<strong><?php echo esc_html( 'Category:' ); ?></strong> <?php echo esc_html( $part->category ); ?>
+					<?php if ( ! empty( $part->discontinued ) && 1 === (int) $part->discontinued ) : ?>
+						<span class="csf-badge csf-discontinued-badge" style="display: inline-block; margin-left: 8px; padding: 6px 14px; background: transparent; color: var(--global-palette1, #C41C10); border: 2px solid var(--global-palette1, #C41C10); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-radius: 20px;">DISCONTINUED</span>
+					<?php endif; ?>
+				</p>
 			<?php endif; ?>
-			<?php if ( $show_price && $part->price ) : ?>
-				<p class="csf-price"><strong><?php esc_html_e( 'Price:', 'csf-parts' ); ?></strong> $<?php echo esc_html( number_format( $part->price, 2 ) ); ?></p>
+			<?php if ( $show_price ) : ?>
+				<?php if ( null !== $part->price && $part->price > 0 ) : ?>
+					<p class="csf-price"><strong><?php echo esc_html( 'Price:' ); ?></strong> $<?php echo esc_html( number_format( (float) $part->price, 2 ) ); ?></p>
+				<?php else : ?>
+					<p class="csf-price"><strong><?php echo esc_html( 'Price:' ); ?></strong> <?php echo esc_html( 'Contact for pricing' ); ?></p>
+				<?php endif; ?>
 			<?php endif; ?>
 			<p class="csf-stock">
-				<strong><?php esc_html_e( 'Availability:', 'csf-parts' ); ?></strong>
-				<?php echo $part->in_stock ? esc_html__( 'In Stock', 'csf-parts' ) : esc_html__( 'Out of Stock', 'csf-parts' ); ?>
+				<strong><?php echo esc_html( 'Availability:' ); ?></strong>
+				<?php echo $part->in_stock ? esc_html( 'In Stock' ) : esc_html( 'Out of Stock' ); ?>
 			</p>
 		</div>
 
@@ -87,7 +97,7 @@ if ( ! empty( $images ) ) {
 
 		<?php if ( $show_specs && ! empty( $specs ) ) : ?>
 			<div class="csf-specifications">
-				<h3><?php esc_html_e( 'Specifications', 'csf-parts' ); ?></h3>
+				<h3><?php echo esc_html( 'Specifications' ); ?></h3>
 				<dl>
 					<?php foreach ( $specs as $key => $value ) : ?>
 						<dt><?php echo esc_html( ucwords( str_replace( '_', ' ', $key ) ) ); ?></dt>
@@ -99,7 +109,7 @@ if ( ! empty( $images ) ) {
 
 		<?php if ( $show_features && ! empty( $features ) ) : ?>
 			<div class="csf-features">
-				<h3><?php esc_html_e( 'Features', 'csf-parts' ); ?></h3>
+				<h3><?php echo esc_html( 'Features' ); ?></h3>
 				<ul>
 					<?php foreach ( $features as $feature ) : ?>
 						<li><?php echo esc_html( $feature ); ?></li>
@@ -110,7 +120,7 @@ if ( ! empty( $images ) ) {
 
 		<?php if ( ! empty( $compatibility ) ) : ?>
 			<div class="csf-compatibility">
-				<h3><?php esc_html_e( 'Vehicle Compatibility', 'csf-parts' ); ?></h3>
+				<h3><?php echo esc_html( 'Vehicle Compatibility' ); ?></h3>
 				<ul>
 					<?php foreach ( $compatibility as $vehicle ) : ?>
 						<li>
@@ -135,7 +145,7 @@ if ( ! empty( $images ) ) {
 
 		<?php if ( $part->tech_notes ) : ?>
 			<div class="csf-tech-notes">
-				<h3><?php esc_html_e( 'Technical Notes', 'csf-parts' ); ?></h3>
+				<h3><?php echo esc_html( 'Technical Notes' ); ?></h3>
 				<p><?php echo esc_html( $part->tech_notes ); ?></p>
 			</div>
 		<?php endif; ?>

@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.models.validators import normalize_text, validate_csf_sku
+
 
 class PartImage(BaseModel):
     """Image associated with a part.
@@ -23,6 +25,23 @@ class PartImage(BaseModel):
     url: str = Field(..., min_length=1, description="Image URL")
     alt_text: str | None = Field(None, description="Alt text for image")
     is_primary: bool = Field(default=False, description="Primary product image flag")
+
+    model_config = {
+        "frozen": True,
+        "str_strip_whitespace": True,
+    }
+
+
+class ReferenceNumber(BaseModel):
+    """Interchange/OEM reference number.
+
+    Attributes:
+        reference_number: The actual part number (e.g., '30048', '88460-0D400')
+        reference_type: Type of reference (e.g., 'OEM', 'Partslink', 'DPI')
+    """
+
+    reference_number: str = Field(..., min_length=1, description="Reference part number")
+    reference_type: str = Field(..., min_length=1, description="Reference type")
 
     model_config = {
         "frozen": True,
@@ -49,6 +68,7 @@ class Part(BaseModel):
         features: List of product features/highlights
         tech_notes: Technical notes or special instructions
         position: Part position/location (e.g., 'Front', 'Rear')
+        interchange_numbers: List of OEM and aftermarket reference numbers
     """
 
     sku: str = Field(..., min_length=1, max_length=100, description="Part SKU")
@@ -65,6 +85,9 @@ class Part(BaseModel):
     features: list[str] = Field(default_factory=list, description="Product features")
     tech_notes: str | None = Field(None, description="Technical notes")
     position: str | None = Field(None, description="Part position/location")
+    interchange_numbers: list[ReferenceNumber] = Field(
+        default_factory=list, description="OEM and interchange reference numbers"
+    )
     scraped_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         description="Timestamp when part data was scraped",
@@ -84,11 +107,7 @@ class Part(BaseModel):
         Raises:
             ValueError: If SKU doesn't start with 'CSF-'
         """
-        v = v.upper().strip()
-        if not v.startswith("CSF-"):
-            msg = "SKU must start with 'CSF-'"
-            raise ValueError(msg)
-        return v
+        return validate_csf_sku(v)
 
     @field_validator("price")
     @classmethod
@@ -122,7 +141,7 @@ class Part(BaseModel):
         Returns:
             Title-cased category
         """
-        return v.strip().title()
+        return normalize_text(v)
 
     model_config = {
         "frozen": True,  # Immutable

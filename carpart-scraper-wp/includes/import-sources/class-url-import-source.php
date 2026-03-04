@@ -80,7 +80,7 @@ class URL_Import_Source implements Import_Source_Strategy {
 			throw new Exception(
 				sprintf(
 					/* translators: %s: error message */
-					__( 'Failed to fetch remote URL: %s', CSF_Parts_Constants::TEXT_DOMAIN ),
+					'Failed to fetch remote URL: %s',
 					$response->get_error_message()
 				)
 			);
@@ -91,7 +91,7 @@ class URL_Import_Source implements Import_Source_Strategy {
 			throw new Exception(
 				sprintf(
 					/* translators: %d: HTTP status code */
-					__( 'HTTP error %d when fetching remote URL', CSF_Parts_Constants::TEXT_DOMAIN ),
+					'HTTP error %d when fetching remote URL',
 					$status_code
 				)
 			);
@@ -114,20 +114,20 @@ class URL_Import_Source implements Import_Source_Strategy {
 	public function validate_configuration(): bool {
 		if ( empty( $this->url ) ) {
 			throw new Exception(
-				__( 'Remote URL is not configured', CSF_Parts_Constants::TEXT_DOMAIN )
+				'Remote URL is not configured'
 			);
 		}
 
 		if ( ! filter_var( $this->url, FILTER_VALIDATE_URL ) ) {
 			throw new Exception(
-				__( 'Remote URL is not a valid URL', CSF_Parts_Constants::TEXT_DOMAIN )
+				'Remote URL is not a valid URL'
 			);
 		}
 
 		// Enforce HTTPS for security.
 		if ( 0 !== strpos( $this->url, 'https://' ) ) {
 			throw new Exception(
-				__( 'Remote URL must use HTTPS', CSF_Parts_Constants::TEXT_DOMAIN )
+				'Remote URL must use HTTPS'
 			);
 		}
 
@@ -158,7 +158,7 @@ class URL_Import_Source implements Import_Source_Strategy {
 			throw new Exception(
 				sprintf(
 					/* translators: %s: JSON error message */
-					__( 'Invalid JSON received: %s', CSF_Parts_Constants::TEXT_DOMAIN ),
+					'Invalid JSON received: %s',
 					json_last_error_msg()
 				)
 			);
@@ -185,7 +185,7 @@ class URL_Import_Source implements Import_Source_Strategy {
 
 		if ( false === $bytes_written ) {
 			throw new Exception(
-				__( 'Failed to save downloaded file', CSF_Parts_Constants::TEXT_DOMAIN )
+				'Failed to save downloaded file'
 			);
 		}
 

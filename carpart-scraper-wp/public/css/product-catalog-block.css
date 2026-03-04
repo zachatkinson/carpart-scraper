@@ -1,0 +1,160 @@
+/**
+ * Product Catalog Block Styles
+ * Uses Kadence global palette directly for automatic dark mode support
+ */
+
+/* Block Container - Remove default padding for cleaner layout */
+.csf-product-catalog {
+	padding-left: 0 !important;
+	padding-right: 0 !important;
+}
+
+/* Search Box */
+.csf-search-box {
+	margin-bottom: 24px;
+}
+
+.csf-search-box__label {
+	display: block;
+	margin-bottom: 4px;
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text));
+}
+
+.csf-search-box__input {
+	width: 100%;
+	padding: 8px;
+	border: 1px solid var(--csf-border);
+	border-radius: 4px;
+	background: var(--global-palette9, var(--csf-surface));
+	color: var(--global-palette3, var(--csf-text));
+	font-size: 14px;
+	font-family: inherit;
+	line-height: 1.4;
+	appearance: none;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	box-sizing: border-box;
+	height: 38px;
+	vertical-align: middle;
+}
+
+.csf-search-box__input:hover {
+	border-color: var(--csf-border-hover);
+}
+
+.csf-search-box__input:focus {
+	outline: none !important;
+	border-color: var(--global-palette2, var(--csf-secondary)) !important;
+	box-shadow: 0 0 0 3px rgba(0, 153, 204, 0.2) !important;
+}
+
+.csf-search-box__help-text {
+	margin: 8px 0 0;
+	font-size: 13px;
+	color: var(--csf-text-secondary);
+}
+
+/* Filter Controls */
+.csf-filter-controls {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	align-items: end;
+	margin-bottom: 24px;
+}
+
+.csf-filter-group {
+	flex: 1;
+	min-width: 150px;
+}
+
+.csf-filter-group__label {
+	display: block;
+	margin-bottom: 4px;
+	font-weight: 600;
+	color: var(--global-palette3, var(--csf-text));
+}
+
+.csf-select {
+	width: 100%;
+	padding: 8px;
+	border: 1px solid var(--csf-border);
+	border-radius: 4px;
+	background: var(--global-palette9, var(--csf-surface));
+	color: var(--global-palette3, var(--csf-text));
+	font-size: 14px;
+	font-family: inherit;
+	line-height: 1.4;
+	appearance: none;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	box-sizing: border-box;
+	height: 38px;
+	vertical-align: middle;
+	background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8" viewBox="0 0 12 8"><path fill="%23999" d="M1.41 0L6 4.59L10.59 0L12 1.41l-6 6l-6-6z"/></svg>');
+	background-repeat: no-repeat;
+	background-position: right 8px center;
+	background-size: 12px 8px;
+	padding-right: 32px;
+}
+
+.csf-select:hover {
+	border-color: var(--csf-border-hover);
+}
+
+.csf-select:focus {
+	outline: none;
+	border-color: var(--global-palette2, var(--csf-secondary));
+	box-shadow: 0 0 0 3px var(--csf-focus-ring);
+}
+
+.csf-select:disabled {
+	background: var(--global-palette5, var(--csf-bg-alt));
+	cursor: not-allowed !important;
+	opacity: 0.5;
+	color: var(--global-palette3, var(--csf-text-muted));
+}
+
+.csf-button-reset {
+	padding: 8px 24px;
+	background: var(--global-palette8, var(--csf-error));
+	color: #FCFCFC !important;
+	border: none;
+	border-radius: 4px;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.csf-button-reset:hover {
+	opacity: 0.9;
+}
+
+/* Dark mode - keep button text white */
+@media (prefers-color-scheme: dark) {
+	.csf-button-reset,
+	.csf-btn-reset {
+		color: #FCFCFC !important;
+	}
+}
+
+/* Results Header */
+.csf-results-header {
+	margin-bottom: 16px;
+}
+
+.csf-results-header__title {
+	margin: 0;
+	font-size: 18px;
+	color: var(--global-palette3, var(--csf-text));
+}
+
+/* Empty State */
+.csf-empty-state {
+	text-align: center;
+	padding: 48px 24px;
+	color: var(--csf-text-secondary);
+}
+
+/* Dark mode handled in csf-color-system.css via scoped --global-palette* overrides. */

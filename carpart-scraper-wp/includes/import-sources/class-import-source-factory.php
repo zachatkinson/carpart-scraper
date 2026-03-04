@@ -53,7 +53,7 @@ class Import_Source_Factory {
 				throw new Exception(
 					sprintf(
 						/* translators: %s: source type */
-						__( 'Unknown import source type: %s', CSF_Parts_Constants::TEXT_DOMAIN ),
+						'Unknown import source type: %s',
 						$source_type
 					)
 				);
@@ -92,8 +92,8 @@ class Import_Source_Factory {
 	 */
 	public static function get_available_types(): array {
 		return array(
-			CSF_Parts_Constants::IMPORT_SOURCE_URL       => __( 'Remote URL', CSF_Parts_Constants::TEXT_DOMAIN ),
-			CSF_Parts_Constants::IMPORT_SOURCE_DIRECTORY => __( 'Local Directory', CSF_Parts_Constants::TEXT_DOMAIN ),
+			CSF_Parts_Constants::IMPORT_SOURCE_URL       => 'Remote URL',
+			CSF_Parts_Constants::IMPORT_SOURCE_DIRECTORY => 'Local Directory',
 		);
 	}
 }

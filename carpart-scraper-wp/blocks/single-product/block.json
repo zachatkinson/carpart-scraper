@@ -8,7 +8,6 @@
 	"description": "Display a single automotive part with details",
 	"keywords": ["part", "product", "automotive", "csf"],
 	"version": "1.0.0",
-	"textdomain": "csf-parts",
 	"attributes": {
 		"partId": {
 			"type": "number",

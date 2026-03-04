@@ -29,6 +29,9 @@ export default function Edit({ attributes, setAttributes }) {
 		showMakeFilter,
 		showModelFilter,
 		showCategoryFilter,
+		orderBy,
+		orderDirection,
+		showResultsCount,
 		perPage,
 		columns,
 		gap,
@@ -56,7 +59,7 @@ export default function Edit({ attributes, setAttributes }) {
 	// Suggestion lists (in real implementation, these would come from API)
 	const yearSuggestions = ['2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015'];
 	const makeSuggestions = ['Honda', 'Toyota', 'Ford', 'GM', 'Nissan', 'BMW', 'Mercedes', 'Audi', 'Dodge', 'Jeep'];
-	const categorySuggestions = ['Radiators', 'Condensers', 'Intercoolers', 'Oil Coolers', 'Radiator Caps'];
+	const categorySuggestions = ['Radiator', 'A/C Condenser', 'Intercooler', 'Automatic Transmission Oil Cooler', 'Engine Oil Cooler', 'Drive Motor Inverter Cooler', 'Power Steering Cooler', 'Radiator Cap'];
 
 	const hasDefaults = defaultYears.length > 0 || defaultMakes.length > 0 ||
 	                    defaultModels.length > 0 || defaultCategories.length > 0;
@@ -105,6 +108,15 @@ export default function Edit({ attributes, setAttributes }) {
 				</PanelBody>
 
 				<PanelBody title={__('Filter Display', 'csf-parts')} initialOpen={true}>
+					<ToggleControl
+						label={__('Show Results Count', 'csf-parts')}
+						checked={showResultsCount}
+						onChange={(value) => setAttributes({ showResultsCount: value })}
+						help={showResultsCount
+							? __('"X Parts Found" header is visible', 'csf-parts')
+							: __('Results count header is hidden', 'csf-parts')
+						}
+					/>
 					<ToggleControl
 						label={__('Show Filter Controls', 'csf-parts')}
 						checked={showFilters}
@@ -199,6 +211,34 @@ export default function Edit({ attributes, setAttributes }) {
 						onChange={(value) => setAttributes({ perPage: value })}
 						min={3}
 						max={48}
+					/>
+
+					<SelectControl
+						label={__('Sort By', 'csf-parts')}
+						value={orderBy}
+						onChange={(value) => setAttributes({ orderBy: value })}
+						options={[
+							{ label: __('Name', 'csf-parts'), value: 'name' },
+							{ label: __('SKU', 'csf-parts'), value: 'sku' },
+							{ label: __('Category', 'csf-parts'), value: 'category' },
+							{ label: __('Newest First', 'csf-parts'), value: 'created_at' },
+							{ label: __('Recently Updated', 'csf-parts'), value: 'updated_at' },
+							{ label: __('Latest Activity', 'csf-parts'), value: 'latest' }
+						]}
+						help={__('Choose how parts are ordered', 'csf-parts')}
+					/>
+					<SelectControl
+						label={__('Sort Direction', 'csf-parts')}
+						value={orderDirection}
+						onChange={(value) => setAttributes({ orderDirection: value })}
+						options={[
+							{ label: __('Ascending (A-Z, oldest first)', 'csf-parts'), value: 'asc' },
+							{ label: __('Descending (Z-A, newest first)', 'csf-parts'), value: 'desc' }
+						]}
+						help={orderBy === 'created_at' || orderBy === 'updated_at' || orderBy === 'latest'
+							? __('Use "Descending" for newest first', 'csf-parts')
+							: __('Sort order for results', 'csf-parts')
+						}
 					/>
 
 					<RangeControl
@@ -366,7 +406,7 @@ export default function Edit({ attributes, setAttributes }) {
 					/>
 				</PanelBody>
 
-				<PanelBody title={__('Advanced', 'csf-parts')} initialOpen={false}>
+				<PanelBody title={__('Behavior', 'csf-parts')} initialOpen={false}>
 					<TextControl
 						label={__('Button Text', 'csf-parts')}
 						value={buttonText}
@@ -382,10 +422,12 @@ export default function Edit({ attributes, setAttributes }) {
 				</PanelBody>
 			</InspectorControls>
 
-			<ServerSideRender
-				block="csf-parts/product-catalog"
-				attributes={attributes}
-			/>
+			<div style={{ pointerEvents: 'none' }}>
+				<ServerSideRender
+					block="csf-parts/product-catalog"
+					attributes={attributes}
+				/>
+			</div>
 		</div>
 	);
 }

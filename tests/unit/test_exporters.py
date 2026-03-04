@@ -1036,3 +1036,204 @@ def test_compatibility_to_dict_includes_vehicle_data(
     assert first_vehicle["year"] == 2020
     assert first_vehicle["submodel"] == "Quattro"
     assert first_vehicle["engine"] == "2.0L L4"
+
+
+# ============================================================================
+# Test OSError paths and compact JSON for uncovered branches
+# ============================================================================
+
+
+def test_export_parts_raises_oserror_on_write_failure(tmp_path: Path, sample_part: Part) -> None:
+    """Test that export_parts() raises OSError when file write fails.
+
+    Arrange: Create exporter and make output path a directory so write fails
+    Act: Try to export parts
+    Assert: OSError raised with descriptive message
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+    bad_path = tmp_path / "parts.json"
+    bad_path.mkdir()
+
+    # Act & Assert
+    with pytest.raises(OSError, match="Failed to export parts"):
+        exporter.export_parts([sample_part], filename="parts.json")
+
+
+def test_export_compatibility_raises_oserror_on_write_failure(
+    tmp_path: Path, sample_compatibility: VehicleCompatibility
+) -> None:
+    """Test that export_compatibility() raises OSError when file write fails.
+
+    Arrange: Create exporter and make output path a directory so write fails
+    Act: Try to export compatibility
+    Assert: OSError raised with descriptive message
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+    bad_path = tmp_path / "compat.json"
+    bad_path.mkdir()
+
+    # Act & Assert
+    with pytest.raises(OSError, match="Failed to export compatibility"):
+        exporter.export_compatibility([sample_compatibility], filename="compat.json")
+
+
+def test_export_hierarchical_compact_json(
+    tmp_path: Path, sample_part: Part, sample_compatibility: VehicleCompatibility
+) -> None:
+    """Test that export_hierarchical() with pretty=False produces compact single-line JSON.
+
+    Arrange: Create exporter with parts and compatibility data
+    Act: Export hierarchical with pretty=False
+    Assert: Output is a single line of JSON
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+    parts_by_sku = {"CSF-12345": sample_part}
+
+    # Act
+    output_path = exporter.export_hierarchical(
+        [sample_compatibility], parts_by_sku, filename="compact.json", pretty=False
+    )
+
+    # Assert
+    content = output_path.read_text(encoding="utf-8")
+    lines = content.strip().split("\n")
+    assert len(lines) == 1
+
+
+def test_export_hierarchical_raises_oserror_on_write_failure(
+    tmp_path: Path, sample_part: Part, sample_compatibility: VehicleCompatibility
+) -> None:
+    """Test that export_hierarchical() raises OSError when file write fails.
+
+    Arrange: Create exporter and make output path a directory so write fails
+    Act: Try to export hierarchical
+    Assert: OSError raised with descriptive message
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+    bad_path = tmp_path / "hierarchy.json"
+    bad_path.mkdir()
+
+    # Act & Assert
+    with pytest.raises(OSError, match="Failed to export hierarchical"):
+        exporter.export_hierarchical(
+            [sample_compatibility], {"CSF-12345": sample_part}, filename="hierarchy.json"
+        )
+
+
+def test_export_parts_incremental_compact_json(tmp_path: Path, sample_part: Part) -> None:
+    """Test that export_parts_incremental() with pretty=False produces compact JSON.
+
+    Arrange: Create exporter and sample part
+    Act: Export parts incrementally with pretty=False
+    Assert: Output is a single line of JSON
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+
+    # Act
+    output_path = exporter.export_parts_incremental(
+        [sample_part], filename="compact.json", pretty=False
+    )
+
+    # Assert
+    content = output_path.read_text(encoding="utf-8")
+    lines = content.strip().split("\n")
+    assert len(lines) == 1
+
+
+def test_export_parts_incremental_raises_oserror_on_write_failure(
+    tmp_path: Path, sample_part: Part
+) -> None:
+    """Test that export_parts_incremental() raises OSError when file write fails.
+
+    Arrange: Create exporter and make output path a directory so write fails
+    Act: Try to export parts incrementally
+    Assert: OSError raised with descriptive message
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+    bad_path = tmp_path / "inc.json"
+    bad_path.mkdir()
+
+    # Act & Assert
+    with pytest.raises(OSError, match="Failed to export parts incrementally"):
+        exporter.export_parts_incremental([sample_part], filename="inc.json")
+
+
+def test_export_compatibility_incremental_compact_json(
+    tmp_path: Path, sample_compatibility: VehicleCompatibility
+) -> None:
+    """Test that export_compatibility_incremental() with pretty=False produces compact JSON.
+
+    Arrange: Create exporter and sample compatibility
+    Act: Export compatibility incrementally with pretty=False
+    Assert: Output is a single line of JSON
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+
+    # Act
+    output_path = exporter.export_compatibility_incremental(
+        [sample_compatibility], filename="compact.json", pretty=False
+    )
+
+    # Assert
+    content = output_path.read_text(encoding="utf-8")
+    lines = content.strip().split("\n")
+    assert len(lines) == 1
+
+
+def test_export_compatibility_incremental_raises_oserror_on_write_failure(
+    tmp_path: Path, sample_compatibility: VehicleCompatibility
+) -> None:
+    """Test that export_compatibility_incremental() raises OSError when file write fails.
+
+    Arrange: Create exporter and make output path a directory so write fails
+    Act: Try to export compatibility incrementally
+    Assert: OSError raised with descriptive message
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+    bad_path = tmp_path / "inc_compat.json"
+    bad_path.mkdir()
+
+    # Act & Assert
+    with pytest.raises(OSError, match="Failed to export compatibility incrementally"):
+        exporter.export_compatibility_incremental(
+            [sample_compatibility], filename="inc_compat.json"
+        )
+
+
+def test_export_hierarchical_multiple_vehicles(tmp_path: Path) -> None:
+    """Test that export_hierarchical() handles multiple vehicles across different years/makes.
+
+    Arrange: Create two parts with distinct vehicle compatibility (different years/makes)
+    Act: Export hierarchical
+    Assert: Both years present in hierarchy with correct metadata
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+    part1 = Part(sku="CSF-100", name="Radiator A", category="Radiator", price=Decimal("99.99"))
+    part2 = Part(sku="CSF-200", name="Condenser B", category="Condenser", price=Decimal("199.99"))
+    compat1 = VehicleCompatibility(
+        part_sku="CSF-100",
+        vehicles=[Vehicle(make="Honda", model="Civic", year=2020)],
+    )
+    compat2 = VehicleCompatibility(
+        part_sku="CSF-200",
+        vehicles=[Vehicle(make="Toyota", model="Camry", year=2021)],
+    )
+    parts_by_sku = {"CSF-100": part1, "CSF-200": part2}
+
+    # Act
+    output_path = exporter.export_hierarchical([compat1, compat2], parts_by_sku)
+
+    # Assert
+    data = json.loads(output_path.read_text(encoding="utf-8"))
+    assert data["metadata"]["total_years"] == 2
+    assert "2020" in data["data"] or 2020 in data["data"]
+    assert "2021" in data["data"] or 2021 in data["data"]

@@ -27,44 +27,44 @@ $cleared = isset( $_GET['cleared'] ) && '1' === $_GET['cleared'];
 ?>
 
 <div class="wrap">
-	<h1><?php esc_html_e( 'Import Log', CSF_Parts_Constants::TEXT_DOMAIN ); ?></h1>
+	<h1><?php echo esc_html( 'Import Log' ); ?></h1>
 
 	<?php if ( $cleared ) : ?>
 		<div class="notice notice-success is-dismissible">
-			<p><?php esc_html_e( 'Import logs cleared successfully.', CSF_Parts_Constants::TEXT_DOMAIN ); ?></p>
+			<p><?php echo esc_html( 'Import logs cleared successfully.' ); ?></p>
 		</div>
 	<?php endif; ?>
 
 	<p>
 		<a href="<?php echo esc_url( admin_url( 'admin.php?page=csf-parts-import' ) ); ?>" class="button">
-			<?php esc_html_e( 'Back to Import', CSF_Parts_Constants::TEXT_DOMAIN ); ?>
+			<?php echo esc_html( 'Back to Import' ); ?>
 		</a>
 	</p>
 
 	<?php if ( empty( $logs ) ) : ?>
 		<div class="notice notice-info">
-			<p><?php esc_html_e( 'No import history found.', CSF_Parts_Constants::TEXT_DOMAIN ); ?></p>
+			<p><?php echo esc_html( 'No import history found.' ); ?></p>
 		</div>
 	<?php else : ?>
 		<form method="post" style="margin-bottom: 20px;">
 			<?php wp_nonce_field( 'csf_clear_logs_nonce' ); ?>
-			<button type="submit" name="csf_clear_logs" class="button" onclick="return confirm('<?php esc_attr_e( 'Are you sure you want to clear all import logs?', CSF_Parts_Constants::TEXT_DOMAIN ); ?>');">
-				<?php esc_html_e( 'Clear Logs', CSF_Parts_Constants::TEXT_DOMAIN ); ?>
+			<button type="submit" name="csf_clear_logs" class="button" onclick="return confirm('<?php echo esc_attr( 'Are you sure you want to clear all import logs?' ); ?>');">
+				<?php echo esc_html( 'Clear Logs' ); ?>
 			</button>
 		</form>
 
 		<table class="wp-list-table widefat fixed striped">
 			<thead>
 				<tr>
-					<th><?php esc_html_e( 'Date', CSF_Parts_Constants::TEXT_DOMAIN ); ?></th>
-					<th><?php esc_html_e( 'File', CSF_Parts_Constants::TEXT_DOMAIN ); ?></th>
-					<th><?php esc_html_e( 'Parts', CSF_Parts_Constants::TEXT_DOMAIN ); ?></th>
-					<th><?php esc_html_e( 'Created', CSF_Parts_Constants::TEXT_DOMAIN ); ?></th>
-					<th><?php esc_html_e( 'Updated', CSF_Parts_Constants::TEXT_DOMAIN ); ?></th>
-					<th><?php esc_html_e( 'Skipped', CSF_Parts_Constants::TEXT_DOMAIN ); ?></th>
-					<th><?php esc_html_e( 'Errors', CSF_Parts_Constants::TEXT_DOMAIN ); ?></th>
-					<th><?php esc_html_e( 'Warnings', CSF_Parts_Constants::TEXT_DOMAIN ); ?></th>
-					<th><?php esc_html_e( 'Duration', CSF_Parts_Constants::TEXT_DOMAIN ); ?></th>
+					<th><?php echo esc_html( 'Date' ); ?></th>
+					<th><?php echo esc_html( 'File' ); ?></th>
+					<th><?php echo esc_html( 'Parts' ); ?></th>
+					<th><?php echo esc_html( 'Created' ); ?></th>
+					<th><?php echo esc_html( 'Updated' ); ?></th>
+					<th><?php echo esc_html( 'Skipped' ); ?></th>
+					<th><?php echo esc_html( 'Errors' ); ?></th>
+					<th><?php echo esc_html( 'Warnings' ); ?></th>
+					<th><?php echo esc_html( 'Duration' ); ?></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -100,7 +100,7 @@ $cleared = isset( $_GET['cleared'] ) && '1' === $_GET['cleared'];
 									<?php echo esc_html( number_format_i18n( $error_count ) ); ?>
 								</span>
 								<button type="button" class="button button-small csf-toggle-details" data-target="errors-<?php echo esc_attr( sanitize_key( $log['completed_at'] ?? $log['uploaded_at'] ) ); ?>">
-									<?php esc_html_e( 'View', CSF_Parts_Constants::TEXT_DOMAIN ); ?>
+									<?php echo esc_html( 'View' ); ?>
 								</button>
 							<?php else : ?>
 								0
@@ -112,7 +112,7 @@ $cleared = isset( $_GET['cleared'] ) && '1' === $_GET['cleared'];
 									<?php echo esc_html( number_format_i18n( $warning_count ) ); ?>
 								</span>
 								<button type="button" class="button button-small csf-toggle-details" data-target="warnings-<?php echo esc_attr( sanitize_key( $log['completed_at'] ?? $log['uploaded_at'] ) ); ?>">
-									<?php esc_html_e( 'View', CSF_Parts_Constants::TEXT_DOMAIN ); ?>
+									<?php echo esc_html( 'View' ); ?>
 								</button>
 							<?php else : ?>
 								0
@@ -125,7 +125,7 @@ $cleared = isset( $_GET['cleared'] ) && '1' === $_GET['cleared'];
 					<?php if ( $error_count > 0 ) : ?>
 						<tr id="errors-<?php echo esc_attr( sanitize_key( $log['completed_at'] ?? $log['uploaded_at'] ) ); ?>" class="csf-details-row" style="display: none;">
 							<td colspan="9">
-								<strong><?php esc_html_e( 'Errors:', CSF_Parts_Constants::TEXT_DOMAIN ); ?></strong>
+								<strong><?php echo esc_html( 'Errors:' ); ?></strong>
 								<ul style="margin: 10px 0; padding-left: 20px;">
 									<?php foreach ( $results['errors'] as $error ) : ?>
 										<li style="color: #d63638;"><?php echo esc_html( $error ); ?></li>
@@ -139,7 +139,7 @@ $cleared = isset( $_GET['cleared'] ) && '1' === $_GET['cleared'];
 					<?php if ( $warning_count > 0 ) : ?>
 						<tr id="warnings-<?php echo esc_attr( sanitize_key( $log['completed_at'] ?? $log['uploaded_at'] ) ); ?>" class="csf-details-row" style="display: none;">
 							<td colspan="9">
-								<strong><?php esc_html_e( 'Warnings:', CSF_Parts_Constants::TEXT_DOMAIN ); ?></strong>
+								<strong><?php echo esc_html( 'Warnings:' ); ?></strong>
 								<ul style="margin: 10px 0; padding-left: 20px;">
 									<?php foreach ( $results['warnings'] as $warning ) : ?>
 										<li style="color: #dba617;"><?php echo esc_html( $warning ); ?></li>
@@ -156,7 +156,7 @@ $cleared = isset( $_GET['cleared'] ) && '1' === $_GET['cleared'];
 			<?php
 			printf(
 				/* translators: %d: number of logs */
-				esc_html__( 'Showing %d most recent import(s). Older logs are automatically removed.', CSF_Parts_Constants::TEXT_DOMAIN ),
+				esc_html( 'Showing %d most recent import(s). Older logs are automatically removed.' ),
 				count( $logs )
 			);
 			?>

@@ -1,8 +1,9 @@
 <?php
 /**
- * Main plugin class.
+ * Main plugin class (refactored for SOLID compliance).
  *
- * Coordinates all plugin functionality and initializes components.
+ * Orchestrates plugin initialization and coordinates components.
+ * Follows Single Responsibility Principle - only responsible for plugin lifecycle.
  *
  * @package CSF_Parts_Catalog
  * @since   1.0.0
@@ -14,6 +15,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Class CSF_Parts_Plugin
+ *
+ * Core orchestrator - delegates specific responsibilities to focused classes.
  */
 class CSF_Parts_Plugin {
 
@@ -25,63 +28,14 @@ class CSF_Parts_Plugin {
 	private static $instance = null;
 
 	/**
-	 * AJAX handler.
+	 * Component instances.
 	 *
-	 * @var CSF_Parts_AJAX_Handler
+	 * @var object[]
 	 */
-	public $ajax_handler;
+	private array $components = array();
 
 	/**
-	 * REST API handler.
-	 *
-	 * @var CSF_Parts_REST_API
-	 */
-	public $rest_api;
-
-	/**
-	 * Admin menu handler.
-	 *
-	 * @var CSF_Parts_Admin_Menu
-	 */
-	public $admin_menu;
-
-	/**
-	 * Auto-import handler.
-	 *
-	 * @var CSF_Parts_Auto_Import
-	 */
-	public $auto_import;
-
-	/**
-	 * Import manager.
-	 *
-	 * @var CSF_Parts_Import_Manager
-	 */
-	public $import_manager;
-
-	/**
-	 * URL handler for virtual pages.
-	 *
-	 * @var CSF_Parts_URL_Handler
-	 */
-	public $url_handler;
-
-	/**
-	 * Database handler.
-	 *
-	 * @var CSF_Parts_Database
-	 */
-	public $database;
-
-	/**
-	 * Shortcodes handler.
-	 *
-	 * @var CSF_Parts_Shortcodes
-	 */
-	public $shortcodes;
-
-	/**
-	 * Get plugin instance.
+	 * Get plugin instance (Singleton pattern).
 	 *
 	 * @return CSF_Parts_Plugin
 	 */
@@ -97,16 +51,20 @@ class CSF_Parts_Plugin {
 	 */
 	private function __construct() {
 		$this->load_dependencies();
+		$this->initialize_components();
 		$this->define_hooks();
 	}
 
 	/**
 	 * Load required dependencies.
 	 *
-	 * @since 1.0.0
+	 * @since 2.0.0
 	 */
 	private function load_dependencies(): void {
-		// Load constants first (required by all other classes).
+		// Load helper functions first.
+		require_once CSF_PARTS_PLUGIN_DIR . 'includes/helpers.php';
+
+		// Load constants.
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-constants.php';
 
 		// Load import source strategies.
@@ -115,7 +73,7 @@ class CSF_Parts_Plugin {
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/import-sources/class-directory-import-source.php';
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/import-sources/class-import-source-factory.php';
 
-		// Load core classes (v2 - dynamic architecture).
+		// Load core classes.
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-database.php';
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-url-handler.php';
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-sitemap-provider.php';
@@ -127,44 +85,69 @@ class CSF_Parts_Plugin {
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-auto-import.php';
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-shortcodes.php';
 
+		// Load separated responsibility classes (SOLID refactoring).
+		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-customizer.php';
+		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-assets.php';
+		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-block-manager.php';
+
 		// Load admin classes.
 		if ( is_admin() ) {
 			require_once CSF_PARTS_PLUGIN_DIR . 'admin/class-csf-parts-admin-menu.php';
 			require_once CSF_PARTS_PLUGIN_DIR . 'admin/class-csf-parts-import-manager.php';
 		}
+	}
 
-		// Initialize components (v2 architecture).
-		$this->database     = new CSF_Parts_Database();
-		$this->url_handler  = new CSF_Parts_URL_Handler();
+	/**
+	 * Initialize plugin components.
+	 *
+	 * Each component handles a single responsibility (SOLID principle).
+	 *
+	 * @since 2.0.0
+	 */
+	private function initialize_components(): void {
+		// Core database component.
+		$this->components['database'] = new CSF_Parts_Database();
+		$this->components['database']->maybe_migrate();
 
-		// Initialize supporting components.
-		$this->ajax_handler    = new CSF_Parts_AJAX_Handler();
-		$this->rest_api        = new CSF_Parts_REST_API();
-		$this->auto_import     = new CSF_Parts_Auto_Import();
-		$this->shortcodes      = new CSF_Parts_Shortcodes();
+		// URL handling (virtual pages).
+		$this->components['url_handler'] = new CSF_Parts_URL_Handler();
 
+		// Customizer integration (separated from main class).
+		$this->components['customizer'] = new CSF_Parts_Customizer();
+		$this->components['customizer']->init();
+
+		// Asset management (separated from main class).
+		$this->components['assets'] = new CSF_Parts_Assets( $this->components['customizer'] );
+		$this->components['assets']->init();
+
+		// Block management (separated from main class).
+		$this->components['block_manager'] = new CSF_Parts_Block_Manager();
+		$this->components['block_manager']->init();
+
+		// API handlers.
+		$this->components['ajax_handler'] = new CSF_Parts_AJAX_Handler();
+		$this->components['rest_api']     = new CSF_Parts_REST_API();
+
+		// Import and automation.
+		$this->components['auto_import'] = new CSF_Parts_Auto_Import();
+		$this->components['shortcodes']  = new CSF_Parts_Shortcodes();
+
+		// Admin components (only in admin context).
 		if ( is_admin() ) {
-			$this->admin_menu     = new CSF_Parts_Admin_Menu();
-			$this->import_manager = new CSF_Parts_Import_Manager();
+			$this->components['admin_menu']     = new CSF_Parts_Admin_Menu();
+			$this->components['import_manager'] = new CSF_Parts_Import_Manager();
 		}
 	}
 
 	/**
-	 * Define WordPress hooks.
+	 * Define core WordPress hooks.
 	 *
-	 * @since 1.0.0
+	 * Only hooks that directly relate to plugin orchestration remain here.
+	 * Component-specific hooks are defined in their respective classes.
+	 *
+	 * @since 2.0.0
 	 */
-	private function define_hooks() {
-		// Localization.
-		add_action( 'plugins_loaded', array( $this, 'load_textdomain' ) );
-
-		// Enqueue scripts and styles.
-		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_public_assets' ) );
-		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
-
-		// Register Gutenberg blocks.
-		add_action( 'init', array( $this, 'register_blocks' ) );
-
+	private function define_hooks(): void {
 		// Register sitemap provider (WordPress 5.5+).
 		add_action( 'init', array( $this, 'register_sitemap_provider' ) );
 
@@ -180,146 +163,22 @@ class CSF_Parts_Plugin {
 	 *
 	 * @since 1.0.0
 	 */
-	public function run() {
+	public function run(): void {
 		// Plugin is initialized in constructor via hooks.
 		do_action( 'csf_parts_loaded' );
 	}
 
 	/**
-	 * Load plugin textdomain for internationalization.
+	 * Get component instance.
 	 *
-	 * @since 1.0.0
-	 */
-	public function load_textdomain() {
-		load_plugin_textdomain(
-			'csf-parts',
-			false,
-			dirname( CSF_PARTS_BASENAME ) . '/languages'
-		);
-	}
-
-	/**
-	 * Enqueue public-facing assets.
+	 * Provides access to plugin components for extensibility.
 	 *
-	 * @since 1.0.0
+	 * @since 2.0.0
+	 * @param string $component_name Component name.
+	 * @return object|null Component instance or null if not found.
 	 */
-	public function enqueue_public_assets() {
-		// Public CSS.
-		wp_enqueue_style(
-			'csf-parts-public',
-			CSF_PARTS_PLUGIN_URL . 'public/css/frontend-styles.css',
-			array(),
-			CSF_PARTS_VERSION,
-			'all'
-		);
-
-		// Async search JS.
-		wp_enqueue_script(
-			'csf-parts-search',
-			CSF_PARTS_PLUGIN_URL . 'public/js/search-async.js',
-			array(),
-			CSF_PARTS_VERSION,
-			true
-		);
-
-		// Localize script with REST API data.
-		wp_localize_script(
-			'csf-parts-search',
-			'csfPartsData',
-			array(
-				'restUrl'   => rest_url( 'csf/v1/' ),
-				'nonce'     => wp_create_nonce( 'wp_rest' ),
-				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
-			)
-		);
-	}
-
-	/**
-	 * Enqueue admin assets.
-	 *
-	 * @since 1.0.0
-	 * @param string $hook Current admin page hook.
-	 */
-	public function enqueue_admin_assets( $hook ) {
-		// Only load on CSF Parts admin pages.
-		if ( empty( $hook ) || false === strpos( $hook, 'csf-parts' ) ) {
-			return;
-		}
-
-		// Admin CSS.
-		wp_enqueue_style(
-			'csf-parts-admin',
-			CSF_PARTS_PLUGIN_URL . 'admin/css/admin-styles.css',
-			array(),
-			CSF_PARTS_VERSION,
-			'all'
-		);
-
-		// Admin JS.
-		wp_enqueue_script(
-			'csf-parts-admin',
-			CSF_PARTS_PLUGIN_URL . 'admin/js/admin-scripts.js',
-			array( 'jquery' ),
-			CSF_PARTS_VERSION,
-			true
-		);
-
-		// Localize admin script.
-		wp_localize_script(
-			'csf-parts-admin',
-			'csfPartsAdmin',
-			array(
-				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-				'nonce'   => wp_create_nonce( 'csf_parts_admin' ),
-			)
-		);
-	}
-
-	/**
-	 * Register Gutenberg blocks.
-	 *
-	 * @since 1.0.0
-	 */
-	public function register_blocks() {
-		// Check if Block Editor is available.
-		if ( ! function_exists( 'register_block_type' ) ) {
-			return;
-		}
-
-		// Register block category.
-		add_filter( 'block_categories_all', array( $this, 'register_block_category' ), 10, 2 );
-
-		// Register blocks (will be built with @wordpress/scripts).
-		$blocks = array( 'single-product', 'product-catalog' );
-
-		foreach ( $blocks as $block ) {
-			$block_path = CSF_PARTS_PLUGIN_DIR . 'blocks/' . $block;
-
-			if ( file_exists( $block_path . '/block.json' ) ) {
-				register_block_type( $block_path );
-			}
-		}
-	}
-
-	/**
-	 * Register custom block category.
-	 *
-	 * @since 1.0.0
-	 * @param array                   $categories Existing block categories.
-	 * @param WP_Block_Editor_Context $context    Block editor context.
-	 * @return array Modified block categories.
-	 */
-	public function register_block_category( $categories, $context ) {
-		return array_merge(
-			$categories,
-			array(
-				array(
-					'slug'  => 'csf-parts',
-					'title' => __( 'CSF Parts', 'csf-parts' ),
-					'icon'  => 'car',
-				),
-			)
-		);
+	public function get_component( string $component_name ) {
+		return $this->components[ $component_name ] ?? null;
 	}
 
 	/**
@@ -327,7 +186,7 @@ class CSF_Parts_Plugin {
 	 *
 	 * @since 2.0.0
 	 */
-	public function register_sitemap_provider() {
+	public function register_sitemap_provider(): void {
 		// Check if sitemaps are available (WordPress 5.5+).
 		if ( ! function_exists( 'wp_register_sitemap_provider' ) ) {
 			return;
@@ -345,7 +204,7 @@ class CSF_Parts_Plugin {
 	 * @param array $mimes Existing MIME types.
 	 * @return array Modified MIME types.
 	 */
-	public function allow_json_uploads( $mimes ) {
+	public function allow_json_uploads( array $mimes ): array {
 		// Only allow JSON uploads for administrators.
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return $mimes;
@@ -364,7 +223,7 @@ class CSF_Parts_Plugin {
 	 * @param array $links Existing plugin action links.
 	 * @return array Modified action links.
 	 */
-	public function add_action_links( $links ) {
+	public function add_action_links( array $links ): array {
 		$settings_link = sprintf(
 			'<a href="%s">%s</a>',
 			admin_url( 'admin.php?page=csf-parts-import' ),
@@ -376,5 +235,14 @@ class CSF_Parts_Plugin {
 		return $links;
 	}
 
-
+	/**
+	 * Legacy getter for backwards compatibility.
+	 *
+	 * @deprecated 2.0.0 Use get_component() instead.
+	 * @param string $property Property name.
+	 * @return mixed Component instance or null.
+	 */
+	public function __get( string $property ) {
+		return $this->get_component( $property );
+	}
 }

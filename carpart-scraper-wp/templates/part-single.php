@@ -87,7 +87,7 @@ if ( ! $is_block_theme ) {
 			<div class="csf-part-image">
 				<?php if ( ! empty( $images ) && isset( $images[0]['url'] ) ) : ?>
 					<img
-						src="<?php echo esc_url( $images[0]['url'] ); ?>"
+						src="<?php echo esc_url( csf_resolve_image_url( $images[0]['url'] ) ); ?>"
 						alt="<?php echo esc_attr( $images[0]['alt_text'] ?? $title ); ?>"
 						loading="lazy"
 					>
@@ -108,12 +108,24 @@ if ( ! $is_block_theme ) {
 						<strong>Manufacturer:</strong> <?php echo esc_html( $part->manufacturer ); ?>
 					</p>
 				<?php endif; ?>
+				<?php if ( $part->category ) : ?>
+					<p class="csf-category">
+						<strong>Category:</strong> <?php echo esc_html( $part->category ); ?>
+						<?php if ( ! empty( $part->discontinued ) && 1 === (int) $part->discontinued ) : ?>
+							<span class="csf-badge csf-discontinued-badge" style="display: inline-block; margin-left: 8px; padding: 6px 14px; background: transparent; color: var(--global-palette1, #C41C10); border: 2px solid var(--global-palette1, #C41C10); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-radius: 20px;">DISCONTINUED</span>
+						<?php endif; ?>
+					</p>
+				<?php endif; ?>
 
 				<!-- Price & Availability -->
 				<div class="csf-pricing">
 					<p class="csf-price">
 						<strong>Price:</strong>
-						<span class="amount">$<?php echo esc_html( number_format( $part->price, 2 ) ); ?></span>
+						<?php if ( null !== $part->price && $part->price > 0 ) : ?>
+							<span class="amount">$<?php echo esc_html( number_format( (float) $part->price, 2 ) ); ?></span>
+						<?php else : ?>
+							<span class="contact-price" style="color: #666;">Contact for pricing</span>
+						<?php endif; ?>
 					</p>
 					<p class="csf-stock <?php echo $part->in_stock ? 'in-stock' : 'out-of-stock'; ?>">
 						<?php echo $part->in_stock ? 'In Stock' : 'Out of Stock'; ?>
@@ -196,6 +208,43 @@ if ( ! $is_block_theme ) {
 						<li><?php echo esc_html( $feature ); ?></li>
 					<?php endforeach; ?>
 				</ul>
+			</div>
+		<?php endif; ?>
+
+		<!-- Interchange / Reference Numbers -->
+		<?php if ( ! empty( $interchange_numbers ) ) : ?>
+			<?php
+			// Sort interchange numbers alphabetically by reference_type, then by reference_number.
+			usort(
+				$interchange_numbers,
+				function( $a, $b ) {
+					$type_compare = strcmp( $a['reference_type'] ?? '', $b['reference_type'] ?? '' );
+					if ( 0 !== $type_compare ) {
+						return $type_compare;
+					}
+					return strcmp( $a['reference_number'] ?? '', $b['reference_number'] ?? '' );
+				}
+			);
+			?>
+			<div class="csf-interchange">
+				<h2>Interchange Numbers</h2>
+				<p class="csf-interchange-description">This part replaces the following OEM and aftermarket part numbers:</p>
+				<table class="csf-interchange-table">
+					<thead>
+						<tr>
+							<th>Reference Type</th>
+							<th>Part Number</th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $interchange_numbers as $reference ) : ?>
+							<tr>
+								<td><strong><?php echo esc_html( $reference['reference_type'] ?? 'OEM' ); ?></strong></td>
+								<td><?php echo esc_html( $reference['reference_number'] ?? '' ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
 			</div>
 		<?php endif; ?>
 

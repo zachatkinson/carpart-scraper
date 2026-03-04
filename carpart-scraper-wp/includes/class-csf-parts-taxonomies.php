@@ -122,30 +122,30 @@ class CSF_Parts_Taxonomies {
 		bool $hierarchical = false
 	): array {
 		$labels = array(
-			'name'                       => _x( $plural, 'Taxonomy general name', CSF_Parts_Constants::TEXT_DOMAIN ),
-			'singular_name'              => _x( $singular, 'Taxonomy singular name', CSF_Parts_Constants::TEXT_DOMAIN ),
-			'menu_name'                  => __( $plural, CSF_Parts_Constants::TEXT_DOMAIN ),
-			'all_items'                  => sprintf( __( 'All %s', CSF_Parts_Constants::TEXT_DOMAIN ), $plural ),
-			'new_item_name'              => sprintf( __( 'New %s Name', CSF_Parts_Constants::TEXT_DOMAIN ), $singular ),
-			'add_new_item'               => sprintf( __( 'Add New %s', CSF_Parts_Constants::TEXT_DOMAIN ), $singular ),
-			'edit_item'                  => sprintf( __( 'Edit %s', CSF_Parts_Constants::TEXT_DOMAIN ), $singular ),
-			'update_item'                => sprintf( __( 'Update %s', CSF_Parts_Constants::TEXT_DOMAIN ), $singular ),
-			'view_item'                  => sprintf( __( 'View %s', CSF_Parts_Constants::TEXT_DOMAIN ), $singular ),
-			'separate_items_with_commas' => sprintf( __( 'Separate %s with commas', CSF_Parts_Constants::TEXT_DOMAIN ), $lowercase_plural ),
-			'add_or_remove_items'        => sprintf( __( 'Add or remove %s', CSF_Parts_Constants::TEXT_DOMAIN ), $lowercase_plural ),
-			'choose_from_most_used'      => __( 'Choose from the most used', CSF_Parts_Constants::TEXT_DOMAIN ),
-			'popular_items'              => sprintf( __( 'Popular %s', CSF_Parts_Constants::TEXT_DOMAIN ), $plural ),
-			'search_items'               => sprintf( __( 'Search %s', CSF_Parts_Constants::TEXT_DOMAIN ), $plural ),
-			'not_found'                  => sprintf( __( 'No %s found', CSF_Parts_Constants::TEXT_DOMAIN ), $lowercase_plural ),
-			'no_terms'                   => sprintf( __( 'No %s', CSF_Parts_Constants::TEXT_DOMAIN ), $lowercase_plural ),
-			'items_list'                 => sprintf( __( '%s list', CSF_Parts_Constants::TEXT_DOMAIN ), $plural ),
-			'items_list_navigation'      => sprintf( __( '%s list navigation', CSF_Parts_Constants::TEXT_DOMAIN ), $plural ),
+			'name'                       => $plural,
+			'singular_name'              => $singular,
+			'menu_name'                  => $plural,
+			'all_items'                  => sprintf( 'All %s', $plural ),
+			'new_item_name'              => sprintf( 'New %s Name', $singular ),
+			'add_new_item'               => sprintf( 'Add New %s', $singular ),
+			'edit_item'                  => sprintf( 'Edit %s', $singular ),
+			'update_item'                => sprintf( 'Update %s', $singular ),
+			'view_item'                  => sprintf( 'View %s', $singular ),
+			'separate_items_with_commas' => sprintf( 'Separate %s with commas', $lowercase_plural ),
+			'add_or_remove_items'        => sprintf( 'Add or remove %s', $lowercase_plural ),
+			'choose_from_most_used'      => 'Choose from the most used',
+			'popular_items'              => sprintf( 'Popular %s', $plural ),
+			'search_items'               => sprintf( 'Search %s', $plural ),
+			'not_found'                  => sprintf( 'No %s found', $lowercase_plural ),
+			'no_terms'                   => sprintf( 'No %s', $lowercase_plural ),
+			'items_list'                 => sprintf( '%s list', $plural ),
+			'items_list_navigation'      => sprintf( '%s list navigation', $plural ),
 		);
 
 		// Add hierarchical-specific labels.
 		if ( $hierarchical ) {
-			$labels['parent_item']       = sprintf( __( 'Parent %s', CSF_Parts_Constants::TEXT_DOMAIN ), $singular );
-			$labels['parent_item_colon'] = sprintf( __( 'Parent %s:', CSF_Parts_Constants::TEXT_DOMAIN ), $singular );
+			$labels['parent_item']       = sprintf( 'Parent %s', $singular );
+			$labels['parent_item_colon'] = sprintf( 'Parent %s:', $singular );
 		}
 
 		return $labels;

@@ -3,8 +3,8 @@
  * Plugin Name:       CSF Parts Catalog
  * Plugin URI:        https://github.com/zachatkinson/carpart-scraper
  * Description:       Complete automotive parts catalog system with Gutenberg blocks, async search, and JSON import management for CSF MyCarParts data.
- * Version:           1.0.0
- * Requires at least: 6.0
+ * Version:           1.7.0
+ * Requires at least: 6.7
  * Requires PHP:      8.4
  * Author:            Development Team
  * Author URI:        https://github.com/zachatkinson
@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Plugin version.
  */
-define( 'CSF_PARTS_VERSION', '1.0.0' );
+define( 'CSF_PARTS_VERSION', '1.7.0' );
 
 /**
  * Plugin root directory.
@@ -65,6 +65,7 @@ spl_autoload_register( 'csf_parts_autoloader' );
 /**
  * Load required core files.
  */
+require_once CSF_PARTS_PLUGIN_DIR . 'includes/helpers.php';
 require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-plugin.php';
 
 /**
@@ -91,8 +92,21 @@ function csf_parts_activate() {
 	$database = new CSF_Parts_Database();
 	$database->create_tables();
 
-	// Flush rewrite rules for virtual URLs.
+	// Register rewrite rules before flushing. During activation, the init hook
+	// has already fired so add_rewrite_rule() calls from init never ran.
+	require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-url-handler.php';
+	$url_handler = new CSF_Parts_URL_Handler();
+	$url_handler->register_rewrite_rules();
+
+	// Flush rewrite rules — now includes our custom rules in the DB.
 	flush_rewrite_rules();
+
+	// Create persistent image directory in wp-content/uploads/ (survives plugin updates).
+	$upload_dir = wp_upload_dir();
+	$image_dir  = $upload_dir['basedir'] . '/csf-parts/images/avif';
+	if ( ! file_exists( $image_dir ) ) {
+		wp_mkdir_p( $image_dir );
+	}
 
 	// Set default options.
 	add_option( 'csf_parts_version', CSF_PARTS_VERSION );
@@ -110,3 +124,13 @@ function csf_parts_deactivate() {
 	flush_rewrite_rules();
 }
 register_deactivation_hook( __FILE__, 'csf_parts_deactivate' );
+
+/**
+ * Register WP-CLI commands.
+ *
+ * @since 1.1.0
+ */
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-cli.php';
+	WP_CLI::add_command( 'csf-parts', 'CSF_Parts_CLI' );
+}

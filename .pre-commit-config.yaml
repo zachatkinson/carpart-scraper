@@ -51,6 +51,8 @@ repos:
         name: MyPy type checking
         additional_dependencies:
           - types-pyyaml
+          - types-beautifulsoup4
+          - types-Pillow
           - pydantic
           - click
           - httpx

@@ -39,7 +39,7 @@ class CSF_Parts_Import_Manager {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error(
 				array(
-					'message' => __( 'You do not have permission to perform this action.', CSF_Parts_Constants::TEXT_DOMAIN ),
+					'message' => 'You do not have permission to perform this action.',
 				)
 			);
 		}
@@ -48,7 +48,7 @@ class CSF_Parts_Import_Manager {
 		if ( empty( $_FILES['file'] ) ) {
 			wp_send_json_error(
 				array(
-					'message' => __( 'No file uploaded.', CSF_Parts_Constants::TEXT_DOMAIN ),
+					'message' => 'No file uploaded.',
 				)
 			);
 		}
@@ -60,7 +60,7 @@ class CSF_Parts_Import_Manager {
 		if ( 'json' !== $file_type['ext'] ) {
 			wp_send_json_error(
 				array(
-					'message' => __( 'Invalid file type. Only JSON files are allowed.', CSF_Parts_Constants::TEXT_DOMAIN ),
+					'message' => 'Invalid file type. Only JSON files are allowed.',
 				)
 			);
 		}
@@ -70,7 +70,7 @@ class CSF_Parts_Import_Manager {
 		if ( $file['size'] > $max_size ) {
 			wp_send_json_error(
 				array(
-					'message' => __( 'File is too large. Maximum size is 50MB.', CSF_Parts_Constants::TEXT_DOMAIN ),
+					'message' => 'File is too large. Maximum size is 50MB.',
 				)
 			);
 		}
@@ -93,7 +93,7 @@ class CSF_Parts_Import_Manager {
 		if ( ! move_uploaded_file( $file['tmp_name'], $target_path ) ) {
 			wp_send_json_error(
 				array(
-					'message' => __( 'Failed to save uploaded file.', CSF_Parts_Constants::TEXT_DOMAIN ),
+					'message' => 'Failed to save uploaded file.',
 				)
 			);
 		}
@@ -108,7 +108,7 @@ class CSF_Parts_Import_Manager {
 				array(
 					'message' => sprintf(
 						/* translators: %s: JSON error message */
-						__( 'Invalid JSON file: %s', CSF_Parts_Constants::TEXT_DOMAIN ),
+						'Invalid JSON file: %s',
 						json_last_error_msg()
 					),
 				)
@@ -131,7 +131,7 @@ class CSF_Parts_Import_Manager {
 
 		wp_send_json_success(
 			array(
-				'message'     => __( 'File uploaded successfully.', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'message'     => 'File uploaded successfully.',
 				'filename'    => $filename,
 				'parts_count' => $parts_count,
 			)
@@ -151,7 +151,7 @@ class CSF_Parts_Import_Manager {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error(
 				array(
-					'message' => __( 'You do not have permission to perform this action.', CSF_Parts_Constants::TEXT_DOMAIN ),
+					'message' => 'You do not have permission to perform this action.',
 				)
 			);
 		}
@@ -162,7 +162,7 @@ class CSF_Parts_Import_Manager {
 		if ( ! $file_info || ! file_exists( $file_info['path'] ) ) {
 			wp_send_json_error(
 				array(
-					'message' => __( 'No file available for import.', CSF_Parts_Constants::TEXT_DOMAIN ),
+					'message' => 'No file available for import.',
 				)
 			);
 		}
@@ -193,7 +193,7 @@ class CSF_Parts_Import_Manager {
 
 		wp_send_json_success(
 			array(
-				'message' => __( 'Import completed successfully.', CSF_Parts_Constants::TEXT_DOMAIN ),
+				'message' => 'Import completed successfully.',
 				'results' => $results,
 			)
 		);
@@ -212,7 +212,7 @@ class CSF_Parts_Import_Manager {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error(
 				array(
-					'message' => __( 'You do not have permission to perform this action.', CSF_Parts_Constants::TEXT_DOMAIN ),
+					'message' => 'You do not have permission to perform this action.',
 				)
 			);
 		}

@@ -30,10 +30,13 @@
 			const yearSelect = filterForm.querySelector('select[name="csf_year"]');
 			const makeSelect = filterForm.querySelector('select[name="csf_make"]');
 			const modelSelect = filterForm.querySelector('select[name="csf_model"]');
+			const searchInput = filterForm.querySelector('input[name="csf_search"]');
+			const resultsGrid = block.querySelector('.csf-grid-items');
 
 			console.log('CSF Filters: Year select:', yearSelect);
 			console.log('CSF Filters: Make select:', makeSelect);
 			console.log('CSF Filters: Model select:', modelSelect);
+			console.log('CSF Filters: Search input:', searchInput);
 
 			if (!yearSelect || !makeSelect || !modelSelect) {
 				console.log('CSF Filters: Missing select elements');
@@ -46,6 +49,17 @@
 			makeSelect.disabled = true;
 			modelSelect.disabled = true;
 			console.log('CSF Filters: Make and model disabled');
+
+			// Create loading overlay if it doesn't exist.
+			let loadingOverlay = block.querySelector('.csf-loading-overlay');
+			if (!loadingOverlay && resultsGrid) {
+				loadingOverlay = document.createElement('div');
+				loadingOverlay.className = 'csf-loading-overlay';
+				loadingOverlay.innerHTML = '<div class="csf-spinner"></div><p>' + csfPartsFilters.loadingResults + '</p>';
+				loadingOverlay.style.display = 'none';
+				resultsGrid.parentNode.style.position = 'relative';
+				resultsGrid.parentNode.insertBefore(loadingOverlay, resultsGrid);
+			}
 
 			// Year change handler.
 			yearSelect.addEventListener('change', function() {
@@ -60,12 +74,17 @@
 
 				if (!year) {
 					console.log('CSF Filters: No year selected, stopping');
+					// Trigger filter update to show all results.
+					triggerFilterUpdate(filterForm, loadingOverlay);
 					return;
 				}
 
 				console.log('CSF Filters: Fetching makes for year:', year);
 				// Fetch makes for selected year.
 				fetchMakesByYear(year, makeSelect);
+
+				// Trigger filter update to show parts for this year.
+				triggerFilterUpdate(filterForm, loadingOverlay);
 			});
 
 			// Make change handler.
@@ -83,14 +102,198 @@
 
 				// Fetch models for selected year + make.
 				fetchModelsByYearMake(year, make, modelSelect);
+
+				// Auto-submit to show filtered results.
+				triggerFilterUpdate(filterForm, loadingOverlay);
 			});
+
+			// Model change handler - trigger filter immediately.
+			modelSelect.addEventListener('change', function() {
+				triggerFilterUpdate(filterForm, loadingOverlay);
+			});
+
+			// Search input handler with debounce.
+			if (searchInput) {
+				let searchTimeout;
+				searchInput.addEventListener('input', function() {
+					clearTimeout(searchTimeout);
+					searchTimeout = setTimeout(() => {
+						console.log('CSF Filters: Search input changed:', searchInput.value);
+						triggerFilterUpdate(filterForm, loadingOverlay);
+					}, 500); // Debounce 500ms
+				});
+			}
+
+			// Reset button handler.
+			const resetButton = filterForm.querySelector('.csf-btn-reset');
+			if (resetButton) {
+				resetButton.addEventListener('click', function(e) {
+					e.preventDefault();
+					console.log('CSF Filters: Reset button clicked');
+
+					// Show loading overlay.
+					if (loadingOverlay) {
+						loadingOverlay.style.display = 'flex';
+					}
+
+					// Reset all filter values.
+					yearSelect.value = '';
+					makeSelect.innerHTML = '<option value="">' + csfPartsFilters.selectMake + '</option>';
+					modelSelect.innerHTML = '<option value="">' + csfPartsFilters.selectModel + '</option>';
+					makeSelect.disabled = true;
+					modelSelect.disabled = true;
+
+					// Reload page without filter parameters.
+					window.location.href = window.location.pathname;
+				});
+			}
+
+			// Initialize cascading filters based on current URL parameters.
+			initializeCascadingFilters(yearSelect, makeSelect, modelSelect);
 		});
+	}
+
+	/**
+	 * Initialize cascading filters on page load based on URL parameters.
+	 */
+	function initializeCascadingFilters(yearSelect, makeSelect, modelSelect) {
+		const yearValue = yearSelect.value;
+		const makeValue = makeSelect.value;
+		const modelValue = modelSelect.value;
+
+		// If year is selected, fetch makes for it.
+		if (yearValue) {
+			console.log('CSF Filters: Initializing makes for year:', yearValue);
+			fetchMakesByYear(yearValue, makeSelect, function() {
+				// If make was also selected, restore it and fetch models.
+				if (makeValue) {
+					makeSelect.value = makeValue;
+					console.log('CSF Filters: Initializing models for year/make:', yearValue, makeValue);
+					fetchModelsByYearMake(yearValue, makeValue, modelSelect, function() {
+						// Restore the model value after models are fetched.
+						if (modelValue) {
+							modelSelect.value = modelValue;
+							console.log('CSF Filters: Restored model value:', modelValue);
+						}
+					});
+				}
+			});
+		}
+	}
+
+	/**
+	 * Trigger filter update via AJAX (no page reload, maintains scroll position).
+	 */
+	function triggerFilterUpdate(form, loadingOverlay) {
+		console.log('CSF Filters: Triggering filter update via AJAX');
+
+		// Show loading overlay.
+		if (loadingOverlay) {
+			loadingOverlay.style.display = 'flex';
+		}
+
+		// Get current filter values.
+		const formData = new FormData(form);
+		const year = formData.get('csf_year') || '';
+		const make = formData.get('csf_make') || '';
+		const model = formData.get('csf_model') || '';
+		const searchQuery = formData.get('csf_search') || '';
+
+		// Get default categories from block data attribute.
+		const block = form.closest('.csf-product-catalog');
+		const defaultCategories = block ? (block.dataset.defaultCategories || '') : '';
+
+		// Build AJAX data.
+		const data = new FormData();
+		data.append('action', 'csf_filter_products');
+		data.append('nonce', csfPartsFilters.nonce);
+		data.append('csf_year', year);
+		data.append('csf_make', make);
+		data.append('csf_model', model);
+		data.append('csf_search', searchQuery);
+		if (defaultCategories) {
+			data.append('default_categories', defaultCategories);
+		}
+
+		console.log('CSF Filters: Fetching filtered results...', {year, make, model, searchQuery, defaultCategories});
+
+		// Fetch filtered results.
+		fetch(csfPartsFilters.ajaxUrl, {
+			method: 'POST',
+			body: data,
+			credentials: 'same-origin'
+		})
+		.then(response => response.json())
+		.then(response => {
+			console.log('CSF Filters: Filter response:', response);
+
+			if (response.success && response.data.html) {
+				// Update results grid with new HTML.
+				const resultsGrid = form.closest('.csf-product-catalog').querySelector('.csf-grid-items');
+				if (resultsGrid) {
+					resultsGrid.innerHTML = response.data.html;
+					console.log('CSF Filters: Results updated successfully');
+				}
+
+				// Update URL without page reload (for shareable links).
+				updateURLParams({
+					csf_year: year,
+					csf_make: make,
+					csf_model: model,
+					csf_search: searchQuery
+				});
+
+				// Update results count if present.
+				const resultsHeader = form.closest('.csf-product-catalog').querySelector('.csf-results-header__title');
+				if (resultsHeader && response.data.count !== undefined) {
+					resultsHeader.textContent = response.data.count + ' ' + (response.data.count === 1 ? csfPartsFilters.resultSingular : csfPartsFilters.resultPlural);
+				}
+			} else {
+				console.error('CSF Filters: Failed to fetch results:', response);
+			}
+
+			// Hide loading overlay.
+			if (loadingOverlay) {
+				loadingOverlay.style.display = 'none';
+			}
+		})
+		.catch(error => {
+			console.error('CSF Filters: Error fetching filtered results:', error);
+
+			// Hide loading overlay.
+			if (loadingOverlay) {
+				loadingOverlay.style.display = 'none';
+			}
+		});
+	}
+
+	/**
+	 * Update URL parameters without page reload.
+	 */
+	function updateURLParams(params) {
+		const url = new URL(window.location);
+
+		// Clear existing filter params.
+		url.searchParams.delete('csf_year');
+		url.searchParams.delete('csf_make');
+		url.searchParams.delete('csf_model');
+		url.searchParams.delete('csf_search');
+
+		// Add new params (only if they have values).
+		Object.keys(params).forEach(key => {
+			if (params[key]) {
+				url.searchParams.set(key, params[key]);
+			}
+		});
+
+		// Update URL without reload.
+		window.history.pushState({}, '', url);
 	}
 
 	/**
 	 * Fetch makes for a specific year via AJAX.
 	 */
-	function fetchMakesByYear(year, makeSelect) {
+	function fetchMakesByYear(year, makeSelect, callback) {
 		console.log('CSF Filters: fetchMakesByYear called with year:', year);
 		console.log('CSF Filters: AJAX URL:', csfPartsFilters.ajaxUrl);
 		console.log('CSF Filters: Nonce:', csfPartsFilters.nonce);
@@ -126,18 +329,20 @@
 				makeSelect.innerHTML = '<option value="">' + csfPartsFilters.noMakes + '</option>';
 				makeSelect.disabled = true;
 			}
+			if (callback) callback();
 		})
 		.catch(error => {
 			console.error('CSF Filters: Error fetching makes:', error);
 			makeSelect.innerHTML = '<option value="">' + csfPartsFilters.error + '</option>';
 			makeSelect.disabled = true;
+			if (callback) callback();
 		});
 	}
 
 	/**
 	 * Fetch models for a specific year and make via AJAX.
 	 */
-	function fetchModelsByYearMake(year, make, modelSelect) {
+	function fetchModelsByYearMake(year, make, modelSelect, callback) {
 		// Show loading state.
 		modelSelect.disabled = true;
 		modelSelect.innerHTML = '<option value="">' + csfPartsFilters.loading + '</option>';
@@ -162,11 +367,13 @@
 				modelSelect.innerHTML = '<option value="">' + csfPartsFilters.noModels + '</option>';
 				modelSelect.disabled = true;
 			}
+			if (callback) callback();
 		})
 		.catch(error => {
 			console.error('Error fetching models:', error);
 			modelSelect.innerHTML = '<option value="">' + csfPartsFilters.error + '</option>';
 			modelSelect.disabled = true;
+			if (callback) callback();
 		});
 	}
 

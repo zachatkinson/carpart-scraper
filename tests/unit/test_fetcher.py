@@ -6,9 +6,9 @@ Tests cover:
 - User-agent headers
 - Successful responses
 - HTTP error handling
-- Retry logic
+- Retry logic (including smart 404 skip)
 - Rate limiting timing
-- Browser fetching
+- Browser fetching (persistent browser, scroll, retries)
 - Context manager cleanup
 """
 
@@ -20,7 +20,11 @@ import pytest
 from playwright.sync_api import Browser, Page, Playwright
 from pytest_mock import MockerFixture
 
-from src.scraper.fetcher import RespectfulFetcher
+from src.scraper.fetcher import (
+    RespectfulFetcher,
+    _is_retryable_browser_error,
+    _is_retryable_http_error,
+)
 
 
 class TestRespectfulFetcherInit:
@@ -446,16 +450,21 @@ class TestRespectfulFetcherBrowser:
         mock_page = Mock(spec=Page)
         mock_page.content.return_value = "<html><body>Browser content</body></html>"
         mock_page.goto = Mock()
+        mock_page.evaluate = Mock()
+        mock_page.wait_for_load_state = Mock()
+        mock_page.close = Mock()
+
+        mock_context = Mock()
+        mock_context.new_page.return_value = mock_page
 
         mock_browser = Mock(spec=Browser)
-        mock_browser.new_page.return_value = mock_page
-        mock_browser.close = Mock()
+        mock_browser.new_context.return_value = mock_context
 
         mock_playwright = Mock(spec=Playwright)
         mock_playwright.chromium.launch.return_value = mock_browser
 
         mock_sync_playwright = mocker.patch("src.scraper.fetcher.sync_playwright")
-        mock_sync_playwright.return_value.__enter__.return_value = mock_playwright
+        mock_sync_playwright.return_value.start.return_value = mock_playwright
 
         fetcher = RespectfulFetcher()
 
@@ -465,44 +474,47 @@ class TestRespectfulFetcherBrowser:
         # Assert
         assert html == "<html><body>Browser content</body></html>"
         mock_playwright.chromium.launch.assert_called_once_with(headless=True)
-        mock_browser.new_page.assert_called_once_with(
+        mock_browser.new_context.assert_called_once_with(
             user_agent="CSF-Parts-Scraper/1.0 (contact@example.com)"
         )
         mock_page.goto.assert_called_once_with(
             "https://example.com", wait_until="networkidle", timeout=30000
         )
         mock_page.content.assert_called_once()
-        mock_browser.close.assert_called_once()
+        mock_page.close.assert_called_once()
 
         # Cleanup
         fetcher.close()
 
     def test_fetch_with_browser_handles_navigation_error(self, mocker: MockerFixture) -> None:
-        """Test fetch_with_browser() handles navigation errors."""
+        """Test fetch_with_browser() raises immediately for non-retryable errors."""
         # Arrange
         mocker.patch("src.scraper.fetcher.time.sleep")
 
         mock_page = Mock(spec=Page)
-        mock_page.goto = Mock(side_effect=Exception("Navigation timeout"))
+        mock_page.goto = Mock(side_effect=Exception("Protocol error: permission denied"))
+        mock_page.close = Mock()
+
+        mock_context = Mock()
+        mock_context.new_page.return_value = mock_page
 
         mock_browser = Mock(spec=Browser)
-        mock_browser.new_page.return_value = mock_page
-        mock_browser.close = Mock()
+        mock_browser.new_context.return_value = mock_context
 
         mock_playwright = Mock(spec=Playwright)
         mock_playwright.chromium.launch.return_value = mock_browser
 
         mock_sync_playwright = mocker.patch("src.scraper.fetcher.sync_playwright")
-        mock_sync_playwright.return_value.__enter__.return_value = mock_playwright
+        mock_sync_playwright.return_value.start.return_value = mock_playwright
 
         fetcher = RespectfulFetcher()
 
-        # Act & Assert
-        with pytest.raises(Exception, match="Navigation timeout"):
+        # Act & Assert - Non-retryable error raises immediately
+        with pytest.raises(Exception, match="Protocol error: permission denied"):
             fetcher.fetch_with_browser("https://example.com")
 
-        # Browser should still be closed
-        mock_browser.close.assert_called_once()
+        # Page should still be closed via finally block
+        mock_page.close.assert_called_once()
 
         # Cleanup
         fetcher.close()
@@ -674,6 +686,342 @@ class TestRespectfulFetcherRateLimiting:
             f"Expected uniform(0.5, 3.0), got {call_args}"
         )
         mock_sleep.assert_called_with(2.0)
+
+        # Cleanup
+        fetcher.close()
+
+
+class TestSmartHTTPRetry:
+    """Test smart HTTP retry logic that skips non-retryable errors."""
+
+    def test_is_retryable_http_error_returns_false_for_404(self) -> None:
+        """Test _is_retryable_http_error returns False for 404."""
+        # Arrange
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.status_code = 404
+        error = httpx.HTTPStatusError(
+            "Not Found",
+            request=Mock(spec=httpx.Request),
+            response=mock_response,
+        )
+
+        # Act
+        result = _is_retryable_http_error(error)
+
+        # Assert
+        assert result is False
+
+    def test_is_retryable_http_error_returns_false_for_403(self) -> None:
+        """Test _is_retryable_http_error returns False for 403."""
+        # Arrange
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.status_code = 403
+        error = httpx.HTTPStatusError(
+            "Forbidden",
+            request=Mock(spec=httpx.Request),
+            response=mock_response,
+        )
+
+        # Act
+        result = _is_retryable_http_error(error)
+
+        # Assert
+        assert result is False
+
+    def test_is_retryable_http_error_returns_true_for_429(self) -> None:
+        """Test _is_retryable_http_error returns True for 429 (rate limit)."""
+        # Arrange
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.status_code = 429
+        error = httpx.HTTPStatusError(
+            "Too Many Requests",
+            request=Mock(spec=httpx.Request),
+            response=mock_response,
+        )
+
+        # Act
+        result = _is_retryable_http_error(error)
+
+        # Assert
+        assert result is True
+
+    def test_is_retryable_http_error_returns_true_for_500(self) -> None:
+        """Test _is_retryable_http_error returns True for 500."""
+        # Arrange
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.status_code = 500
+        error = httpx.HTTPStatusError(
+            "Internal Server Error",
+            request=Mock(spec=httpx.Request),
+            response=mock_response,
+        )
+
+        # Act
+        result = _is_retryable_http_error(error)
+
+        # Assert
+        assert result is True
+
+    def test_is_retryable_http_error_returns_true_for_non_http_error(self) -> None:
+        """Test _is_retryable_http_error returns True for network errors."""
+        # Arrange
+        error = httpx.ConnectError("Connection refused")
+
+        # Act
+        result = _is_retryable_http_error(error)
+
+        # Assert
+        assert result is True
+
+    def test_fetch_does_not_retry_on_404(self, mocker: MockerFixture) -> None:
+        """Test fetch() does not retry on 404 errors."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.time.sleep")
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.status_code = 404
+        mock_response.headers = {}
+
+        http_error = httpx.HTTPStatusError(
+            "Not Found",
+            request=Mock(spec=httpx.Request),
+            response=mock_response,
+        )
+        mock_response.raise_for_status = Mock(side_effect=http_error)
+
+        fetcher = RespectfulFetcher()
+        mocker.patch.object(fetcher.client, "get", return_value=mock_response)
+
+        # Act & Assert
+        with pytest.raises(httpx.HTTPStatusError) as exc_info:
+            fetcher.fetch("https://example.com/missing")
+
+        # Should only try once (no retry for 404)
+        assert fetcher.client.get.call_count == 1
+        assert exc_info.value.response.status_code == 404
+
+        # Cleanup
+        fetcher.close()
+
+
+class TestBrowserErrorClassification:
+    """Test _is_retryable_browser_error classification."""
+
+    def test_timeout_error_is_retryable(self) -> None:
+        """Test timeout errors are classified as retryable."""
+        assert _is_retryable_browser_error(Exception("Navigation timeout exceeded"))
+
+    def test_net_err_is_retryable(self) -> None:
+        """Test net::err_ errors are classified as retryable."""
+        assert _is_retryable_browser_error(Exception("net::err_connection_reset"))
+
+    def test_navigation_failed_is_retryable(self) -> None:
+        """Test navigation failed errors are classified as retryable."""
+        assert _is_retryable_browser_error(Exception("navigation failed"))
+
+    def test_page_crashed_is_retryable(self) -> None:
+        """Test page crashed errors are classified as retryable."""
+        assert _is_retryable_browser_error(Exception("page crashed"))
+
+    def test_unknown_error_is_not_retryable(self) -> None:
+        """Test unknown errors are classified as non-retryable."""
+        assert not _is_retryable_browser_error(Exception("Something completely different"))
+
+    def test_value_error_is_not_retryable(self) -> None:
+        """Test ValueError is classified as non-retryable."""
+        assert not _is_retryable_browser_error(ValueError("invalid argument"))
+
+
+class TestPersistentBrowser:
+    """Test persistent browser lifecycle management."""
+
+    def test_browser_reuse_across_calls(self, mocker: MockerFixture) -> None:
+        """Test browser is reused across multiple fetch_with_browser calls."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.time.sleep")
+
+        mock_page = Mock(spec=Page)
+        mock_page.content.return_value = "<html>test</html>"
+        mock_page.goto = Mock()
+        mock_page.evaluate = Mock()
+        mock_page.wait_for_load_state = Mock()
+        mock_page.close = Mock()
+
+        mock_context = Mock()
+        mock_context.new_page.return_value = mock_page
+
+        mock_browser = Mock(spec=Browser)
+        mock_browser.new_context.return_value = mock_context
+
+        mock_playwright = Mock(spec=Playwright)
+        mock_playwright.chromium.launch.return_value = mock_browser
+
+        mock_sync_playwright = mocker.patch("src.scraper.fetcher.sync_playwright")
+        mock_sync_playwright.return_value.start.return_value = mock_playwright
+
+        fetcher = RespectfulFetcher()
+
+        # Act - Make two calls
+        fetcher.fetch_with_browser("https://example.com/first")
+        fetcher.fetch_with_browser("https://example.com/second")
+
+        # Assert - Browser launched only once
+        mock_playwright.chromium.launch.assert_called_once()
+        # But two pages were created
+        assert mock_context.new_page.call_count == 2
+        # And both pages were closed
+        assert mock_page.close.call_count == 2
+
+        # Cleanup
+        fetcher.close()
+
+    def test_close_cleans_up_browser(self, mocker: MockerFixture) -> None:
+        """Test close() properly cleans up browser context, browser, and playwright."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.time.sleep")
+
+        mock_page = Mock(spec=Page)
+        mock_page.content.return_value = "<html>test</html>"
+        mock_page.goto = Mock()
+        mock_page.evaluate = Mock()
+        mock_page.wait_for_load_state = Mock()
+        mock_page.close = Mock()
+
+        mock_context = Mock()
+        mock_context.new_page.return_value = mock_page
+
+        mock_browser = Mock(spec=Browser)
+        mock_browser.new_context.return_value = mock_context
+
+        mock_playwright = Mock(spec=Playwright)
+        mock_playwright.chromium.launch.return_value = mock_browser
+
+        mock_sync_playwright = mocker.patch("src.scraper.fetcher.sync_playwright")
+        mock_sync_playwright.return_value.start.return_value = mock_playwright
+
+        fetcher = RespectfulFetcher()
+
+        # Initialize browser by making a call
+        fetcher.fetch_with_browser("https://example.com")
+
+        # Act
+        fetcher.close()
+
+        # Assert - All resources cleaned up in order
+        mock_context.close.assert_called_once()
+        mock_browser.close.assert_called_once()
+        mock_playwright.stop.assert_called_once()
+
+    def test_fetch_with_browser_retries_on_timeout(self, mocker: MockerFixture) -> None:
+        """Test fetch_with_browser retries on timeout error."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.time.sleep")
+
+        mock_page_fail = Mock(spec=Page)
+        mock_page_fail.goto = Mock(side_effect=Exception("Navigation timeout exceeded"))
+        mock_page_fail.close = Mock()
+
+        mock_page_success = Mock(spec=Page)
+        mock_page_success.content.return_value = "<html>success</html>"
+        mock_page_success.goto = Mock()
+        mock_page_success.evaluate = Mock()
+        mock_page_success.wait_for_load_state = Mock()
+        mock_page_success.close = Mock()
+
+        mock_context = Mock()
+        mock_context.new_page.side_effect = [mock_page_fail, mock_page_success]
+
+        mock_browser = Mock(spec=Browser)
+        mock_browser.new_context.return_value = mock_context
+
+        mock_playwright = Mock(spec=Playwright)
+        mock_playwright.chromium.launch.return_value = mock_browser
+
+        mock_sync_playwright = mocker.patch("src.scraper.fetcher.sync_playwright")
+        mock_sync_playwright.return_value.start.return_value = mock_playwright
+
+        fetcher = RespectfulFetcher()
+
+        # Act
+        html = fetcher.fetch_with_browser("https://example.com")
+
+        # Assert
+        assert html == "<html>success</html>"
+        # Two pages created (one failed, one succeeded)
+        assert mock_context.new_page.call_count == 2
+        # Both pages closed
+        mock_page_fail.close.assert_called_once()
+        mock_page_success.close.assert_called_once()
+
+        # Cleanup
+        fetcher.close()
+
+    def test_fetch_with_browser_scrolls_to_bottom(self, mocker: MockerFixture) -> None:
+        """Test fetch_with_browser calls scroll-to-bottom."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.time.sleep")
+
+        mock_page = Mock(spec=Page)
+        mock_page.content.return_value = "<html>test</html>"
+        mock_page.goto = Mock()
+        mock_page.evaluate = Mock()
+        mock_page.wait_for_load_state = Mock()
+        mock_page.close = Mock()
+
+        mock_context = Mock()
+        mock_context.new_page.return_value = mock_page
+
+        mock_browser = Mock(spec=Browser)
+        mock_browser.new_context.return_value = mock_context
+
+        mock_playwright = Mock(spec=Playwright)
+        mock_playwright.chromium.launch.return_value = mock_browser
+
+        mock_sync_playwright = mocker.patch("src.scraper.fetcher.sync_playwright")
+        mock_sync_playwright.return_value.start.return_value = mock_playwright
+
+        fetcher = RespectfulFetcher()
+
+        # Act
+        fetcher.fetch_with_browser("https://example.com")
+
+        # Assert - scroll was called
+        mock_page.evaluate.assert_called_once_with("window.scrollTo(0, document.body.scrollHeight)")
+        # networkidle waited after scroll
+        mock_page.wait_for_load_state.assert_called_once_with("networkidle")
+
+        # Cleanup
+        fetcher.close()
+
+    def test_fetch_with_browser_raises_on_non_retryable_error(self, mocker: MockerFixture) -> None:
+        """Test fetch_with_browser raises immediately on non-retryable error."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.time.sleep")
+
+        mock_page = Mock(spec=Page)
+        mock_page.goto = Mock(side_effect=ValueError("non-retryable error"))
+        mock_page.close = Mock()
+
+        mock_context = Mock()
+        mock_context.new_page.return_value = mock_page
+
+        mock_browser = Mock(spec=Browser)
+        mock_browser.new_context.return_value = mock_context
+
+        mock_playwright = Mock(spec=Playwright)
+        mock_playwright.chromium.launch.return_value = mock_browser
+
+        mock_sync_playwright = mocker.patch("src.scraper.fetcher.sync_playwright")
+        mock_sync_playwright.return_value.start.return_value = mock_playwright
+
+        fetcher = RespectfulFetcher()
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="non-retryable error"):
+            fetcher.fetch_with_browser("https://example.com")
+
+        # Only one attempt (no retry)
+        assert mock_context.new_page.call_count == 1
+        mock_page.close.assert_called_once()
 
         # Cleanup
         fetcher.close()

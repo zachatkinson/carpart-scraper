@@ -356,6 +356,33 @@
 }
 
 /* ==========================================================================
+   Part Refresh Row States
+   ========================================================================== */
+
+.csf-row-refreshing {
+	background-color: #e3f2fd !important;
+	transition: background-color 0.3s ease;
+}
+
+.csf-row-refreshing td {
+	opacity: 0.7;
+}
+
+.csf-row-refreshed {
+	background-color: #d5e8d4 !important;
+	transition: background-color 0.3s ease;
+}
+
+.csf-row-refresh-error {
+	background-color: #fce4e4 !important;
+	transition: background-color 0.3s ease;
+}
+
+.csf-refresh-part {
+	cursor: pointer;
+}
+
+/* ==========================================================================
    Responsive Styles
    ========================================================================== */
 

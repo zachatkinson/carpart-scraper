@@ -7,7 +7,6 @@
 	"icon": "cart",
 	"description": "Display automotive parts with optional filtering by vehicle, category, and more. Configure defaults for curated showcases or enable filters for user search.",
 	"keywords": ["parts", "catalog", "vehicle", "search", "filter"],
-	"textdomain": "csf-parts",
 	"attributes": {
 		"defaultYears": {
 			"type": "array",
@@ -45,6 +44,10 @@
 			"type": "boolean",
 			"default": false
 		},
+		"showResultsCount": {
+			"type": "boolean",
+			"default": true
+		},
 		"perPage": {
 			"type": "number",
 			"default": 12
@@ -54,7 +57,7 @@
 			"default": {
 				"mobile": 2,
 				"tablet": 3,
-				"desktop": 4
+				"desktop": 3
 			}
 		},
 		"gap": {
@@ -109,9 +112,9 @@
 			"type": "object",
 			"default": {
 				"top": 0,
-				"right": 0,
+				"right": 24,
 				"bottom": 0,
-				"left": 0
+				"left": 24
 			}
 		},
 		"blockMargin": {
@@ -140,6 +143,16 @@
 			"default": "none",
 			"enum": ["none", "fade", "slideUp", "slideLeft"]
 		},
+		"orderBy": {
+			"type": "string",
+			"default": "name",
+			"enum": ["name", "sku", "category", "created_at", "updated_at", "latest"]
+		},
+		"orderDirection": {
+			"type": "string",
+			"default": "asc",
+			"enum": ["asc", "desc"]
+		},
 		"colorScheme": {
 			"type": "string",
 			"default": "default",
@@ -148,12 +161,10 @@
 	},
 	"supports": {
 		"html": false,
-		"align": ["wide", "full"],
-		"spacing": {
-			"margin": true,
-			"padding": true
-		}
+		"align": ["wide", "full"]
 	},
 	"editorScript": "file:../build/product-catalog/index.js",
+	"viewScript": "file:./view.js",
+	"style": "csf-parts-public",
 	"render": "file:./render.php"
 }

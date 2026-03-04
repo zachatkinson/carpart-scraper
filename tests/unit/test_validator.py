@@ -17,7 +17,7 @@ from src.cli.validators import (
 )
 from src.cli.validators import ValidationIssue, ValidationResult
 from src.models.part import Part, PartImage
-from src.models.vehicle import VehicleCompatibility
+from src.models.vehicle import Vehicle, VehicleCompatibility
 from src.scraper.validator import DataValidator as ScraperDataValidator
 
 
@@ -347,6 +347,170 @@ class TestScraperDataValidator:
 
         # Assert - None should remain None
         assert result["price"] is None
+
+    def test_validate_vehicle_with_valid_data(self) -> None:
+        """Test validate_vehicle accepts valid vehicle data and returns Vehicle."""
+        # Arrange
+        validator = ScraperDataValidator()
+        valid_data = {
+            "make": "Audi",
+            "model": "A4",
+            "year": 2020,
+        }
+
+        # Act
+        result = validator.validate_vehicle(valid_data)
+
+        # Assert
+        assert isinstance(result, Vehicle)
+        assert result.make == "Audi"
+        assert result.model == "A4"
+        assert result.year == 2020
+
+    def test_validate_vehicle_with_invalid_data_raises_validation_error(self) -> None:
+        """Test validate_vehicle rejects data with missing required field."""
+        # Arrange
+        validator = ScraperDataValidator()
+        invalid_data = {
+            "model": "A4",
+            "year": 2020,
+            # Missing 'make' - required field
+        }
+
+        # Act & Assert
+        with pytest.raises(ValidationError) as exc_info:
+            validator.validate_vehicle(invalid_data)
+
+        assert "make" in str(exc_info.value)
+
+    def test_preprocess_part_data_sets_default_manufacturer(self) -> None:
+        """Test _preprocess_part_data sets default manufacturer to 'CSF'."""
+        # Arrange
+        validator = ScraperDataValidator()
+        data: dict[str, Any] = {
+            "sku": "CSF-12345",
+            "name": "Radiator",
+            "category": "Radiators",
+        }
+
+        # Act
+        result = validator._preprocess_part_data(data)  # noqa: SLF001
+
+        # Assert
+        assert result["manufacturer"] == "CSF"
+
+    def test_preprocess_part_data_sets_default_in_stock(self) -> None:
+        """Test _preprocess_part_data sets default in_stock to True."""
+        # Arrange
+        validator = ScraperDataValidator()
+        data: dict[str, Any] = {
+            "sku": "CSF-12345",
+            "name": "Radiator",
+            "category": "Radiators",
+        }
+
+        # Act
+        result = validator._preprocess_part_data(data)  # noqa: SLF001
+
+        # Assert
+        assert result["in_stock"] is True
+
+    def test_preprocess_part_data_none_specs_becomes_empty_dict(self) -> None:
+        """Test _preprocess_part_data converts specifications=None to empty dict."""
+        # Arrange
+        validator = ScraperDataValidator()
+        data: dict[str, Any] = {
+            "sku": "CSF-12345",
+            "name": "Radiator",
+            "category": "Radiators",
+            "specifications": None,
+        }
+
+        # Act
+        result = validator._preprocess_part_data(data)  # noqa: SLF001
+
+        # Assert
+        assert result["specifications"] == {}
+
+    def test_preprocess_part_data_none_features_becomes_empty_list(self) -> None:
+        """Test _preprocess_part_data converts features=None to empty list."""
+        # Arrange
+        validator = ScraperDataValidator()
+        data: dict[str, Any] = {
+            "sku": "CSF-12345",
+            "name": "Radiator",
+            "category": "Radiators",
+            "features": None,
+        }
+
+        # Act
+        result = validator._preprocess_part_data(data)  # noqa: SLF001
+
+        # Assert
+        assert result["features"] == []
+
+    def test_preprocess_part_data_int_position_becomes_string(self) -> None:
+        """Test _preprocess_part_data converts integer position to string."""
+        # Arrange
+        validator = ScraperDataValidator()
+        data: dict[str, Any] = {
+            "sku": "CSF-12345",
+            "name": "Radiator",
+            "category": "Radiators",
+            "position": 123,
+        }
+
+        # Act
+        result = validator._preprocess_part_data(data)  # noqa: SLF001
+
+        # Assert
+        assert result["position"] == "123"
+        assert isinstance(result["position"], str)
+
+    def test_preprocess_part_data_empty_position_becomes_none(self) -> None:
+        """Test _preprocess_part_data converts empty position string to None."""
+        # Arrange
+        validator = ScraperDataValidator()
+        data: dict[str, Any] = {
+            "sku": "CSF-12345",
+            "name": "Radiator",
+            "category": "Radiators",
+            "position": "",
+        }
+
+        # Act
+        result = validator._preprocess_part_data(data)  # noqa: SLF001
+
+        # Assert
+        assert result["position"] is None
+
+    def test_process_image_with_part_image_returns_same(self) -> None:
+        """Test _process_image returns PartImage instance unchanged."""
+        # Arrange
+        validator = ScraperDataValidator()
+        image = PartImage(url="https://example.com/img.jpg", alt_text="Test image")
+
+        # Act
+        result = validator._process_image(image)  # noqa: SLF001
+
+        # Assert
+        assert result is image
+        assert result.url == "https://example.com/img.jpg"
+        assert result.alt_text == "Test image"
+
+    def test_process_image_with_invalid_dict_raises_validation_error(self) -> None:
+        """Test _process_image raises ValidationError for invalid dict (missing url)."""
+        # Arrange
+        validator = ScraperDataValidator()
+        invalid_image_data: dict[str, Any] = {
+            "alt_text": "Missing URL image",
+        }
+
+        # Act & Assert
+        with pytest.raises(ValidationError) as exc_info:
+            validator._process_image(invalid_image_data)  # noqa: SLF001
+
+        assert "url" in str(exc_info.value)
 
 
 class TestCLIDataValidator:
@@ -760,6 +924,189 @@ class TestCLIDataValidator:
 
         # Assert
         assert result.total_items == 3  # Should count all 3 parts
+
+    def test_validate_parts_export_with_non_list_parts(self, tmp_path: Path) -> None:
+        """Test _validate_parts_export rejects non-list parts field."""
+        # Arrange
+        validator = CLIDataValidator()
+        data = {
+            "metadata": {"export_date": "2025-10-28", "total_parts": 1},
+            "parts": "not a list",
+        }
+        test_file = tmp_path / "bad_parts.json"
+        test_file.write_text(json.dumps(data))
+
+        # Act
+        result = validator.validate_json_file(test_file)
+
+        # Assert
+        assert result.is_valid is False
+        assert any("list" in err.message.lower() for err in result.errors)
+
+    def test_validate_compatibility_export_with_non_list_compat(self, tmp_path: Path) -> None:
+        """Test _validate_compatibility_export rejects non-list compatibility field."""
+        # Arrange
+        validator = CLIDataValidator()
+        data = {
+            "metadata": {"export_date": "2025-10-28", "total_mappings": 1},
+            "compatibility": "not a list",
+        }
+        test_file = tmp_path / "bad_compat.json"
+        test_file.write_text(json.dumps(data))
+
+        # Act
+        result = validator.validate_json_file(test_file)
+
+        # Assert
+        assert result.is_valid is False
+        assert any("list" in err.message.lower() for err in result.errors)
+
+    def test_validate_hierarchical_export_with_non_dict_data(self, tmp_path: Path) -> None:
+        """Test _validate_hierarchical_export rejects non-dict data field."""
+        # Arrange
+        validator = CLIDataValidator()
+        # validate_json_file only routes to _validate_hierarchical_export when
+        # isinstance(data["data"], dict) is True, so we call the internal method directly
+        # to test the non-dict data path.
+        result = validator._validate_hierarchical_export(  # noqa: SLF001
+            {
+                "metadata": {"export_date": "2025-10-28", "structure": "y>m>m", "total_years": 0},
+                "data": ["not", "a", "dict"],
+            },
+            tmp_path / "test.json",
+        )
+
+        # Assert
+        assert result.is_valid is False
+        assert any("dict" in err.message.lower() for err in result.errors)
+
+    def test_validate_hierarchical_export_with_non_dict_make_level(self, tmp_path: Path) -> None:
+        """Test _validate_hierarchical_export rejects non-dict at make level."""
+        # Arrange
+        validator = CLIDataValidator()
+        data = {
+            "metadata": {
+                "export_date": "2025-10-28",
+                "structure": "year>make>model",
+                "total_years": 1,
+            },
+            "data": {"2020": "not a dict"},
+        }
+        test_file = tmp_path / "bad_make.json"
+        test_file.write_text(json.dumps(data))
+
+        # Act
+        result = validator.validate_json_file(test_file)
+
+        # Assert
+        assert result.is_valid is False
+        assert any("dict" in err.message.lower() for err in result.errors)
+
+    def test_validate_hierarchical_export_with_non_dict_model_level(self, tmp_path: Path) -> None:
+        """Test _validate_hierarchical_export rejects non-dict at model level."""
+        # Arrange
+        validator = CLIDataValidator()
+        data = {
+            "metadata": {
+                "export_date": "2025-10-28",
+                "structure": "year>make>model",
+                "total_years": 1,
+            },
+            "data": {"2020": {"Audi": "not a dict"}},
+        }
+        test_file = tmp_path / "bad_model.json"
+        test_file.write_text(json.dumps(data))
+
+        # Act
+        result = validator.validate_json_file(test_file)
+
+        # Assert
+        assert result.is_valid is False
+        assert any("dict" in err.message.lower() for err in result.errors)
+
+    def test_validate_hierarchical_export_with_non_list_parts_level(self, tmp_path: Path) -> None:
+        """Test _validate_hierarchical_export rejects non-list at parts level."""
+        # Arrange
+        validator = CLIDataValidator()
+        data = {
+            "metadata": {
+                "export_date": "2025-10-28",
+                "structure": "year>make>model",
+                "total_years": 1,
+            },
+            "data": {"2020": {"Audi": {"A4": "not a list"}}},
+        }
+        test_file = tmp_path / "bad_parts_level.json"
+        test_file.write_text(json.dumps(data))
+
+        # Act
+        result = validator.validate_json_file(test_file)
+
+        # Assert
+        assert result.is_valid is False
+        assert any("list" in err.message.lower() for err in result.errors)
+
+    def test_validate_metadata_with_non_dict_metadata(self) -> None:
+        """Test _validate_metadata rejects non-dict metadata."""
+        # Arrange
+        validator = CLIDataValidator()
+        non_dict_metadata: Any = "not a dict"
+
+        # Act - call _validate_metadata directly because _validate_parts_export
+        # does not guard against non-dict metadata before accessing .get()
+        result = validator._validate_metadata(  # noqa: SLF001
+            non_dict_metadata, ["export_date", "total_parts"]
+        )
+
+        # Assert
+        assert len(result["errors"]) > 0
+        assert any(
+            "metadata" in err.message.lower() or "dict" in err.message.lower()
+            for err in result["errors"]
+        )
+
+    def test_validate_part_data_generic_exception(self) -> None:
+        """Test _validate_part_data handles unexpected exceptions."""
+        # Arrange
+        validator = CLIDataValidator()
+        # Pass something that will cause a generic exception (not ValidationError)
+        # A non-dict will cause **part_data to fail with TypeError
+        bad_data: Any = "not a dict"
+
+        # Act
+        result = validator._validate_part_data(bad_data, 0)  # noqa: SLF001
+
+        # Assert
+        assert len(result["errors"]) > 0
+        assert any(
+            "unexpected" in err.message.lower() or "error" in err.message.lower()
+            for err in result["errors"]
+        )
+
+    def test_validate_compatibility_data_validation_error(self) -> None:
+        """Test _validate_compatibility_data handles ValidationError."""
+        # Arrange
+        validator = CLIDataValidator()
+        # Missing required fields will cause ValidationError
+        bad_compat: dict[str, Any] = {"part_sku": "CSF-12345", "vehicles": []}
+
+        # Act
+        result = validator._validate_compatibility_data(bad_compat, 0)  # noqa: SLF001
+
+        # Assert
+        assert len(result["errors"]) > 0
+
+    def test_validate_compatibility_data_generic_exception(self) -> None:
+        """Test _validate_compatibility_data handles unexpected exceptions."""
+        # Arrange
+        validator = CLIDataValidator()
+        bad_data: Any = "not a dict"
+
+        # Act
+        result = validator._validate_compatibility_data(bad_data, 0)  # noqa: SLF001
+
+        # Assert
+        assert len(result["errors"]) > 0
 
 
 class TestValidationIssue:

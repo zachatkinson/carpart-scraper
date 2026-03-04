@@ -5,6 +5,9 @@ This module implements respectful web scraping with:
 - Polite user-agent
 - Exponential backoff on errors
 - Request timeout
+- Persistent browser for efficiency
+- Scroll-to-bottom for lazy-loaded content
+- Smart retry (skip non-retryable HTTP errors like 404)
 """
 
 import random
@@ -13,17 +16,74 @@ from typing import Final
 
 import httpx
 import structlog
-from playwright.sync_api import sync_playwright
-from tenacity import retry, stop_after_attempt, wait_exponential
+from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 logger = structlog.get_logger()
+
+# Browser retry constants
+BROWSER_MAX_RETRIES: Final[int] = 3
+BROWSER_BACKOFF_BASE: Final[int] = 2
+SCROLL_WAIT_SECONDS: Final[float] = 1.0
+
+
+def _is_retryable_http_error(exception: BaseException) -> bool:
+    """Determine if an HTTP error should be retried.
+
+    Returns False for client errors (4xx except 429), True for everything else.
+    This prevents wasting retries on permanent failures like 404 Not Found.
+
+    Args:
+        exception: The exception to check
+
+    Returns:
+        True if the request should be retried, False otherwise
+    """
+    if isinstance(exception, httpx.HTTPStatusError):
+        status = exception.response.status_code
+        http_too_many_requests = 429
+        min_client_error = 400
+        max_client_error = 499
+        # Don't retry 4xx errors (client errors) except 429 (rate limit)
+        if min_client_error <= status <= max_client_error and status != http_too_many_requests:
+            return False
+    # Retry everything else (5xx, network errors, timeouts, etc.)
+    return True
+
+
+def _is_retryable_browser_error(error: BaseException) -> bool:
+    """Classify whether a browser error is retryable.
+
+    Checks error message for known transient patterns like timeouts
+    and network failures vs permanent errors.
+
+    Args:
+        error: The exception to classify
+
+    Returns:
+        True if the error is likely transient and worth retrying
+    """
+    error_str = str(error).lower()
+    retryable_patterns = [
+        "timeout",
+        "net::err_",
+        "navigation failed",
+        "navigating frame was detached",
+        "page crashed",
+        "browser has been closed",
+        "connection refused",
+        "connection reset",
+        "target closed",
+    ]
+    return any(pattern in error_str for pattern in retryable_patterns)
 
 
 class RespectfulFetcher:
     """HTTP fetcher with built-in respectful scraping practices.
 
     Implements rate limiting, retries, and error handling to ensure
-    we don't overwhelm the target server.
+    we don't overwhelm the target server. Uses a persistent browser
+    instance for efficiency across multiple fetch_with_browser calls.
 
     Attributes:
         MIN_DELAY_SECONDS: Minimum delay between requests
@@ -40,13 +100,50 @@ class RespectfulFetcher:
     TIMEOUT_SECONDS: Final[int] = 30
 
     def __init__(self) -> None:
-        """Initialize fetcher with HTTP client."""
+        """Initialize fetcher with HTTP client and lazy browser fields."""
         self.client = httpx.Client(
             headers={"User-Agent": self.USER_AGENT},
             timeout=self.TIMEOUT_SECONDS,
             follow_redirects=True,
         )
         self._last_request_time: float = 0
+
+        # Persistent browser lifecycle (lazy-initialized)
+        self._playwright: Playwright | None = None
+        self._browser: Browser | None = None
+        self._browser_context: BrowserContext | None = None
+
+    def _ensure_browser(self) -> tuple[Browser, BrowserContext]:
+        """Lazily initialize persistent Playwright browser on first use.
+
+        Returns:
+            Tuple of (browser, browser_context) objects
+
+        Note:
+            Uses sync_playwright().start() instead of context manager
+            so the browser persists across multiple calls.
+        """
+        if self._browser is None:
+            pw = sync_playwright().start()
+            self._playwright = pw
+            self._browser = pw.chromium.launch(headless=True)
+            self._browser_context = self._browser.new_context(user_agent=self.USER_AGENT)
+            logger.info("browser_initialized")
+
+        assert self._browser is not None  # noqa: S101
+        assert self._browser_context is not None  # noqa: S101
+        return self._browser, self._browser_context
+
+    @staticmethod
+    def _scroll_to_bottom(page: Page) -> None:
+        """Scroll page to bottom to trigger lazy-loaded content.
+
+        Args:
+            page: Playwright Page object
+        """
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        time.sleep(SCROLL_WAIT_SECONDS)
+        page.wait_for_load_state("networkidle")
 
     def _apply_rate_limit(self) -> None:
         """Apply rate limiting delay between requests.
@@ -77,10 +174,13 @@ class RespectfulFetcher:
     @retry(
         wait=wait_exponential(multiplier=1, min=4, max=60),
         stop=stop_after_attempt(MAX_RETRIES),
+        retry=retry_if_exception(_is_retryable_http_error),
         reraise=True,
     )
     def fetch(self, url: str) -> httpx.Response:
         """Fetch URL with rate limiting and retries.
+
+        Skips retries for non-retryable errors (4xx except 429).
 
         Args:
             url: URL to fetch
@@ -145,7 +245,11 @@ class RespectfulFetcher:
             return response
 
     def fetch_with_browser(self, url: str) -> str:
-        """Fetch URL using headless browser for JavaScript content.
+        """Fetch URL using persistent headless browser for JavaScript content.
+
+        Uses a persistent browser instance (created on first call) and creates
+        a fresh page per request. Includes retry logic with exponential backoff
+        for transient errors and scroll-to-bottom for lazy-loaded content.
 
         Args:
             url: URL to fetch
@@ -154,7 +258,7 @@ class RespectfulFetcher:
             Rendered HTML content
 
         Raises:
-            Exception: If browser fetch fails
+            Exception: If browser fetch fails after all retries
 
         Example:
             >>> fetcher = RespectfulFetcher()
@@ -166,27 +270,80 @@ class RespectfulFetcher:
 
         logger.info("fetching_url_with_browser", url=url)
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page(user_agent=self.USER_AGENT)
+        _browser, browser_context = self._ensure_browser()
 
+        last_error: BaseException | None = None
+
+        for attempt in range(BROWSER_MAX_RETRIES):
+            page = browser_context.new_page()
             try:
-                page.goto(url, wait_until="networkidle", timeout=self.TIMEOUT_SECONDS * 1000)
-                content = page.content()
+                page.goto(
+                    url,
+                    wait_until="networkidle",
+                    timeout=self.TIMEOUT_SECONDS * 1000,
+                )
+
+                # Scroll to bottom to trigger lazy-loaded content
+                self._scroll_to_bottom(page)
+
+                content: str = page.content()
 
                 logger.info(
                     "browser_fetch_success",
                     url=url,
                     content_length=len(content),
+                    attempt=attempt + 1,
                 )
 
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    "browser_fetch_attempt_failed",
+                    url=url,
+                    attempt=attempt + 1,
+                    max_attempts=BROWSER_MAX_RETRIES,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+
+                if not _is_retryable_browser_error(e):
+                    logger.exception(
+                        "browser_fetch_non_retryable",
+                        url=url,
+                        error=str(e),
+                    )
+                    raise
+
+                if attempt < BROWSER_MAX_RETRIES - 1:
+                    backoff = BROWSER_BACKOFF_BASE ** (attempt + 1)
+                    logger.info("browser_fetch_retrying", backoff_seconds=backoff)
+                    time.sleep(backoff)
+
+            else:
                 return content
 
             finally:
-                browser.close()
+                page.close()
+
+        # All retries exhausted
+        msg = f"Browser fetch failed after {BROWSER_MAX_RETRIES} attempts: {last_error}"
+        raise RuntimeError(msg) from last_error
 
     def close(self) -> None:
-        """Close HTTP client and release resources."""
+        """Close HTTP client, browser, and release all resources."""
+        # Clean up browser resources in order: context → browser → playwright
+        if self._browser_context is not None:
+            self._browser_context.close()
+            self._browser_context = None
+
+        if self._browser is not None:
+            self._browser.close()
+            self._browser = None
+
+        if self._playwright is not None:
+            self._playwright.stop()
+            self._playwright = None
+
         self.client.close()
         logger.debug("fetcher_closed")
 

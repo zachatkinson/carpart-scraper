@@ -40,31 +40,35 @@ class CSF_Parts_URL_Handler {
 
 		// Handle template loading.
 		add_action( 'template_redirect', array( $this, 'handle_virtual_page' ) );
+
+		// Filter page title when category is selected from breadcrumbs.
+		add_filter( 'the_title', array( $this, 'filter_category_page_title' ), 10, 2 );
+		add_filter( 'document_title_parts', array( $this, 'filter_category_document_title' ) );
 	}
 
 	/**
 	 * Register rewrite rules for virtual part URLs.
 	 *
 	 * URL Patterns:
-	 * - Canonical: /parts/{category}-{sku}  (e.g., /parts/radiator-csf-3411)
-	 * - Vehicle:   /parts/{year}-{make}-{model}-{category}-{sku}
+	 * - Canonical: /parts/csf{sku}  (e.g., /parts/csf3411)
+	 * - Vehicle:   /parts/{year}-{make}-{model}-csf{sku}
 	 *
 	 * @since 2.0.0
 	 */
 	public function register_rewrite_rules(): void {
 		// Vehicle-specific part URL (most specific, match first).
-		// Example: /parts/2006-honda-civic-radiator-csf-3411.
+		// Example: /parts/2006-honda-civic-csf3411.
 		add_rewrite_rule(
-			'^parts/([0-9]{4})-([^/-]+)-([^/-]+)-([^/-]+)-(.+)/?$',
-			'index.php?csf_part=1&csf_year=$matches[1]&csf_make=$matches[2]&csf_model=$matches[3]&csf_category=$matches[4]&csf_sku=$matches[5]',
+			'^parts/([0-9]{4})-([^/-]+)-([^/-]+)-(csf[^/]+)/?$',
+			'index.php?csf_part=1&csf_year=$matches[1]&csf_make=$matches[2]&csf_model=$matches[3]&csf_sku=$matches[4]',
 			'top'
 		);
 
 		// Canonical part URL (SKU-based).
-		// Example: /parts/radiator-csf-3411.
+		// Example: /parts/csf3411.
 		add_rewrite_rule(
-			'^parts/([^-]+)-(.+)/?$',
-			'index.php?csf_part=1&csf_category=$matches[1]&csf_sku=$matches[2]',
+			'^parts/(csf[^/]+)/?$',
+			'index.php?csf_part=1&csf_sku=$matches[1]',
 			'top'
 		);
 
@@ -116,11 +120,16 @@ class CSF_Parts_URL_Handler {
 			return;
 		}
 
-		$sku = get_query_var( 'csf_sku' );
-		if ( empty( $sku ) ) {
+		$sku_slug = get_query_var( 'csf_sku' );
+		if ( empty( $sku_slug ) ) {
 			$this->render_404();
 			return;
 		}
+
+		// Extract numeric SKU from csf{sku} format and reconstruct database format.
+		// URL slug: csf3680 -> Extract: 3680 -> Database format: CSF-3680
+		$numeric_sku = preg_replace( '/^csf/i', '', $sku_slug );
+		$sku = 'CSF-' . $numeric_sku;
 
 		// Load part from database.
 		$part = $this->database->get_part_by_sku( $sku );
@@ -155,48 +164,45 @@ class CSF_Parts_URL_Handler {
 	 */
 	private function render_part_page( object $part, string $year = '', string $make = '', string $model = '' ): void {
 		// Decode JSON fields.
-		$compatibility  = ! empty( $part->compatibility ) ? json_decode( $part->compatibility, true ) : array();
-		$specifications = ! empty( $part->specifications ) ? json_decode( $part->specifications, true ) : array();
-		$features       = ! empty( $part->features ) ? json_decode( $part->features, true ) : array();
-		$images         = ! empty( $part->images ) ? json_decode( $part->images, true ) : array();
+		$compatibility       = ! empty( $part->compatibility ) ? json_decode( $part->compatibility, true ) : array();
+		$specifications      = ! empty( $part->specifications ) ? json_decode( $part->specifications, true ) : array();
+		$features            = ! empty( $part->features ) ? json_decode( $part->features, true ) : array();
+		$images              = ! empty( $part->images ) ? json_decode( $part->images, true ) : array();
+		$interchange_numbers = ! empty( $part->interchange_numbers ) ? json_decode( $part->interchange_numbers, true ) : array();
 
 		// Determine if this is canonical or vehicle-specific page.
 		$is_vehicle_specific = ! empty( $year ) && ! empty( $make ) && ! empty( $model );
 
-		// Singularize category for part title (Radiators -> Radiator).
-		$category_singular = rtrim( $part->category, 's' );
+		// Display name: Use shared helper for consistent formatting.
+		$display_name = csf_format_sku_display( $part->sku );
 
 		// Generate page title.
 		if ( $is_vehicle_specific ) {
 			$title = sprintf(
-				'%s %s %s %s — %s',
+				'%s %s %s %s',
 				sanitize_text_field( $year ),
 				sanitize_text_field( ucwords( str_replace( '-', ' ', $make ) ) ),
 				sanitize_text_field( ucwords( str_replace( '-', ' ', $model ) ) ),
-				sanitize_text_field( $category_singular ),
-				sanitize_text_field( $part->sku )
+				sanitize_text_field( $display_name )
 			);
 		} else {
-			$title = sprintf(
-				'%s — %s',
-				sanitize_text_field( $category_singular ),
-				sanitize_text_field( $part->sku )
-			);
+			$title = sanitize_text_field( $display_name );
 		}
 
-		// Generate canonical URL (always points to generic SKU page with singular category).
-		$canonical_url = home_url( sprintf(
-			'/parts/%s-%s',
-			sanitize_title( $category_singular ),
-			sanitize_title( $part->sku )
-		) );
+		// Generate canonical URL (always points to generic SKU page).
+		// Use shared helper for URL generation.
+		$canonical_url = csf_get_part_url( $part->sku );
 
 		// Generate meta description.
+		$price_text = ( null !== $part->price && $part->price > 0 )
+			? '$' . number_format( (float) $part->price, 2 )
+			: 'Contact for pricing';
+
 		$meta_description = sprintf(
-			'%s for %s. Price: $%s. In stock and ready to ship. %s',
+			'%s for %s. Price: %s. In stock and ready to ship. %s',
 			esc_attr( $part->category ),
 			esc_attr( $part->manufacturer ),
-			esc_attr( number_format( $part->price, 2 ) ),
+			esc_attr( $price_text ),
 			esc_attr( wp_trim_words( $part->description, 20 ) )
 		);
 
@@ -208,6 +214,7 @@ class CSF_Parts_URL_Handler {
 		// Add SEO meta tags and Schema.org via wp_head hook.
 		add_action( 'wp_head', function() use ( $canonical_url, $meta_description, $title, $part, $images ) {
 			echo "\n<!-- CSF Parts SEO Meta Tags -->\n";
+			echo '<title>' . esc_html( $title ) . '</title>' . "\n";
 			echo '<meta name="description" content="' . esc_attr( $meta_description ) . '">' . "\n";
 			echo '<link rel="canonical" href="' . esc_url( $canonical_url ) . '">' . "\n";
 
@@ -249,11 +256,21 @@ class CSF_Parts_URL_Handler {
 			}
 		}, 1 );
 
+		// Enqueue modern part page styles.
+		add_action( 'wp_enqueue_scripts', function() {
+			wp_enqueue_style(
+				'csf-part-modern',
+				CSF_PARTS_PLUGIN_URL . 'public/css/part-single-modern.css',
+				array(),
+				CSF_PARTS_VERSION
+			);
+		}, 20 );
+
 		// Set template variables for use in template file.
-		$template_vars = compact( 'part', 'title', 'canonical_url', 'compatibility', 'specifications', 'features', 'images', 'is_vehicle_specific', 'year', 'make', 'model' );
+		$template_vars = compact( 'part', 'title', 'canonical_url', 'compatibility', 'specifications', 'features', 'images', 'interchange_numbers', 'is_vehicle_specific', 'year', 'make', 'model' );
 
 		// Load template.
-		$this->load_template( 'part-single', $template_vars );
+		$this->load_template( 'part-single-modern', $template_vars );
 	}
 
 	/**
@@ -292,6 +309,61 @@ class CSF_Parts_URL_Handler {
 		status_header( 404 );
 		get_template_part( 404 );
 		exit;
+	}
+
+	/**
+	 * Filter page title when a category is selected via breadcrumbs.
+	 *
+	 * Replaces the generic page title (e.g. "Parts") with the selected category
+	 * name (e.g. "Radiators") when the csf_category GET parameter is present.
+	 *
+	 * @since 1.5.0
+	 * @param string $title   The page title.
+	 * @param int    $post_id The post ID.
+	 * @return string Modified title.
+	 */
+	public function filter_category_page_title( string $title, int $post_id = 0 ): string {
+		// Only filter on the main query for the current page.
+		if ( ! is_main_query() || ! in_the_loop() ) {
+			return $title;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only GET param for display.
+		if ( empty( $_GET['csf_category'] ) ) {
+			return $title;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$category = sanitize_text_field( wp_unslash( $_GET['csf_category'] ) );
+
+		if ( ! empty( $category ) ) {
+			return $category;
+		}
+
+		return $title;
+	}
+
+	/**
+	 * Filter document title (browser tab) when a category is selected.
+	 *
+	 * @since 1.5.0
+	 * @param array $title_parts Document title parts.
+	 * @return array Modified title parts.
+	 */
+	public function filter_category_document_title( array $title_parts ): array {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only GET param for display.
+		if ( empty( $_GET['csf_category'] ) ) {
+			return $title_parts;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$category = sanitize_text_field( wp_unslash( $_GET['csf_category'] ) );
+
+		if ( ! empty( $category ) ) {
+			$title_parts['title'] = $category;
+		}
+
+		return $title_parts;
 	}
 
 	/**

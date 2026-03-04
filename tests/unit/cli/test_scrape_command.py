@@ -4,6 +4,7 @@ This module contains comprehensive tests for the CLI scrape command and
 ScraperOrchestrator, following AAA (Arrange-Act-Assert) testing pattern.
 """
 
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, Mock
 
@@ -30,53 +31,20 @@ def cli_runner() -> CliRunner:
 
 
 @pytest.fixture
-def mock_orchestrator(mocker: MockerFixture) -> Mock:
-    """Provide mocked ScraperOrchestrator.
+def mock_subprocess(mocker: MockerFixture) -> Mock:
+    """Provide mocked subprocess.run for scrape command delegation.
 
     Args:
         mocker: pytest-mock fixture
 
     Returns:
-        Mock orchestrator instance
+        Mock subprocess.run
     """
-    mock: Mock = mocker.Mock(spec=ScraperOrchestrator)
-    mock.output_dir = Path("exports")
-    mock.scrape_all.return_value = {
-        "unique_parts": 10,
-        "total_applications": 50,
-        "parts_scraped": 10,
-        "make_filter": None,
-        "year_filter": None,
-    }
-    mock.export_data.return_value = {
-        "parts": Path("exports/parts.json"),
-        "compatibility": Path("exports/compatibility.json"),
-    }
-    mock.get_stats.return_value = {
-        "unique_parts": 10,
-        "parts_scraped": 10,
-        "vehicles_tracked": 50,
-    }
-    mock.__enter__ = Mock(return_value=mock)
-    mock.__exit__ = Mock(return_value=None)
-    return mock
-
-
-@pytest.fixture
-def patch_orchestrator(mocker: MockerFixture, mock_orchestrator: Mock) -> Mock:
-    """Patch ScraperOrchestrator constructor.
-
-    Args:
-        mocker: pytest-mock fixture
-        mock_orchestrator: Mock orchestrator instance
-
-    Returns:
-        Patched constructor
-    """
-    patched: Mock = mocker.patch(
-        "src.cli.commands.scrape.ScraperOrchestrator", return_value=mock_orchestrator
-    )
-    return patched
+    mock_run = mocker.patch("src.cli.commands.scrape.subprocess.run")
+    mock_result = Mock()
+    mock_result.returncode = 0
+    mock_run.return_value = mock_result
+    return mock_run
 
 
 # ============================================================================
@@ -117,30 +85,30 @@ class TestScrapeCommandRegistration:
         # Act & Assert
         assert "output_dir" in param_names
 
-    def test_scrape_has_incremental_option(self) -> None:
-        """Test scrape command has --incremental option."""
+    def test_scrape_has_catalog_only_option(self) -> None:
+        """Test scrape command has --catalog-only option."""
         # Arrange
         param_names = [param.name for param in scrape.params]
 
         # Act & Assert
-        assert "incremental" in param_names
+        assert "catalog_only" in param_names
 
-    def test_scrape_has_delay_option(self) -> None:
-        """Test scrape command has --delay option."""
+    def test_scrape_has_images_only_option(self) -> None:
+        """Test scrape command has --images-only option."""
         # Arrange
         param_names = [param.name for param in scrape.params]
 
         # Act & Assert
-        assert "delay" in param_names
+        assert "images_only" in param_names
 
 
 class TestScrapeCommandOptions:
     """Test scrape command option handling."""
 
-    def test_make_option_filters_by_make(
-        self, cli_runner: CliRunner, patch_orchestrator: Mock, mock_orchestrator: Mock
+    def test_make_option_passes_to_subprocess(
+        self, cli_runner: CliRunner, mock_subprocess: Mock
     ) -> None:
-        """Test --make option filters by make."""
+        """Test --make option is forwarded to run_scrape.py subprocess."""
         # Arrange
         make_value = "Honda"
 
@@ -149,30 +117,32 @@ class TestScrapeCommandOptions:
 
         # Assert
         assert result.exit_code == 0
-        mock_orchestrator.scrape_all.assert_called_once()
-        call_kwargs = mock_orchestrator.scrape_all.call_args.kwargs
-        assert call_kwargs["make_filter"] == make_value
+        mock_subprocess.assert_called_once()
+        cmd = mock_subprocess.call_args[0][0]
+        assert "--make" in cmd
+        assert make_value in cmd
 
-    def test_year_option_filters_by_year(
-        self, cli_runner: CliRunner, patch_orchestrator: Mock, mock_orchestrator: Mock
+    def test_year_option_passes_to_subprocess(
+        self, cli_runner: CliRunner, mock_subprocess: Mock
     ) -> None:
-        """Test --year option filters by year."""
+        """Test --year option is forwarded to run_scrape.py subprocess."""
         # Arrange
-        year_value = 2025
+        year_value = "2025"
 
         # Act
-        result = cli_runner.invoke(scrape, ["--year", str(year_value)])
+        result = cli_runner.invoke(scrape, ["--year", year_value])
 
         # Assert
         assert result.exit_code == 0
-        mock_orchestrator.scrape_all.assert_called_once()
-        call_kwargs = mock_orchestrator.scrape_all.call_args.kwargs
-        assert call_kwargs["year_filter"] == year_value
+        mock_subprocess.assert_called_once()
+        cmd = mock_subprocess.call_args[0][0]
+        assert "--year" in cmd
+        assert year_value in cmd
 
-    def test_output_dir_creates_directory_if_not_exists(
-        self, cli_runner: CliRunner, patch_orchestrator: Mock, tmp_path: Path
+    def test_output_dir_passes_to_subprocess(
+        self, cli_runner: CliRunner, mock_subprocess: Mock, tmp_path: Path
     ) -> None:
-        """Test --output-dir creates directory if not exists."""
+        """Test --output-dir is forwarded to run_scrape.py subprocess."""
         # Arrange
         output_dir = tmp_path / "custom_exports"
 
@@ -181,53 +151,41 @@ class TestScrapeCommandOptions:
 
         # Assert
         assert result.exit_code == 0
-        patch_orchestrator.assert_called_once()
-        call_kwargs = patch_orchestrator.call_args.kwargs
-        assert call_kwargs["output_dir"] == output_dir
+        mock_subprocess.assert_called_once()
+        cmd = mock_subprocess.call_args[0][0]
+        assert "--output-dir" in cmd
+        assert str(output_dir) in cmd
 
-    def test_incremental_flag_enables_incremental_mode(
-        self, cli_runner: CliRunner, patch_orchestrator: Mock
-    ) -> None:
-        """Test --incremental flag enables incremental mode."""
-        # Arrange & Act
-        result = cli_runner.invoke(scrape, ["--incremental"])
-
-        # Assert
-        assert result.exit_code == 0
-        patch_orchestrator.assert_called_once()
-        call_kwargs = patch_orchestrator.call_args.kwargs
-        assert call_kwargs["incremental"] is True
-
-    def test_delay_option_accepts_float_values(
-        self, cli_runner: CliRunner, patch_orchestrator: Mock
-    ) -> None:
-        """Test --delay option accepts float values."""
-        # Arrange
-        delay_value = 2.5
-
+    def test_catalog_only_passes_flag(self, cli_runner: CliRunner, mock_subprocess: Mock) -> None:
+        """Test --catalog-only flag is forwarded."""
         # Act
-        result = cli_runner.invoke(scrape, ["--delay", str(delay_value)])
+        result = cli_runner.invoke(scrape, ["--catalog-only"])
 
         # Assert
         assert result.exit_code == 0
-        patch_orchestrator.assert_called_once()
-        call_kwargs = patch_orchestrator.call_args.kwargs
-        assert call_kwargs["delay_override"] == delay_value
+        cmd = mock_subprocess.call_args[0][0]
+        assert "--catalog" in cmd
 
-    def test_default_values_work_correctly(
-        self, cli_runner: CliRunner, patch_orchestrator: Mock
-    ) -> None:
-        """Test default values work correctly."""
-        # Arrange & Act
+    def test_images_only_passes_flag(self, cli_runner: CliRunner, mock_subprocess: Mock) -> None:
+        """Test --images-only flag is forwarded."""
+        # Act
+        result = cli_runner.invoke(scrape, ["--images-only"])
+
+        # Assert
+        assert result.exit_code == 0
+        cmd = mock_subprocess.call_args[0][0]
+        assert "--images" in cmd
+
+    def test_default_runs_both_phases(self, cli_runner: CliRunner, mock_subprocess: Mock) -> None:
+        """Test default invocation runs both catalog and images phases."""
+        # Act
         result = cli_runner.invoke(scrape)
 
         # Assert
         assert result.exit_code == 0
-        patch_orchestrator.assert_called_once()
-        call_kwargs = patch_orchestrator.call_args.kwargs
-        assert call_kwargs["output_dir"] == Path("exports")
-        assert call_kwargs["incremental"] is False
-        assert call_kwargs["delay_override"] is None
+        cmd = mock_subprocess.call_args[0][0]
+        assert "--catalog" in cmd
+        assert "--images" in cmd
 
 
 class TestScrapeCommandValidation:
@@ -245,17 +203,16 @@ class TestScrapeCommandValidation:
         assert result.exit_code != 0
         assert "Invalid value" in result.output or "Error" in result.output
 
-    def test_invalid_delay_raises_error(self, cli_runner: CliRunner) -> None:
-        """Test invalid delay option raises error."""
-        # Arrange
-        invalid_delay = "not-a-float"
-
+    def test_catalog_only_and_images_only_mutually_exclusive(
+        self, cli_runner: CliRunner, mock_subprocess: Mock
+    ) -> None:
+        """Test --catalog-only and --images-only are mutually exclusive."""
         # Act
-        result = cli_runner.invoke(scrape, ["--delay", invalid_delay])
+        result = cli_runner.invoke(scrape, ["--catalog-only", "--images-only"])
 
         # Assert
-        assert result.exit_code != 0
-        assert "Invalid value" in result.output or "Error" in result.output
+        assert result.exit_code == 1
+        mock_subprocess.assert_not_called()
 
 
 class TestScrapeCommandHelp:
@@ -272,67 +229,32 @@ class TestScrapeCommandHelp:
         assert "--make" in result.output
         assert "--year" in result.output
         assert "--output-dir" in result.output
-        assert "--incremental" in result.output
-        assert "--delay" in result.output
+        assert "--catalog-only" in result.output
+        assert "--images-only" in result.output
 
 
 class TestScrapeCommandWorkflow:
     """Test scrape command full workflow."""
 
-    def test_scrape_calls_orchestrator_methods_in_order(
-        self, cli_runner: CliRunner, patch_orchestrator: Mock, mock_orchestrator: Mock
+    def test_scrape_delegates_to_run_scrape(
+        self, cli_runner: CliRunner, mock_subprocess: Mock
     ) -> None:
-        """Test scrape command calls orchestrator methods in correct order."""
-        # Arrange
-        call_order: list[str] = []
-
-        def track_scrape_all(
-            make_filter: str | None = None, year_filter: int | None = None
-        ) -> dict[str, object]:
-            call_order.append("scrape_all")
-            return {
-                "unique_parts": 10,
-                "total_applications": 50,
-                "parts_scraped": 10,
-                "make_filter": make_filter,
-                "year_filter": year_filter,
-            }
-
-        def track_export_data() -> dict[str, Path]:
-            call_order.append("export_data")
-            return {
-                "parts": Path("exports/parts.json"),
-                "compatibility": Path("exports/compatibility.json"),
-            }
-
-        def track_get_stats() -> dict[str, object]:
-            call_order.append("get_stats")
-            return {
-                "unique_parts": 10,
-                "parts_scraped": 10,
-                "vehicles_tracked": 50,
-            }
-
-        mock_orchestrator.scrape_all.side_effect = track_scrape_all
-        mock_orchestrator.export_data.side_effect = track_export_data
-        mock_orchestrator.get_stats.side_effect = track_get_stats
-
+        """Test scrape command delegates to run_scrape.py."""
         # Act
         result = cli_runner.invoke(scrape)
 
         # Assert
         assert result.exit_code == 0
-        assert call_order == ["scrape_all", "export_data", "get_stats"]
+        mock_subprocess.assert_called_once()
+        cmd = mock_subprocess.call_args[0][0]
+        assert "run_scrape.py" in cmd
 
-    def test_scrape_with_all_options(
-        self, cli_runner: CliRunner, patch_orchestrator: Mock, mock_orchestrator: Mock
-    ) -> None:
+    def test_scrape_with_all_options(self, cli_runner: CliRunner, mock_subprocess: Mock) -> None:
         """Test scrape command with all options specified."""
         # Arrange
         make_value = "Toyota"
-        year_value = 2024
+        year_value = "2024"
         output_dir_value = "custom_output"
-        delay_value = 1.5
 
         # Act
         result = cli_runner.invoke(
@@ -341,48 +263,34 @@ class TestScrapeCommandWorkflow:
                 "--make",
                 make_value,
                 "--year",
-                str(year_value),
+                year_value,
                 "--output-dir",
                 output_dir_value,
-                "--incremental",
-                "--delay",
-                str(delay_value),
+                "--catalog-only",
             ],
         )
 
         # Assert
         assert result.exit_code == 0
-        patch_orchestrator.assert_called_once_with(
-            output_dir=Path(output_dir_value),
-            incremental=True,
-            delay_override=delay_value,
-        )
-        mock_orchestrator.scrape_all.assert_called_once_with(
-            make_filter=make_value, year_filter=year_value
-        )
-
-    def test_scrape_uses_context_manager(
-        self, cli_runner: CliRunner, patch_orchestrator: Mock, mock_orchestrator: Mock
-    ) -> None:
-        """Test scrape command uses orchestrator as context manager."""
-        # Arrange & Act
-        result = cli_runner.invoke(scrape)
-
-        # Assert
-        assert result.exit_code == 0
-        mock_orchestrator.__enter__.assert_called_once()
-        mock_orchestrator.__exit__.assert_called_once()
+        mock_subprocess.assert_called_once()
+        cmd = mock_subprocess.call_args[0][0]
+        assert "--make" in cmd
+        assert make_value in cmd
+        assert "--year" in cmd
+        assert year_value in cmd
+        assert "--output-dir" in cmd
+        assert output_dir_value in cmd
 
 
 class TestScrapeCommandErrorHandling:
     """Test scrape command error handling."""
 
     def test_scrape_handles_keyboard_interrupt(
-        self, cli_runner: CliRunner, patch_orchestrator: Mock, mock_orchestrator: Mock
+        self, cli_runner: CliRunner, mock_subprocess: Mock
     ) -> None:
         """Test scrape command handles KeyboardInterrupt gracefully."""
         # Arrange
-        mock_orchestrator.scrape_all.side_effect = KeyboardInterrupt()
+        mock_subprocess.side_effect = KeyboardInterrupt()
 
         # Act
         result = cli_runner.invoke(scrape)
@@ -391,20 +299,18 @@ class TestScrapeCommandErrorHandling:
         assert result.exit_code == 1
         assert "interrupted" in result.output.lower()
 
-    def test_scrape_handles_general_exception(
-        self, cli_runner: CliRunner, patch_orchestrator: Mock, mock_orchestrator: Mock
+    def test_scrape_handles_subprocess_failure(
+        self, cli_runner: CliRunner, mock_subprocess: Mock
     ) -> None:
-        """Test scrape command handles general exceptions."""
+        """Test scrape command handles subprocess failure."""
         # Arrange
-        error_message = "Test error message"
-        mock_orchestrator.scrape_all.side_effect = Exception(error_message)
+        mock_subprocess.side_effect = subprocess.CalledProcessError(2, "run_scrape.py")
 
         # Act
         result = cli_runner.invoke(scrape)
 
         # Assert
-        assert result.exit_code == 1
-        assert "Error" in result.output or "error" in result.output
+        assert result.exit_code == 2
 
 
 # ============================================================================
