@@ -773,10 +773,12 @@ class TestScraperOrchestratorExport:
         assert "parts" in paths
         mock_export_parts.assert_called_once()
 
-    def test_export_data_uses_incremental_mode(self, mocker: MockerFixture) -> None:
-        """Test export_data uses incremental mode when enabled."""
-        # Arrange
-        orchestrator = ScraperOrchestrator(incremental=True)
+    def test_export_data_uses_incremental_mode(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test export_data uses incremental mode when previous exports exist."""
+        # Arrange — create previous export so incremental append is triggered
+        (tmp_path / "parts.json").write_text('{"parts": []}')
+
+        orchestrator = ScraperOrchestrator(incremental=True, output_dir=str(tmp_path))
         mock_part = MagicMock()
         orchestrator.unique_parts = {"SKU-001": mock_part}
 
@@ -784,7 +786,7 @@ class TestScraperOrchestratorExport:
         mock_export_incremental = mocker.patch.object(
             orchestrator.exporter,
             "export_parts_incremental",
-            return_value=Path("exports/parts.json"),
+            return_value=tmp_path / "parts.json",
         )
 
         # Act

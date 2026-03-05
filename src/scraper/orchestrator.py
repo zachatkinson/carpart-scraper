@@ -1374,7 +1374,7 @@ class ScraperOrchestrator:
         # Export parts
         if self.unique_parts:
             parts_list = list(self.unique_parts.values())
-            if self.incremental:
+            if self.incremental and self._has_previous_export():
                 paths["parts"] = self.exporter.export_parts_incremental(parts_list, append=True)
             else:
                 paths["parts"] = self.exporter.export_parts(parts_list)
@@ -1385,7 +1385,7 @@ class ScraperOrchestrator:
                 VehicleCompatibility(part_sku=sku, vehicles=vehicles, notes=None)
                 for sku, vehicles in self.vehicle_compat.items()
             ]
-            if self.incremental:
+            if self.incremental and (self.exporter.output_dir / "compatibility.json").exists():
                 paths["compatibility"] = self.exporter.export_compatibility_incremental(
                     compat_list, append=True
                 )

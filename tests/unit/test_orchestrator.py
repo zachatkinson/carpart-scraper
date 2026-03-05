@@ -1476,11 +1476,16 @@ class TestExportData:
         assert paths["compatibility"] == tmp_path / "compat.json"
 
     def test_incremental_export(self, tmp_path: Path) -> None:
-        """Test export_data uses incremental methods when incremental=True."""
-        # Arrange
+        """Test export_data uses incremental methods when previous exports exist."""
+        # Arrange — create previous export files so incremental append is used
+        (tmp_path / "parts.json").write_text('{"parts": []}')
+        (tmp_path / "compatibility.json").write_text('{"compatibility": []}')
+
         orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
         orchestrator.exporter = Mock()
+        orchestrator.exporter.output_dir = tmp_path
         orchestrator.incremental = True
+        orchestrator.output_dir = tmp_path
 
         part = Part(sku="CSF-1001", name="Radiator", category="Radiator")
         vehicle = Vehicle(make="Honda", model="Civic", year=2024)
