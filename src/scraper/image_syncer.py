@@ -188,7 +188,7 @@ class RemoteAPISyncer(ImageSyncStrategy):
 
         try:
             for path in file_paths:
-                files.append(("files", (path.name, path.read_bytes(), "image/avif")))
+                files.append(("files[]", (path.name, path.read_bytes(), "image/avif")))
 
             response = self.client.post(
                 self.endpoint,
