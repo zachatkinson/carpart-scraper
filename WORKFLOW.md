@@ -3,12 +3,20 @@
 ## TL;DR
 
 ```bash
-# Option A: Unified orchestrator (recommended)
-python run_scrape.py --catalog --details
+# Full scrape (catalog + details + merged export)
+carpart scrape
 
-# Option B: Run phases separately
-python scrape_catalog.py                # Phase 1: catalog + compatibility
-python enrich_details.py                # Phase 2: descriptions, specs, images
+# Scrape + streaming image sync to local WordPress (DDEV)
+carpart scrape --sync-images --wp-url /path/to/wp-content/uploads
+
+# Scrape + streaming sync to remote WordPress (GitHub Actions cron)
+carpart scrape --sync-images --wp-url https://yoursite.com --wp-api-key KEY
+
+# Catalog only (no detail pages)
+carpart scrape --catalog-only
+
+# Incremental (skip unchanged pages)
+carpart scrape --incremental
 
 # Import to WordPress
 ddev wp csf-parts import exports/parts_complete.json
@@ -18,7 +26,7 @@ ddev wp csf-parts import exports/parts_complete.json
 
 ## What Gets Scraped
 
-### Phase 1: Catalog Scraping (`scrape_catalog.py`)
+### Catalog (Steps 1-2)
 
 Builds the full vehicle hierarchy and fetches every application page:
 
@@ -27,9 +35,7 @@ Builds the full vehicle hierarchy and fetches every application page:
 - Basic specifications
 - Vehicle compatibility data
 
-**Outputs:** `exports/parts.json` + `exports/compatibility.json`
-
-### Phase 2: Detail Enrichment (`enrich_details.py`)
+### Detail Enrichment (Step 3)
 
 Fetches each part's detail page for complete product data:
 
@@ -39,13 +45,9 @@ Fetches each part's detail page for complete product data:
 - Interchange data (competitor part numbers)
 - Gallery images (large images, converted to AVIF)
 
-**Output:** `exports/parts_with_details.json`
+### Merged Export (Step 4)
 
-### Phase 3: Auto-Merge (via `run_scrape.py`)
-
-When using the unified orchestrator, compatibility data is automatically merged into the final output:
-
-**Output:** `exports/parts_complete.json`
+Produces a single `parts_complete.json` with parts + inline vehicle compatibility.
 
 ---
 
@@ -63,15 +65,43 @@ When using the unified orchestrator, compatibility data is automatically merged 
 
 ## Before You Start
 
-### Copy AVIF Images to WordPress Plugin
+### Sync AVIF Images to WordPress
 
-The scraper saves images to `images/avif/`. Copy them to the WordPress plugin:
+The scraper saves images to `images/avif/` as a staging area. Use `--sync-images` to enable **streaming sync** — images are synced and deleted per-SKU during detail enrichment, keeping disk usage minimal:
 
+```bash
+# Streaming sync during scrape (images synced + deleted as each SKU completes)
+carpart scrape --sync-images --wp-url /path/to/wp-content/uploads
+
+# Remote WordPress (production / GitHub Actions cron)
+carpart scrape --sync-images --wp-url https://yoursite.com --wp-api-key YOUR_KEY
+
+# Standalone batch sync (for ad-hoc use after a previous scrape)
+carpart sync-images --wp-url /path/to/wp-content/uploads
+
+# Remote standalone batch sync
+carpart sync-images --wp-url https://yoursite.com --wp-api-key YOUR_KEY
+```
+
+**Streaming vs Batch:**
+- **Streaming** (`--sync-images` during `scrape`): Images are synced and deleted per-SKU during step 3. Disk stays nearly empty.
+- **Batch** (`carpart sync-images`): Syncs all unsynced images at once. Useful for retrying failed syncs.
+
+### State Persistence (Remote / CI Mode)
+
+When `--wp-url` is an HTTP(S) URL and `--wp-api-key` is provided, state files are automatically persisted to WordPress:
+
+- **Before scrape**: pulls `checkpoints/etags.json` and `images/manifest.json` from WordPress
+- **After scrape** (in `finally` block): pushes both files back to WordPress
+
+This enables ephemeral CI runners (e.g., GitHub Actions cron) to benefit from incremental scraping and ETag-based image dedup across runs.
+
+For local mode (`--wp-url /path/...`), state files persist on disk automatically — no sync needed.
+
+**Legacy method** (still works but not recommended):
 ```bash
 cp -r images/avif/* carpart-scraper-wp/public/images/avif/
 ```
-
-This only needs to be done once (or when images change).
 
 ### Clear Existing Data (Optional)
 
@@ -90,16 +120,13 @@ rm -rf images/avif/*
 
 ## Workflow Options
 
-### Option A: Full Scrape with Unified Orchestrator (Recommended)
+### Option A: Full Scrape (Recommended)
 
 ```bash
 cd /Users/zach/PycharmProjects/carpart-scraper
 
-# Run complete pipeline (catalog + details + auto-merge)
-python run_scrape.py --catalog --details
-
-# Copy images to WordPress plugin
-cp -r images/avif/* carpart-scraper-wp/public/images/avif/
+# Run complete pipeline with automatic image sync
+carpart scrape --sync-images --wp-url /path/to/wp-content/uploads
 
 # Import to WordPress
 ddev wp csf-parts import exports/parts_complete.json
@@ -108,53 +135,47 @@ ddev wp csf-parts import exports/parts_complete.json
 ddev wp csf-parts stats
 ```
 
-### Option B: Run Phases Separately
+### Option B: Catalog Only
 
 ```bash
-# Phase 1: Catalog only
-python scrape_catalog.py --output-dir exports/
+# Catalog only (no detail pages, no merged export)
+carpart scrape --catalog-only
 
-# Phase 2: Detail enrichment (requires exports/parts.json)
-python enrich_details.py
-
-# Merge compatibility into enriched data
-python merge_for_import.py
-
-# Import
-ddev wp csf-parts import exports/parts_complete.json
+# Later, run full scrape to get details
+carpart scrape
 ```
 
 ### Option C: Incremental Update
 
 ```bash
-# Catalog with change detection (skips if unchanged)
-python scrape_catalog.py --check-changes --incremental
+# Only re-scrape changed application pages (via ETag hashing)
+carpart scrape --incremental
 
-# Enrich only new/changed parts (skips already-enriched)
-python enrich_details.py
-
-# Or force re-enrichment of everything
-python enrich_details.py --force
+# Import updated data
+ddev wp csf-parts import exports/parts_complete.json
 ```
 
-### Option D: Target Specific SKUs
+### Option D: Filter by Make/Year
 
 ```bash
-# Re-enrich specific parts
+# Scrape only Honda parts
+carpart scrape --make Honda
+
+# Scrape only 2025 parts
+carpart scrape --year 2025
+
+# Combine filters
+carpart scrape --make Honda --year 2025
+```
+
+### Option E: Target Specific SKUs (Standalone Scripts)
+
+```bash
+# Re-enrich specific parts using standalone script
 python enrich_details.py --skus CSF-3680,CSF-3981,CSF-10535
 
 # Or from a file (one SKU per line)
 python enrich_details.py --skus-file changed_skus.txt
-```
-
-### Option E: Filter by Make/Year
-
-```bash
-# Scrape only Nissan parts
-python run_scrape.py --catalog --details --make Nissan
-
-# Scrape only 2023 parts
-python run_scrape.py --catalog --details --year 2023
 ```
 
 ---
@@ -164,11 +185,8 @@ python run_scrape.py --catalog --details --year 2023
 If a scrape gets interrupted (Ctrl-C, network error, etc.), resume from the last checkpoint:
 
 ```bash
-# Resume catalog scrape
-python scrape_catalog.py --resume
-
-# Detail enrichment automatically skips already-enriched parts
-python enrich_details.py
+# Resume from latest checkpoint
+carpart scrape --resume
 ```
 
 Checkpoints are saved to `checkpoints/` every 10 applications.
@@ -199,8 +217,11 @@ python -m json.tool exports/parts_complete.json > /dev/null && echo "Valid JSON"
 ### Images Not Showing
 
 ```bash
-# Check if images were copied to WordPress plugin
-ls carpart-scraper-wp/public/images/avif/ | wc -l
+# Run image sync to push any unsynced images
+carpart sync-images --wp-url /path/to/wp-content/uploads --dry-run
+
+# Actually sync
+carpart sync-images --wp-url /path/to/wp-content/uploads
 
 # Manually update image URLs if needed
 ddev wp csf-parts update-image-urls
@@ -220,10 +241,7 @@ ddev wp db query "SELECT sku, compatibility FROM wp_csf_parts WHERE sku = 'CSF-3
 
 ```bash
 # Resume from checkpoint
-python scrape_catalog.py --resume
-
-# Detail enrichment auto-skips completed parts
-python enrich_details.py
+carpart scrape --resume
 ```
 
 ### Import Failed
@@ -240,71 +258,73 @@ python -m json.tool exports/parts_complete.json > /dev/null
 
 ```
 exports/
-├── parts.json                # Phase 1: Basic catalog data
-├── compatibility.json        # Phase 1: Vehicle fitment data
-├── parts_with_details.json   # Phase 2: Enriched with detail page data
-└── parts_complete.json       # Final merged data (use this for import)
+├── parts.json                # Basic catalog data (SKU, name, price, specs)
+├── compatibility.json        # Vehicle fitment data
+└── parts_complete.json       # Merged data — parts + inline compatibility (use this for import)
 
 images/
-└── avif/
-    ├── CSF-3680_0.avif
-    ├── CSF-3680_1.avif
+├── manifest.json             # Tracks source hashes, ETags, and sync status
+└── avif/                     # Staging area (streaming sync keeps this nearly empty)
+    ├── CSF-3680_0.avif       # Only present during processing if streaming sync is off
     └── ...
 
 checkpoints/
-├── checkpoint_all_*.json     # Resume points for catalog scrape
-└── hierarchy_fingerprint_*.txt  # Change detection fingerprints
+├── etags.json                # Application page content hashes (persisted to WP in remote mode)
+└── checkpoint_all_*.json     # Resume points for catalog scrape
 ```
 
 ---
 
 ## Performance Estimates
 
-| Phase | Duration | Notes |
-|-------|----------|-------|
-| Catalog scrape (full) | ~8-10 hours | 8,764 application pages at ~1-3s delay |
-| Catalog scrape (incremental, no changes) | ~45 minutes | Hierarchy check only |
-| Detail enrichment (full) | ~3-4 hours | 1,728 parts at ~7s/part |
-| Detail enrichment (skip enriched) | Seconds | Only processes new parts |
+| Scenario | Duration | Notes |
+|----------|----------|-------|
+| Full scrape (catalog + details) | ~12-14 hours | 8,764 pages at 1-3s delay + 1,728 detail pages |
+| Incremental (no changes) | Minutes | ETag comparison only, skips unchanged pages |
+| Incremental (some changes) | Varies | Only re-scrapes changed application pages |
+| Catalog only | ~8-10 hours | 8,764 application pages at 1-3s delay |
 | WordPress import | ~30 seconds | |
-| **Total fresh scrape** | **~12-14 hours** | Run overnight |
 
 ---
 
 ## CLI Reference
 
-### `run_scrape.py` (Unified Orchestrator)
+### `carpart scrape`
 
 ```
---catalog          Run catalog scraping (hierarchy + applications)
---details          Run detail enrichment (descriptions, specs, images)
---make TEXT        Filter by make (catalog only)
---year INTEGER     Filter by year (catalog only)
---output-dir PATH  Output directory (default: exports/)
---skus TEXT        Target specific SKUs (details only)
---skus-file PATH   SKUs from file (details only)
---force            Force re-enrichment (details only)
---push             Push to WordPress via REST API after scraping
---wp-url TEXT      WordPress site URL
---wp-api-key TEXT  WordPress API key
+--make TEXT         Filter by vehicle make (e.g., 'Honda', 'Toyota')
+--year INTEGER      Filter by model year (e.g., 2025, 2024)
+--output-dir PATH   Export directory path (default: exports/)
+--catalog-only      Only scrape catalog data (skip detail pages and merged export)
+--incremental       Skip unchanged pages via ETag content hashing
+--resume            Resume from the latest checkpoint
+--sync-images       Sync AVIF images to WordPress after scraping
+--wp-url TEXT       WordPress URL or local uploads path (env: CSF_WP_URL)
+--wp-api-key TEXT   WordPress API key for remote sync (env: CSF_WP_API_KEY)
 ```
 
-### `scrape_catalog.py`
+### `carpart sync-images`
+
+Standalone command for syncing AVIF images outside the scrape pipeline.
 
 ```
---make TEXT         Filter by make
---year INTEGER      Filter by year
---output-dir PATH   Output directory (default: exports/)
---incremental       Only process changes vs previous export
---check-changes     Check hierarchy fingerprint, skip if unchanged
---resume            Resume from latest checkpoint
---fetch-details     Also fetch detail pages during catalog scrape
+--wp-url TEXT       WordPress URL or local uploads path (required, env: CSF_WP_URL)
+--wp-api-key TEXT   WordPress API key (env: CSF_WP_API_KEY)
+--images-dir PATH   Image directory (default: images)
+--no-cleanup        Skip deleting synced files
+--dry-run           Show what would be synced
 ```
 
-### `enrich_details.py`
+### Standalone Scripts (Advanced)
+
+These scripts are kept for targeted operations but are not needed for normal workflows:
 
 ```
---skus TEXT        Target specific SKUs
---skus-file PATH   SKUs from file
---force            Force re-enrichment
+scrape_catalog.py             Standalone catalog scraper with extra options
+enrich_details.py             Re-enrich specific SKUs (--skus, --force)
+merge_for_import.py           Manually merge compatibility into parts
 ```
+
+---
+
+**Last Updated**: 2026-03-05

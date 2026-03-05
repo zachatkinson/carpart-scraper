@@ -4,12 +4,14 @@ This module implements the main scraping orchestration logic that coordinates
 fetching, parsing, deduplication, and export of automotive parts data.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple, Self
 
 import structlog
 
@@ -17,10 +19,14 @@ from src.exporters.json_exporter import JSONExporter
 from src.models.part import Part
 from src.models.vehicle import Vehicle, VehicleCompatibility
 from src.scraper.ajax_parser import AJAXResponseParser
+from src.scraper.etag_store import ETagStore
 from src.scraper.fetcher import RespectfulFetcher
 from src.scraper.image_processor import ImageProcessor
 from src.scraper.parser import CSFParser
 from src.scraper.validator import DataValidator
+
+if TYPE_CHECKING:
+    from src.scraper.image_syncer import ImageSyncer
 
 logger = structlog.get_logger()
 
@@ -232,6 +238,7 @@ class ScraperOrchestrator:
         validator: DataValidator | None = None,
         exporter: JSONExporter | None = None,
         image_processor: ImageProcessor | None = None,
+        etag_store: ETagStore | None = None,
     ) -> None:
         """Initialize orchestrator with dependency injection.
 
@@ -246,6 +253,7 @@ class ScraperOrchestrator:
             validator: Data validator (default: creates DataValidator)
             exporter: JSON exporter (default: creates JSONExporter)
             image_processor: Image processor for AVIF conversion (default: creates ImageProcessor)
+            etag_store: Content hash store for change detection (default: creates ETagStore)
 
         Note:
             Dependencies are injected via constructor for testability and flexibility.
@@ -258,6 +266,7 @@ class ScraperOrchestrator:
         self.validator = validator or DataValidator()
         self.exporter = exporter or JSONExporter(output_dir=output_dir)
         self.image_processor = image_processor or ImageProcessor()
+        self.image_syncer: ImageSyncer | None = None
 
         # Note: delay_override is reserved for future use when fetcher supports it
         self.delay_override = delay_override
@@ -265,6 +274,9 @@ class ScraperOrchestrator:
         self.output_dir = Path(output_dir)
         self.checkpoint_dir = Path(checkpoint_dir)
         self.incremental = incremental
+
+        # ETag store for content-hash-based change detection
+        self.etag_store = etag_store or ETagStore(self.checkpoint_dir / "etags.json")
 
         # Ensure checkpoint directory exists
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -634,17 +646,12 @@ class ScraperOrchestrator:
             # Add interchange numbers (convert dict to ReferenceNumber objects)
             updated_data["interchange_numbers"] = detail_data["interchange_data"]
 
-        # Merge gallery images (filter to only "large" size, skip thumbnails)
+        # Process gallery images (parser already filters for large images only)
         if detail_data.get("additional_images"):
-            large_images = [
-                img for img in detail_data["additional_images"] if img.get("size") == "large"
-            ]
-
-            # Replace images with gallery images (already includes primary image first)
-            if large_images:
-                # Process images: download from S3 and convert to AVIF immediately
-                processed_images = self.image_processor.process_images(sku, large_images)
-                updated_data["images"] = processed_images
+            processed_images = self.image_processor.process_images(
+                sku, detail_data["additional_images"]
+            )
+            updated_data["images"] = processed_images
 
         # Create new Part with enriched data
         enriched_part = Part(**updated_data)
@@ -690,27 +697,6 @@ class ScraperOrchestrator:
             aspiration=vehicle_qualifiers.get("aspiration"),
             qualifiers=vehicle_qualifiers.get("qualifiers", []),
         )
-
-    def _get_hierarchy_fingerprint(self, hierarchy: list[dict[str, Any]]) -> str:
-        """Generate fingerprint hash of vehicle hierarchy.
-
-        Args:
-            hierarchy: Vehicle hierarchy from _build_hierarchy
-
-        Returns:
-            MD5 hash of hierarchy structure
-
-        Note:
-            Only includes structural data (makes, years, models, application_ids).
-            Changes to part details don't affect this fingerprint.
-        """
-        # Create canonical JSON representation
-        hierarchy_json = json.dumps(hierarchy, sort_keys=True)
-        # MD5 is fine for non-cryptographic fingerprinting
-        fingerprint = hashlib.md5(hierarchy_json.encode()).hexdigest()  # noqa: S324
-
-        logger.debug("hierarchy_fingerprint_generated", fingerprint=fingerprint)
-        return fingerprint
 
     @staticmethod
     def _content_hash(part: Part) -> str:
@@ -761,16 +747,20 @@ class ScraperOrchestrator:
             logger.info("no_previous_export_found", path=str(path))
             return {}
 
-        data = json.loads(path.read_text())
+        raw = json.loads(path.read_text())
         previous_hashes: dict[str, str] = {}
+
+        # Handle both wrapped format {"metadata": ..., "parts": [...]} and flat list [...]
+        data: list[dict[str, Any]] = raw.get("parts", raw) if isinstance(raw, dict) else raw
 
         for item in data:
             try:
                 part = Part(**item)
                 self.unique_parts[part.sku] = part
                 previous_hashes[part.sku] = self._content_hash(part)
-            except (ValueError, TypeError, KeyError) as e:
-                logger.warning("previous_part_load_failed", sku=item.get("sku"), error=str(e))
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                sku = item.get("sku", "unknown") if isinstance(item, dict) else str(item)[:20]
+                logger.warning("previous_part_load_failed", sku=sku, error=str(e))
                 continue
 
         logger.info(
@@ -782,7 +772,13 @@ class ScraperOrchestrator:
         # Load previous compatibility.json too
         compat_path = path.parent / "compatibility.json"
         if compat_path.exists():
-            compat_data = json.loads(compat_path.read_text())
+            compat_raw = json.loads(compat_path.read_text())
+            # Handle wrapped format {"metadata": ..., "compatibility": [...]}
+            compat_data: list[dict[str, Any]] = (
+                compat_raw.get("compatibility", compat_raw)
+                if isinstance(compat_raw, dict)
+                else compat_raw
+            )
             for entry in compat_data:
                 sku = entry.get("sku", "")
                 vehicles = entry.get("vehicles", [])
@@ -792,130 +788,67 @@ class ScraperOrchestrator:
 
         return previous_hashes
 
-    def _load_last_fingerprint(
-        self, make_filter: str | None = None, year_filter: int | None = None
-    ) -> str | None:
-        """Load last saved hierarchy fingerprint.
-
-        Args:
-            make_filter: Make filter to match
-            year_filter: Year filter to match
+    def _has_previous_export(self) -> bool:
+        """Check if a previous export exists.
 
         Returns:
-            Previous fingerprint hash or None if no previous run
+            True if parts.json exists in the output directory
         """
-        filters = []
-        if make_filter:
-            filters.append(make_filter.lower())
-        if year_filter:
-            filters.append(str(year_filter))
-        filter_str = "_".join(filters) if filters else "all"
+        return (self.output_dir / "parts.json").exists()
 
-        fingerprint_file = self.checkpoint_dir / f"hierarchy_fingerprint_{filter_str}.txt"
+    def _filter_by_etags(self, hierarchy: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Filter hierarchy to only applications whose pages have changed.
 
-        if fingerprint_file.exists():
-            fingerprint = fingerprint_file.read_text().strip()
-            logger.info("loaded_previous_fingerprint", fingerprint=fingerprint)
-            return fingerprint
-
-        logger.info("no_previous_fingerprint_found")
-        return None
-
-    def _save_fingerprint(
-        self, fingerprint: str, make_filter: str | None = None, year_filter: int | None = None
-    ) -> None:
-        """Save hierarchy fingerprint for future comparison.
+        Sends lightweight HTTP GET requests for each application URL and
+        computes content hashes. Pages whose hash matches the previously
+        stored value are skipped. New hashes are stored for future runs.
 
         Args:
-            fingerprint: Fingerprint hash to save
-            make_filter: Make filter used
-            year_filter: Year filter used
-        """
-        filters = []
-        if make_filter:
-            filters.append(make_filter.lower())
-        if year_filter:
-            filters.append(str(year_filter))
-        filter_str = "_".join(filters) if filters else "all"
-
-        fingerprint_file = self.checkpoint_dir / f"hierarchy_fingerprint_{filter_str}.txt"
-        fingerprint_file.write_text(fingerprint)
-
-        logger.info("fingerprint_saved", fingerprint=fingerprint, file=str(fingerprint_file))
-
-    def detect_catalog_changes(
-        self, make_filter: str | None = None, year_filter: int | None = None
-    ) -> dict[str, Any]:
-        """Detect if catalog hierarchy has changed since last run.
-
-        This is a lightweight check that only enumerates the hierarchy
-        (AJAX calls) without fetching any application pages. Takes ~5 minutes
-        vs ~9 hours for full scrape.
-
-        Args:
-            make_filter: Filter by make name
-            year_filter: Filter by year
+            hierarchy: Full vehicle hierarchy from _build_hierarchy
 
         Returns:
-            Dict with change detection results:
-            - changed: bool (True if hierarchy changed)
-            - current_fingerprint: str (hash of current hierarchy)
-            - previous_fingerprint: str | None (hash of previous hierarchy)
-            - total_vehicles: int (count of vehicle configurations)
-            - new_vehicles: int (if changed, count of new configurations)
-
-        Example:
-            >>> changes = orchestrator.detect_catalog_changes(make_filter="Honda")
-            >>> if changes['changed']:
-            >>>     orchestrator.scrape_all(make_filter="Honda")
+            Filtered hierarchy containing only changed/new applications
         """
+        if not self.etag_store.has_data():
+            logger.info("etag_store_empty_skipping_filter")
+            # First run: compute and store hashes for all pages
+            # but don't filter (all are "new")
+            for config in hierarchy:
+                application_id = config["application_id"]
+                url = f"https://csf.mycarparts.com/applications/{application_id}"
+                _changed, current_hash = self.fetcher.check_etag(url, None)
+                self.etag_store.set(url, current_hash)
+            self.etag_store.save()
+            return hierarchy
+
+        changed: list[dict[str, Any]] = []
+        skipped = 0
+
+        for config in hierarchy:
+            application_id = config["application_id"]
+            url = f"https://csf.mycarparts.com/applications/{application_id}"
+            previous_hash = self.etag_store.get(url)
+
+            is_changed, current_hash = self.fetcher.check_etag(url, previous_hash)
+
+            # Always update stored hash
+            self.etag_store.set(url, current_hash)
+
+            if is_changed:
+                changed.append(config)
+            else:
+                skipped += 1
+
+        self.etag_store.save()
+
         logger.info(
-            "detecting_catalog_changes",
-            make_filter=make_filter,
-            year_filter=year_filter,
+            "etag_filtering_results",
+            total=len(hierarchy),
+            changed=len(changed),
+            skipped=skipped,
         )
 
-        # Build hierarchy (only AJAX calls, no page fetching)
-        hierarchy = self._build_hierarchy(make_filter=make_filter, year_filter=year_filter)
-
-        # Generate fingerprint
-        current_fingerprint = self._get_hierarchy_fingerprint(hierarchy)
-
-        # Compare to previous fingerprint
-        previous_fingerprint = self._load_last_fingerprint(make_filter, year_filter)
-
-        changed = current_fingerprint != previous_fingerprint
-
-        result = {
-            "changed": changed,
-            "current_fingerprint": current_fingerprint,
-            "previous_fingerprint": previous_fingerprint,
-            "total_vehicles": len(hierarchy),
-        }
-
-        if changed:
-            # Save new fingerprint
-            self._save_fingerprint(current_fingerprint, make_filter, year_filter)
-
-            if previous_fingerprint:
-                logger.info(
-                    "catalog_changed",
-                    total_vehicles=len(hierarchy),
-                    fingerprint_changed=True,
-                )
-            else:
-                logger.info(
-                    "first_catalog_scan",
-                    total_vehicles=len(hierarchy),
-                )
-        else:
-            logger.info(
-                "catalog_unchanged",
-                total_vehicles=len(hierarchy),
-                fingerprint=current_fingerprint,
-            )
-
-        return result
+        return changed
 
     def _save_checkpoint(self, make_filter: str | None, year_filter: int | None) -> Path:
         """Save current scraping state to checkpoint file.
@@ -1069,19 +1002,19 @@ class ScraperOrchestrator:
         fetch_details: bool = True,
         resume: bool = False,
         checkpoint_interval: int = 10,
-        check_changes: bool = False,
         fetch_details_new_only: bool = True,
+        force_full: bool = False,
     ) -> dict[str, Any]:
         """Execute full scraping workflow with intelligent change detection.
 
         Workflow:
-        1. [Optional] Check for catalog changes (if check_changes=True)
-        2. Build vehicle hierarchy (makes -> years -> models -> applications)
-        3. For each application:
+        1. Build vehicle hierarchy (makes -> years -> models -> applications)
+        1.5. [Auto] Filter unchanged pages via content hashing (if incremental)
+        2. For each application:
            a. Scrape application page for parts list
            b. Deduplicate by SKU and track vehicle compatibility (last-write-wins)
            c. Save checkpoint every N applications
-        4. For each SKU:
+        3. For each SKU:
            a. Fetch detail page for new SKUs (if fetch_details_new_only=True)
            b. OR fetch details for all SKUs (if fetch_details=True and
               fetch_details_new_only=False)
@@ -1093,48 +1026,34 @@ class ScraperOrchestrator:
             fetch_details: Whether to fetch detail pages (default: True)
             resume: Resume from latest checkpoint if available (default: False)
             checkpoint_interval: Save checkpoint every N applications (default: 10)
-            check_changes: Check for hierarchy changes before scraping (default: False)
             fetch_details_new_only: Only fetch details for new SKUs (default: True)
+            force_full: Force full scrape, ignoring previous data (default: False)
 
         Returns:
             Dict with scraping statistics including failure tracking info
         """
+        # Auto-detect incremental mode: use it if previous data exists
+        if not force_full and not self.incremental:
+            etags_exist = self.etag_store.has_data()
+            exports_exist = self._has_previous_export()
+            if etags_exist or exports_exist:
+                self.incremental = True
+                logger.info(
+                    "auto_incremental_detected",
+                    etags_exist=etags_exist,
+                    exports_exist=exports_exist,
+                )
+
         logger.info(
             "scraping_started",
             make_filter=make_filter,
             year_filter=year_filter,
             fetch_details=fetch_details,
             resume=resume,
-            check_changes=check_changes,
             fetch_details_new_only=fetch_details_new_only,
+            force_full=force_full,
+            incremental=self.incremental,
         )
-
-        # Phase 0: Check for catalog changes (optional)
-        catalog_changed = True  # Assume changed unless check_changes=True
-        if check_changes:
-            change_result = self.detect_catalog_changes(make_filter, year_filter)
-            catalog_changed = change_result["changed"]
-
-            if not catalog_changed:
-                logger.info("no_catalog_changes_detected_skipping_scrape")
-                return {
-                    "unique_parts": len(self.unique_parts),
-                    "total_applications": change_result["total_vehicles"],
-                    "applications_processed": 0,
-                    "parts_scraped": self.parts_scraped,
-                    "new_parts": 0,
-                    "changed_parts": 0,
-                    "vehicles_tracked": sum(len(v) for v in self.vehicle_compat.values()),
-                    "make_filter": make_filter,
-                    "year_filter": year_filter,
-                    "details_fetched": False,
-                    "details_fetched_count": 0,
-                    "catalog_changed": False,
-                    "resumed": resume,
-                    "applications_failed": 0,
-                    "details_failed": 0,
-                    "failure_summary": self.failure_tracker.get_summary(),
-                }
 
         # Resume from checkpoint if requested
         if resume:
@@ -1153,6 +1072,18 @@ class ScraperOrchestrator:
         # Phase 1: Build vehicle hierarchy
         hierarchy = self._build_hierarchy(make_filter=make_filter, year_filter=year_filter)
         total_applications = len(hierarchy)
+
+        # Phase 1.5: ETag-based filtering (skip unchanged application pages)
+        etag_skipped = 0
+        if self.incremental and not force_full:
+            pre_filter_count = len(hierarchy)
+            hierarchy = self._filter_by_etags(hierarchy)
+            etag_skipped = pre_filter_count - len(hierarchy)
+            logger.info(
+                "etag_filtering_complete",
+                remaining=len(hierarchy),
+                skipped=etag_skipped,
+            )
 
         # Filter out already processed applications
         if resume and self.processed_application_ids:
@@ -1305,6 +1236,11 @@ class ScraperOrchestrator:
                         detail_data = self._fetch_detail_page(sku)
                         self._enrich_part_with_details(sku, detail_data)
                         details_fetched_count += 1
+
+                        # Stream-sync images for this SKU if syncer is configured
+                        image_syncer = getattr(self, "image_syncer", None)
+                        if image_syncer is not None:
+                            image_syncer.sync_and_cleanup_for_sku(sku)
                     except Exception as e:
                         details_failed += 1
                         self.failure_tracker.record(
@@ -1333,6 +1269,7 @@ class ScraperOrchestrator:
             "unique_parts": len(self.unique_parts),
             "total_applications": total_applications,
             "applications_processed": applications_processed,
+            "applications_skipped_unchanged": etag_skipped,
             "parts_scraped": self.parts_scraped,
             "new_parts": len(new_skus_found),
             "changed_parts": len(changed_skus_found),
@@ -1342,7 +1279,6 @@ class ScraperOrchestrator:
             "details_fetched": fetch_details,
             "details_fetched_count": details_fetched_count,
             "details_new_only": fetch_details_new_only,
-            "catalog_changed": catalog_changed,
             "resumed": resume,
             "applications_failed": applications_failed,
             "details_failed": details_failed,
@@ -1459,6 +1395,18 @@ class ScraperOrchestrator:
         logger.info("export_completed", files=list(paths.keys()))
         return paths
 
+    def export_complete(self) -> Path:
+        """Export merged parts with inline vehicle compatibility.
+
+        Builds compatibility map from internal state and delegates to
+        the JSON exporter to produce a single parts_complete.json file.
+
+        Returns:
+            Path to the merged export file
+        """
+        parts_list = list(self.unique_parts.values())
+        return self.exporter.export_complete(parts_list, self.vehicle_compat)
+
     def get_stats(self) -> dict[str, Any]:
         """Get current scraping statistics.
 
@@ -1479,10 +1427,11 @@ class ScraperOrchestrator:
 
     def close(self) -> None:
         """Clean up resources."""
+        self.image_processor.close()
         self.fetcher.close()
         logger.info("orchestrator_closed")
 
-    def __enter__(self) -> "ScraperOrchestrator":
+    def __enter__(self) -> Self:
         """Context manager entry."""
         return self
 

@@ -230,6 +230,7 @@ def config(ctx: ClickContext) -> None:
 from src.cli.commands.export import export  # noqa: E402
 from src.cli.commands.scrape import scrape  # noqa: E402
 from src.cli.commands.stats import stats  # noqa: E402
+from src.cli.commands.sync_images import sync_images  # noqa: E402
 from src.cli.commands.test_endpoint import test_endpoint  # noqa: E402
 from src.cli.commands.validate import validate  # noqa: E402
 
@@ -238,6 +239,7 @@ cli.add_command(test_endpoint)
 cli.add_command(stats)
 cli.add_command(validate)
 cli.add_command(export)
+cli.add_command(sync_images)
 
 
 def main() -> None:

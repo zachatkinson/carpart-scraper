@@ -106,8 +106,8 @@ def merge_data() -> None:
     """Merge parts catalog, compatibility, and enrichment data."""
     print("Loading data files...")
 
-    parts_path = Path("scraped_data_clean/parts.json")
-    compatibility_path = Path("scraped_data_clean/compatibility.json")
+    parts_path = Path("exports/parts.json")
+    compatibility_path = Path("exports/compatibility.json")
     details_path = Path("exports/parts_with_details.json")
 
     parts = _load_json_file(parts_path, "parts")

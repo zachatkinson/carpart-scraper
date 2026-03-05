@@ -336,9 +336,9 @@
 /* Engine selection notice */
 .engine-notice {
 	display: flex;
-	align-items: flex-start;
-	gap: 10px;
-	padding: 12px 14px;
+	align-items: center;
+	gap: 14px;
+	padding: 14px 16px;
 	margin-bottom: 16px;
 	background: var(--global-palette12, var(--csf-accent));
 	border-left: 3px solid var(--global-palette12, var(--csf-accent));
@@ -348,9 +348,20 @@
 	color: var(--global-palette4, #1E1E1E);
 }
 
+.engine-notice.engine-confirmed {
+	background: #16a34a;
+	border-left-color: #15803d;
+	color: #fff;
+}
+
+.engine-notice.engine-confirmed svg {
+	color: #fff;
+}
+
 .engine-notice svg {
 	flex-shrink: 0;
-	margin-top: 2px;
+	width: 32px;
+	height: 32px;
 	color: var(--global-palette4, #1E1E1E);
 }
 

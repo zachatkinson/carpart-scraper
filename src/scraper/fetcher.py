@@ -8,9 +8,12 @@ This module implements respectful web scraping with:
 - Persistent browser for efficiency
 - Scroll-to-bottom for lazy-loaded content
 - Smart retry (skip non-retryable HTTP errors like 404)
+- Lightweight content-hash checks for change detection
 """
 
+import hashlib
 import random
+import re
 import time
 from typing import Final
 
@@ -243,6 +246,76 @@ class RespectfulFetcher:
             raise
         else:
             return response
+
+    @staticmethod
+    def _normalize_html(html: str) -> str:
+        """Strip volatile tokens from HTML for stable content hashing.
+
+        The target server embeds per-request CSRF tokens and authenticity
+        tokens that change on every response. This method removes them so
+        that content hashes are stable across requests when actual page
+        content hasn't changed.
+
+        Args:
+            html: Raw HTML response text
+
+        Returns:
+            HTML with volatile tokens replaced by empty strings
+        """
+        # Remove CSRF meta tag content
+        normalized = re.sub(r'content="[A-Za-z0-9+/=]+"', 'content=""', html)
+        # Remove form authenticity token values
+        return re.sub(r'value="[A-Za-z0-9+/=]+"', 'value=""', normalized)
+
+    def check_etag(self, url: str, previous_hash: str | None) -> tuple[bool, str]:
+        """Check if a page has changed using lightweight HTTP content hashing.
+
+        Performs a plain HTTP GET (no browser) and computes a content hash
+        of the normalized HTML. Compares against the previous hash to detect
+        changes without needing Playwright.
+
+        The server's native ETags change on every request (due to CSRF tokens),
+        so we compute our own stable hashes from the normalized HTML content.
+
+        Args:
+            url: Application page URL to check
+            previous_hash: Previously stored content hash, or None for first check
+
+        Returns:
+            Tuple of (changed: bool, current_hash: str)
+            - (True, hash) if content changed or no previous hash exists
+            - (False, hash) if content is unchanged
+        """
+        self._apply_rate_limit()
+
+        logger.debug("checking_content_hash", url=url)
+
+        try:
+            response = self.client.get(
+                url,
+                headers={"Accept": "text/html,application/xhtml+xml"},
+            )
+            response.raise_for_status()
+        except httpx.HTTPError:
+            logger.warning("content_hash_check_failed", url=url)
+            # On error, assume changed so we don't skip it
+            return True, previous_hash or ""
+
+        normalized = self._normalize_html(response.text)
+        current_hash = hashlib.md5(normalized.encode()).hexdigest()  # noqa: S324
+
+        if previous_hash is None:
+            logger.debug("content_hash_first_check", url=url, hash=current_hash)
+            return True, current_hash
+
+        changed = current_hash != previous_hash
+
+        if changed:
+            logger.info("content_hash_changed", url=url)
+        else:
+            logger.debug("content_hash_unchanged", url=url)
+
+        return changed, current_hash
 
     def fetch_with_browser(self, url: str) -> str:
         """Fetch URL using persistent headless browser for JavaScript content.

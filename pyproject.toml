@@ -271,14 +271,7 @@ python_functions = ["test_*"]
 addopts = [
     "--strict-markers",
     "--strict-config",
-    "--verbose",
     "--tb=short",
-    "--cov=src",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
-    "--cov-fail-under=90",
-    "--no-cov-on-fail",
 ]
 markers = [
     "unit: Unit tests (fast, isolated)",
@@ -292,6 +285,8 @@ markers = [
     "models: Tests for data models",
     "parser: Tests for HTML parsing",
     "fetcher: Tests for HTTP fetching",
+    "memory: Memory profiling tests (slow, tracks memory usage)",
+    "benchmark: Performance benchmarks (requires pytest-benchmark)",
 ]
 asyncio_mode = "auto"
 filterwarnings = [
@@ -311,6 +306,7 @@ omit = [
 branch = true
 
 [tool.coverage.report]
+fail_under = 90
 precision = 2
 show_missing = true
 skip_covered = false

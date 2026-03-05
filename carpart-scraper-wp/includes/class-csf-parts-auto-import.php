@@ -150,7 +150,7 @@ class CSF_Parts_Auto_Import {
 	}
 
 	/**
-	 * Register REST API endpoint for push imports.
+	 * Register REST API endpoints for push imports and image uploads.
 	 *
 	 * @since 1.0.0
 	 */
@@ -162,6 +162,45 @@ class CSF_Parts_Auto_Import {
 				'methods'             => 'POST',
 				'callback'            => array( $this, 'handle_push_import' ),
 				'permission_callback' => array( $this, 'check_push_import_permission' ),
+			)
+		);
+
+		register_rest_route(
+			'csf/v1',
+			'/images/upload',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'handle_image_upload' ),
+				'permission_callback' => array( $this, 'check_push_import_permission' ),
+			)
+		);
+
+		register_rest_route(
+			'csf/v1',
+			'/scraper-state/(?P<key>[a-z_]+)',
+			array(
+				array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'handle_get_scraper_state' ),
+					'permission_callback' => array( $this, 'check_push_import_permission' ),
+					'args'                => array(
+						'key' => array(
+							'required'          => true,
+							'validate_callback' => array( $this, 'validate_state_key' ),
+						),
+					),
+				),
+				array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'handle_set_scraper_state' ),
+					'permission_callback' => array( $this, 'check_push_import_permission' ),
+					'args'                => array(
+						'key' => array(
+							'required'          => true,
+							'validate_callback' => array( $this, 'validate_state_key' ),
+						),
+					),
+				),
 			)
 		);
 	}
@@ -255,6 +294,225 @@ class CSF_Parts_Auto_Import {
 				array( 'status' => 500 )
 			);
 		}
+	}
+
+	/**
+	 * Handle image upload via REST API.
+	 *
+	 * Accepts multipart file uploads of AVIF images and saves them to
+	 * wp-content/uploads/csf-parts/images/avif/. Validates filenames
+	 * match the expected CSF pattern and skips files that already exist
+	 * with the same size.
+	 *
+	 * @since 1.1.0
+	 * @param WP_REST_Request $request Request object with file uploads.
+	 * @return WP_REST_Response|WP_Error Response or error.
+	 */
+	public function handle_image_upload( WP_REST_Request $request ) {
+		$files = $request->get_file_params();
+
+		if ( empty( $files ) || empty( $files['files'] ) ) {
+			return new WP_Error(
+				'no_files',
+				__( 'No files provided.', 'csf-parts' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		// Set up target directory.
+		$upload_dir = wp_upload_dir();
+		$target_dir = $upload_dir['basedir'] . '/csf-parts/images/avif';
+
+		if ( ! file_exists( $target_dir ) ) {
+			wp_mkdir_p( $target_dir );
+		}
+
+		$uploaded = 0;
+		$skipped  = 0;
+		$errors   = array();
+
+		// Normalize file data — handle both single and multi-file uploads.
+		$file_names = (array) $files['files']['name'];
+		$file_tmps  = (array) $files['files']['tmp_name'];
+		$file_sizes = (array) $files['files']['size'];
+		$file_count = count( $file_names );
+
+		for ( $i = 0; $i < $file_count; $i++ ) {
+			$name     = sanitize_file_name( $file_names[ $i ] );
+			$tmp_name = $file_tmps[ $i ];
+			$size     = intval( $file_sizes[ $i ] );
+
+			// Validate filename pattern: CSF-DIGITS_DIGITS.avif
+			if ( ! preg_match( '/^CSF-\d+_\d+\.avif$/', $name ) ) {
+				$errors[] = sprintf(
+					/* translators: %s: filename */
+					__( 'Invalid filename: %s', 'csf-parts' ),
+					$name
+				);
+				continue;
+			}
+
+			$dest_path = $target_dir . '/' . $name;
+
+			// Skip if file exists with same size.
+			if ( file_exists( $dest_path ) && filesize( $dest_path ) === $size ) {
+				$skipped++;
+				continue;
+			}
+
+			// Move uploaded file to target directory.
+			if ( move_uploaded_file( $tmp_name, $dest_path ) ) {
+				$uploaded++;
+			} else {
+				$errors[] = sprintf(
+					/* translators: %s: filename */
+					__( 'Failed to save: %s', 'csf-parts' ),
+					$name
+				);
+			}
+		}
+
+		return rest_ensure_response(
+			array(
+				'success' => true,
+				'results' => array(
+					'uploaded' => $uploaded,
+					'skipped'  => $skipped,
+					'errors'   => $errors,
+				),
+			)
+		);
+	}
+
+	/**
+	 * Validate that a scraper-state key is in the allowlist.
+	 *
+	 * @since 1.2.0
+	 * @param string $key The state key to validate.
+	 * @return bool True if key is allowed.
+	 */
+	public function validate_state_key( string $key ): bool {
+		$allowed = array( 'etags', 'manifest' );
+		return in_array( $key, $allowed, true );
+	}
+
+	/**
+	 * Get the filesystem path for a scraper state file.
+	 *
+	 * @since 1.2.0
+	 * @param string $key The state key.
+	 * @return string Absolute filesystem path.
+	 */
+	private function get_state_file_path( string $key ): string {
+		$upload_dir = wp_upload_dir();
+		$state_dir  = $upload_dir['basedir'] . '/csf-parts/state';
+
+		if ( ! file_exists( $state_dir ) ) {
+			wp_mkdir_p( $state_dir );
+		}
+
+		return $state_dir . '/' . $key . '.json';
+	}
+
+	/**
+	 * Handle GET request for scraper state.
+	 *
+	 * Downloads a state file (etags.json or manifest.json) from the server.
+	 * Returns 404 if the file does not exist yet.
+	 *
+	 * @since 1.2.0
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error Response or error.
+	 */
+	public function handle_get_scraper_state( WP_REST_Request $request ) {
+		$key       = $request->get_param( 'key' );
+		$file_path = $this->get_state_file_path( $key );
+
+		if ( ! file_exists( $file_path ) ) {
+			return new WP_Error(
+				'state_not_found',
+				/* translators: %s: state key name */
+				sprintf( __( 'State file not found: %s', 'csf-parts' ), $key ),
+				array( 'status' => 404 )
+			);
+		}
+
+		$contents = file_get_contents( $file_path );
+
+		if ( false === $contents ) {
+			return new WP_Error(
+				'state_read_error',
+				__( 'Failed to read state file.', 'csf-parts' ),
+				array( 'status' => 500 )
+			);
+		}
+
+		// Validate JSON without decoding to avoid PHP array/object coercion
+		if ( null === json_decode( $contents ) ) {
+			return new WP_Error(
+				'state_parse_error',
+				__( 'State file contains invalid JSON.', 'csf-parts' ),
+				array( 'status' => 500 )
+			);
+		}
+
+		// Return raw JSON to preserve exact format (avoids PHP {} -> [] coercion)
+		$response = new WP_REST_Response();
+		$response->set_data( json_decode( $contents ) );
+
+		return $response;
+	}
+
+	/**
+	 * Handle POST request to upload scraper state.
+	 *
+	 * Saves a JSON state file to wp-content/uploads/csf-parts/state/.
+	 *
+	 * @since 1.2.0
+	 * @param WP_REST_Request $request Request object with JSON body.
+	 * @return WP_REST_Response|WP_Error Response or error.
+	 */
+	public function handle_set_scraper_state( WP_REST_Request $request ) {
+		$key  = $request->get_param( 'key' );
+		$body = $request->get_body();
+
+		if ( empty( $body ) ) {
+			return new WP_Error(
+				'empty_body',
+				__( 'Request body is empty.', 'csf-parts' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		// Validate JSON without decoding (avoids PHP type coercion)
+		if ( null === json_decode( $body ) ) {
+			return new WP_Error(
+				'invalid_json',
+				__( 'Request body is not valid JSON.', 'csf-parts' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		$file_path = $this->get_state_file_path( $key );
+
+		// Save raw body to preserve exact JSON format (avoids PHP {} -> [] coercion)
+		$written = file_put_contents( $file_path, $body );
+
+		if ( false === $written ) {
+			return new WP_Error(
+				'state_write_error',
+				__( 'Failed to write state file.', 'csf-parts' ),
+				array( 'status' => 500 )
+			);
+		}
+
+		return rest_ensure_response(
+			array(
+				'success' => true,
+				'key'     => $key,
+				'size'    => $written,
+			)
+		);
 	}
 
 	/**

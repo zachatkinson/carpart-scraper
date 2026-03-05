@@ -1,0 +1,111 @@
+name: Scrape Catalog
+
+on:
+  schedule:
+    - cron: "0 3 * * *"  # Daily at 3 AM UTC (off-peak)
+  workflow_dispatch:
+    inputs:
+      make:
+        description: "Vehicle make (e.g. Honda). Empty = scheduled rotation."
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: scrape-catalog
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan Makes
+    runs-on: ubuntu-latest
+    outputs:
+      makes: ${{ steps.pick.outputs.makes }}
+    steps:
+      - id: pick
+        name: Select makes to scrape
+        shell: python3 {0}
+        run: |
+          import json, os
+
+          # All 51 makes in ID order (matches MAKES dict in orchestrator.py)
+          ALL_MAKES = [
+              "Nissan", "Ford", "Honda", "Toyota", "Scion", "Mazda", "Lexus",
+              "Kia", "Hyundai", "Dodge", "Chevrolet", "GMC", "Buick",
+              "Peterbilt", "Kenworth", "International", "Freightliner",
+              "Lincoln", "Ram", "Mercury", "Volvo", "Subaru", "Jeep",
+              "Volkswagen", "Mercedes-Benz", "Mitsubishi", "INFINITI",
+              "Land Rover", "Chrysler", "Pontiac", "Saturn", "BMW", "Audi",
+              "Cadillac", "Fiat", "Acura", "Hummer", "Isuzu", "Mack",
+              "Sterling Truck", "Suzuki", "Porsche", "Jaguar", "Mini",
+              "Oldsmobile", "Plymouth", "Saab", "Geo", "Daewoo", "Eagle",
+              "Tesla",
+          ]
+
+          manual_make = "${{ inputs.make }}".strip()
+
+          if manual_make:
+              makes = [manual_make]
+          else:
+              # Cycle 3 makes per day based on day-of-year.
+              # 51 makes / 3 per day = full cycle every 17 days.
+              from datetime import datetime, timezone
+              day = datetime.now(timezone.utc).timetuple().tm_yday
+              start = ((day - 1) * 3) % len(ALL_MAKES)
+              makes = [ALL_MAKES[(start + i) % len(ALL_MAKES)] for i in range(3)]
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"makes={json.dumps(makes)}\n")
+
+          print(f"Selected makes: {makes}")
+
+  scrape:
+    name: "Scrape: ${{ matrix.make }}"
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        make: ${{ fromJSON(needs.plan.outputs.makes) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Install Playwright Chromium
+        run: uv run playwright install --with-deps chromium
+
+      - name: Scrape ${{ matrix.make }}
+        env:
+          CSF_WP_URL: ${{ secrets.CSF_WP_URL }}
+          CSF_WP_API_KEY: ${{ secrets.CSF_WP_API_KEY }}
+        run: |
+          uv run carpart scrape \
+            --make "${{ matrix.make }}" \
+            --incremental \
+            --sync-images \
+            --wp-url "$CSF_WP_URL" \
+            --wp-api-key "$CSF_WP_API_KEY"
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-${{ matrix.make }}
+          path: |
+            exports/
+            checkpoints/
+          retention-days: 7

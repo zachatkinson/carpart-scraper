@@ -1,8 +1,10 @@
 """Comprehensive unit tests for HTML parser components.
 
-This module provides complete test coverage for parser.py following the AAA pattern:
+This module provides complete test coverage for parser.py and ajax_parser.py
+following the AAA pattern:
 - HTMLParser: Base HTML parsing and element extraction
 - CSFParser: CSF-specific data extraction from application and detail pages
+- AJAXResponseParser: jQuery AJAX response parsing
 
 All tests adhere to DRY, SOLID, and AAA principles as defined in CLAUDE.md.
 
@@ -18,6 +20,7 @@ from typing import Any
 import pytest
 from bs4 import BeautifulSoup, Tag
 
+from src.scraper.ajax_parser import AJAXParsingError, AJAXResponseParser
 from src.scraper.parser import CSFParser, HTMLParser
 
 
@@ -2008,3 +2011,230 @@ class TestCSFParserExtractGalleryImages:
         result = parser._extract_gallery_images(soup)
 
         assert result == []
+
+
+class TestAJAXResponseParser:
+    """Test suite for AJAXResponseParser jQuery response handling."""
+
+    def test_parse_extracts_html_from_jquery_call(self) -> None:
+        """Test parse() extracts HTML from .html() jQuery call."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = '$("#btnYear").next().html("<ul class=\'list-inline\'><li>2025</li></ul>")'
+
+        # Act
+        result = parser.parse(js_code)
+
+        # Assert
+        assert result == "<ul class='list-inline'><li>2025</li></ul>"
+
+    def test_parse_unescapes_double_quotes(self) -> None:
+        r"""Test parse() unescapes \" to " in extracted HTML."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = r'$("#content").html("<a href=\"/path\">Link</a>")'
+
+        # Act
+        result = parser.parse(js_code)
+
+        # Assert
+        assert result == '<a href="/path">Link</a>'
+        assert '\\"' not in result
+
+    def test_parse_unescapes_forward_slashes(self) -> None:
+        r"""Test parse() unescapes \\/ to / in extracted HTML."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = r'$("#el").html("<link href=\"https:\/\/example.com\/style.css\">")'
+
+        # Act
+        result = parser.parse(js_code)
+
+        # Assert
+        assert "https://example.com/style.css" in result
+        assert "\\/" not in result
+
+    def test_parse_handles_complex_html_with_multiple_escapes(self) -> None:
+        """Test parse() handles HTML with multiple escape sequences."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = r'$("#el").html("<div class=\"test\"><a href=\"\/path\">Text<\/a><\/div>")'
+
+        # Act
+        result = parser.parse(js_code)
+
+        # Assert
+        assert result == '<div class="test"><a href="/path">Text</a></div>'
+
+    def test_parse_raises_ajax_parsing_error_for_invalid_input(self) -> None:
+        """Test parse() raises AJAXParsingError when no .html() call found."""
+        # Arrange
+        parser = AJAXResponseParser()
+        invalid_js = 'console.log("no html call here");'
+
+        # Act & Assert
+        with pytest.raises(AJAXParsingError, match=r"No .html\(\) call found"):
+            parser.parse(invalid_js)
+
+    def test_parse_raises_error_for_empty_string(self) -> None:
+        """Test parse() raises AJAXParsingError for empty input."""
+        # Arrange
+        parser = AJAXResponseParser()
+        empty_js = ""
+
+        # Act & Assert
+        with pytest.raises(AJAXParsingError):
+            parser.parse(empty_js)
+
+    def test_parse_raises_error_for_wrong_jquery_method(self) -> None:
+        """Test parse() raises error when jQuery uses different method."""
+        # Arrange
+        parser = AJAXResponseParser()
+        wrong_method = '$("#el").text("Not an html call")'
+
+        # Act & Assert
+        with pytest.raises(AJAXParsingError):
+            parser.parse(wrong_method)
+
+    def test_try_parse_returns_html_on_success(self) -> None:
+        """Test try_parse() returns extracted HTML on successful parse."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = '$("#el").html("<div>Content</div>")'
+
+        # Act
+        result = parser.try_parse(js_code)
+
+        # Assert
+        assert result == "<div>Content</div>"
+
+    def test_try_parse_returns_none_on_failure(self) -> None:
+        """Test try_parse() returns None instead of raising exception."""
+        # Arrange
+        parser = AJAXResponseParser()
+        invalid_js = 'console.log("invalid");'
+
+        # Act
+        result = parser.try_parse(invalid_js)
+
+        # Assert
+        assert result is None
+
+    def test_try_parse_returns_none_for_empty_string(self) -> None:
+        """Test try_parse() returns None for empty string."""
+        # Arrange
+        parser = AJAXResponseParser()
+        empty_js = ""
+
+        # Act
+        result = parser.try_parse(empty_js)
+
+        # Assert
+        assert result is None
+
+    def test_parse_dropdown_response_extracts_ids_and_text(self) -> None:
+        """Test _parse_dropdown_response extracts IDs from matching hrefs."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = (
+            '$("#btnYear").html("<ul>'
+            '<li><a href=\\"remote:/get_model_by_make_year/192\\">2025</a></li>'
+            '<li><a href=\\"remote:/get_model_by_make_year/193\\">2024</a></li>'
+            '</ul>")'
+        )
+
+        # Act
+        result = parser._parse_dropdown_response(js_code, "get_model_by_make_year", "years")
+
+        # Assert
+        assert result == {192: "2025", 193: "2024"}
+
+    def test_parse_dropdown_response_skips_non_matching_hrefs(self) -> None:
+        """Test _parse_dropdown_response skips links that don't match pattern."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = (
+            '$("#el").html("<ul>'
+            '<li><a href=\\"/other/path/123\\">Other</a></li>'
+            '<li><a href=\\"/applications/456\\">Match</a></li>'
+            '</ul>")'
+        )
+
+        # Act
+        result = parser._parse_dropdown_response(js_code, "/applications/", "models")
+
+        # Assert
+        assert result == {456: "Match"}
+
+    def test_parse_dropdown_response_skips_invalid_ids(self) -> None:
+        """Test _parse_dropdown_response skips non-integer IDs with warning."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = (
+            '$("#el").html("<ul>'
+            '<li><a href=\\"/applications/abc\\">Invalid</a></li>'
+            '<li><a href=\\"/applications/789\\">Valid</a></li>'
+            '</ul>")'
+        )
+
+        # Act
+        result = parser._parse_dropdown_response(js_code, "/applications/", "models")
+
+        # Assert
+        assert result == {789: "Valid"}
+
+    def test_parse_dropdown_response_returns_empty_for_no_matches(self) -> None:
+        """Test _parse_dropdown_response returns empty dict when no hrefs match."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = '$("#el").html("<ul><li><a href=\\"/other/path\\">Nope</a></li></ul>")'
+
+        # Act
+        result = parser._parse_dropdown_response(js_code, "/applications/", "models")
+
+        # Assert
+        assert result == {}
+
+    def test_parse_year_response_end_to_end(self) -> None:
+        """Test parse_year_response extracts years from jQuery dropdown response."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = (
+            '$("#btnYear").next().html("<ul class=\'list-inline\'>'
+            '<li><a data-remote=\\"true\\" '
+            'href=\\"remote:/get_model_by_make_year/192\\">2025</a></li>'
+            '<li><a data-remote=\\"true\\" '
+            'href=\\"remote:/get_model_by_make_year/100\\">2024</a></li>'
+            '</ul>")'
+        )
+
+        # Act
+        result = parser.parse_year_response(js_code)
+
+        # Assert
+        assert 192 in result
+        assert result[192] == "2025"
+        assert 100 in result
+        assert result[100] == "2024"
+
+    def test_parse_model_response_end_to_end(self) -> None:
+        """Test parse_model_response extracts models from jQuery dropdown response."""
+        # Arrange
+        parser = AJAXResponseParser()
+        js_code = (
+            '$("#btnModel").next().html("<ul class=\'list-inline\'>'
+            '<li><a data-remote=\\"true\\" '
+            'href=\\"/applications/8430\\">Accord</a></li>'
+            '<li><a data-remote=\\"true\\" '
+            'href=\\"/applications/8431\\">Civic</a></li>'
+            '</ul>")'
+        )
+
+        # Act
+        result = parser.parse_model_response(js_code)
+
+        # Assert
+        assert 8430 in result
+        assert result[8430] == "Accord"
+        assert 8431 in result
+        assert result[8431] == "Civic"

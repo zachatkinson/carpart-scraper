@@ -20,6 +20,7 @@ from pytest_mock import MockerFixture
 from src.models.part import Part
 from src.models.vehicle import Vehicle
 from src.scraper.ajax_parser import AJAXParsingError, AJAXResponseParser
+from src.scraper.etag_store import ETagStore
 from src.scraper.orchestrator import DeduplicationResult, FailureTracker, ScraperOrchestrator
 
 
@@ -922,10 +923,13 @@ class TestEnrichPartWithDetails:
         assert enriched.tech_notes == "Requires adapter bracket"
         assert len(enriched.interchange_numbers) == 1
         assert enriched.interchange_numbers[0].reference_number == "30048"
-        # Only large images were passed to image_processor
+        # All images passed to image_processor (parser handles large-only filtering)
         orchestrator.image_processor.process_images.assert_called_once_with(
             "CSF-1001",
-            [{"url": "https://img.example.com/large.jpg", "size": "large"}],
+            [
+                {"url": "https://img.example.com/large.jpg", "size": "large"},
+                {"url": "https://img.example.com/thumb.jpg", "size": "thumbnail"},
+            ],
         )
 
     def test_enrich_part_missing_sku_logs_warning(self) -> None:
@@ -984,214 +988,6 @@ class TestCreateVehicleFromConfig:
         assert vehicle.engine is None
         assert vehicle.aspiration is None
         assert vehicle.qualifiers == []
-
-
-class TestHierarchyFingerprint:
-    """Test _get_hierarchy_fingerprint method."""
-
-    def test_same_input_same_hash(self) -> None:
-        """Test that identical hierarchy input produces the same fingerprint."""
-        # Arrange
-        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        hierarchy = [
-            {
-                "make_id": 3,
-                "make": "Honda",
-                "year_id": 100,
-                "year": "2024",
-                "application_id": 8000,
-                "model": "Civic",
-            },
-        ]
-
-        # Act
-        hash1 = orchestrator._get_hierarchy_fingerprint(hierarchy)  # noqa: SLF001
-        hash2 = orchestrator._get_hierarchy_fingerprint(hierarchy)  # noqa: SLF001
-
-        # Assert
-        assert hash1 == hash2
-        assert len(hash1) == 32  # MD5 hex digest
-
-    def test_different_input_different_hash(self) -> None:
-        """Test that different hierarchy input produces different fingerprints."""
-        # Arrange
-        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        hierarchy_a = [
-            {
-                "make_id": 3,
-                "make": "Honda",
-                "year_id": 100,
-                "year": "2024",
-                "application_id": 8000,
-                "model": "Civic",
-            },
-        ]
-        hierarchy_b = [
-            {
-                "make_id": 4,
-                "make": "Toyota",
-                "year_id": 200,
-                "year": "2024",
-                "application_id": 9000,
-                "model": "Camry",
-            },
-        ]
-
-        # Act
-        hash_a = orchestrator._get_hierarchy_fingerprint(hierarchy_a)  # noqa: SLF001
-        hash_b = orchestrator._get_hierarchy_fingerprint(hierarchy_b)  # noqa: SLF001
-
-        # Assert
-        assert hash_a != hash_b
-
-
-class TestFingerprintFileIO:
-    """Test _save_fingerprint and _load_last_fingerprint methods."""
-
-    def test_save_and_load_round_trip_no_filters(self, tmp_path: Path) -> None:
-        """Test saving and loading fingerprint without filters."""
-        # Arrange
-        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.checkpoint_dir = tmp_path
-
-        # Act
-        orchestrator._save_fingerprint("abc123def456")  # noqa: SLF001
-        loaded = orchestrator._load_last_fingerprint()  # noqa: SLF001
-
-        # Assert
-        assert loaded == "abc123def456"
-
-    def test_save_and_load_round_trip_with_filters(self, tmp_path: Path) -> None:
-        """Test saving and loading fingerprint with make and year filter."""
-        # Arrange
-        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.checkpoint_dir = tmp_path
-
-        # Act
-        orchestrator._save_fingerprint(  # noqa: SLF001
-            "xyz789", make_filter="Honda", year_filter=2024
-        )
-        loaded = orchestrator._load_last_fingerprint(  # noqa: SLF001
-            make_filter="Honda", year_filter=2024
-        )
-
-        # Assert
-        assert loaded == "xyz789"
-        # Verify the file was named correctly
-        expected_file = tmp_path / "hierarchy_fingerprint_honda_2024.txt"
-        assert expected_file.exists()
-
-
-class TestDetectCatalogChanges:
-    """Test detect_catalog_changes method."""
-
-    def test_first_run_returns_changed(self, mocker: MockerFixture, tmp_path: Path) -> None:
-        """Test first run (no previous fingerprint) returns changed=True."""
-        # Arrange
-        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.checkpoint_dir = tmp_path
-        orchestrator.fetcher = Mock()
-        orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
-        orchestrator.failure_tracker = FailureTracker()
-
-        mock_response_years = Mock(spec=httpx.Response)
-        mock_response_years.text = "years_js"
-        mock_response_models = Mock(spec=httpx.Response)
-        mock_response_models.text = "models_js"
-
-        orchestrator.fetcher.fetch = Mock(side_effect=[mock_response_years, mock_response_models])
-        orchestrator.ajax_parser.parse_year_response.return_value = {100: "2024"}
-        orchestrator.ajax_parser.parse_model_response.return_value = {8000: "Civic"}
-
-        mocker.patch("src.scraper.orchestrator.MAKES", {3: "Honda"})
-
-        # Act
-        result = orchestrator.detect_catalog_changes()
-
-        # Assert
-        assert result["changed"] is True
-        assert result["previous_fingerprint"] is None
-        assert result["total_vehicles"] == 1
-
-    def test_unchanged_hierarchy_returns_not_changed(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
-        """Test unchanged hierarchy returns changed=False."""
-        # Arrange
-        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.checkpoint_dir = tmp_path
-        orchestrator.fetcher = Mock()
-        orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
-        orchestrator.failure_tracker = FailureTracker()
-
-        mock_response_years = Mock(spec=httpx.Response)
-        mock_response_years.text = "years_js"
-        mock_response_models = Mock(spec=httpx.Response)
-        mock_response_models.text = "models_js"
-
-        orchestrator.ajax_parser.parse_year_response.return_value = {100: "2024"}
-        orchestrator.ajax_parser.parse_model_response.return_value = {8000: "Civic"}
-
-        mocker.patch("src.scraper.orchestrator.MAKES", {3: "Honda"})
-
-        # First run saves the fingerprint
-        orchestrator.fetcher.fetch = Mock(side_effect=[mock_response_years, mock_response_models])
-        orchestrator.detect_catalog_changes()
-
-        # Second run with same hierarchy
-        mock_response_years2 = Mock(spec=httpx.Response)
-        mock_response_years2.text = "years_js"
-        mock_response_models2 = Mock(spec=httpx.Response)
-        mock_response_models2.text = "models_js"
-        orchestrator.fetcher.fetch = Mock(side_effect=[mock_response_years2, mock_response_models2])
-
-        # Act
-        result = orchestrator.detect_catalog_changes()
-
-        # Assert
-        assert result["changed"] is False
-
-    def test_changed_hierarchy_returns_changed(self, mocker: MockerFixture, tmp_path: Path) -> None:
-        """Test changed hierarchy returns changed=True with previous fingerprint."""
-        # Arrange
-        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.checkpoint_dir = tmp_path
-        orchestrator.fetcher = Mock()
-        orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
-        orchestrator.failure_tracker = FailureTracker()
-
-        mock_response_years = Mock(spec=httpx.Response)
-        mock_response_years.text = "years_js"
-        mock_response_models = Mock(spec=httpx.Response)
-        mock_response_models.text = "models_js"
-
-        mocker.patch("src.scraper.orchestrator.MAKES", {3: "Honda"})
-
-        # First run: only Civic
-        orchestrator.ajax_parser.parse_year_response.return_value = {100: "2024"}
-        orchestrator.ajax_parser.parse_model_response.return_value = {8000: "Civic"}
-        orchestrator.fetcher.fetch = Mock(side_effect=[mock_response_years, mock_response_models])
-        first_result = orchestrator.detect_catalog_changes()
-        assert first_result["changed"] is True
-
-        # Second run: Civic + Accord (hierarchy changed)
-        mock_response_years2 = Mock(spec=httpx.Response)
-        mock_response_years2.text = "years_js"
-        mock_response_models2 = Mock(spec=httpx.Response)
-        mock_response_models2.text = "models_js"
-        orchestrator.ajax_parser.parse_model_response.return_value = {
-            8000: "Civic",
-            8001: "Accord",
-        }
-        orchestrator.fetcher.fetch = Mock(side_effect=[mock_response_years2, mock_response_models2])
-
-        # Act
-        result = orchestrator.detect_catalog_changes()
-
-        # Assert
-        assert result["changed"] is True
-        assert result["previous_fingerprint"] is not None
-        assert result["total_vehicles"] == 2
 
 
 class TestLoadCheckpointErrors:
@@ -1259,41 +1055,6 @@ class TestGetLatestCheckpoint:
         assert latest is None
 
 
-class TestScrapeAllCheckChanges:
-    """Test scrape_all with check_changes=True when catalog is unchanged."""
-
-    def test_unchanged_catalog_returns_early(self, tmp_path: Path) -> None:
-        """Test scrape_all returns early when check_changes=True and catalog unchanged."""
-        # Arrange
-        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.unique_parts = {}
-        orchestrator.vehicle_compat = {}
-        orchestrator.parts_scraped = 0
-        orchestrator.processed_application_ids = set()
-        orchestrator.failure_tracker = FailureTracker()
-        orchestrator.incremental = False
-
-        # Mock detect_catalog_changes to return unchanged
-        orchestrator.detect_catalog_changes = Mock(  # type: ignore[method-assign]
-            return_value={
-                "changed": False,
-                "total_vehicles": 5,
-                "current_fingerprint": "abc123",
-                "previous_fingerprint": "abc123",
-            }
-        )
-
-        # Act
-        result = orchestrator.scrape_all(check_changes=True)
-
-        # Assert
-        assert result["catalog_changed"] is False
-        assert result["applications_processed"] == 0
-        assert result["total_applications"] == 5
-        # _build_hierarchy should NOT have been called (early return)
-        orchestrator.detect_catalog_changes.assert_called_once()
-
-
 class TestScrapeAllPhase2:
     """Test scrape_all Phase 2 (application scraping loop)."""
 
@@ -1316,6 +1077,7 @@ class TestScrapeAllPhase2:
         orchestrator.processed_application_ids = set()
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
+        orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
         return orchestrator
 
     def test_successful_scrape_loop(self, mocker: MockerFixture, tmp_path: Path) -> None:
@@ -1423,6 +1185,7 @@ class TestScrapeAllPhase3:
         orchestrator.processed_application_ids = set()
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
+        orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
         return orchestrator
 
     def test_fetch_details_new_only(self, mocker: MockerFixture, tmp_path: Path) -> None:
@@ -1529,6 +1292,7 @@ class TestScrapeAllResume:
         orchestrator.processed_application_ids = set()
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
+        orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
 
         # Create a checkpoint file
         checkpoint_data = {
@@ -1612,6 +1376,7 @@ class TestScrapeAllIncremental:
         orchestrator.processed_application_ids = set()
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
+        orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
 
         mocker.patch.object(orchestrator, "_build_hierarchy", return_value=[])
         mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")

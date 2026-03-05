@@ -109,13 +109,15 @@ class Part(BaseModel):
         """
         return validate_csf_sku(v)
 
-    @field_validator("price")
+    @field_validator("price", mode="before")
     @classmethod
-    def validate_price(cls, v: Decimal | None) -> Decimal | None:
-        """Validate price is reasonable.
+    def validate_price(cls, v: Decimal | str | None) -> Decimal | None:
+        """Validate and coerce price values.
+
+        Handles legacy exports where None was serialized as the string "None".
 
         Args:
-            v: Price value (can be None)
+            v: Price value (can be None, string "None", or numeric)
 
         Returns:
             Validated price or None
@@ -123,12 +125,13 @@ class Part(BaseModel):
         Raises:
             ValueError: If price is unreasonably high (>$50,000)
         """
-        if v is None:
+        if v is None or v == "None":
             return None
-        if v > Decimal("50000.00"):
+        price = Decimal(str(v))
+        if price > Decimal("50000.00"):
             msg = "Price seems unreasonably high, please verify"
             raise ValueError(msg)
-        return v
+        return price
 
     @field_validator("category")
     @classmethod

@@ -7,18 +7,17 @@ Complete WordPress plugin for displaying and managing CSF MyCarParts automotive 
 - **Custom Post Type**: `csf_part` for storing parts data
 - **Taxonomies**: Categories, Makes, Models, Years for filtering
 - **JSON Import System**: Import parts from scraper exports
-- **3 Gutenberg Blocks**:
+- **2 Gutenberg Blocks**:
   - Single Product Display
-  - Product Grid/List
-  - Vehicle Selector (Year → Make → Model → Parts)
+  - Product Catalog with smart filters
 - **Async Search**: Real-time product search with AJAX
 - **REST API**: Custom endpoints for dynamic queries
 - **Admin Interface**: Import management and settings
 
 ## Requirements
 
-- **WordPress**: 6.0 or higher
-- **PHP**: 8.1 or higher
+- **WordPress**: 6.7 or higher
+- **PHP**: 8.4 or higher
 - **Node.js**: 18+ (for block development)
 - **MySQL**: 5.7+ or MariaDB 10.3+
 
@@ -82,23 +81,15 @@ Complete WordPress plugin for displaying and managing CSF MyCarParts automotive 
    - Show/hide images
    - Show/hide compatibility
 
-#### Product Grid Block
+#### Product Catalog Block
 
-1. Add "CSF Product Grid" block
+1. Add "CSF Product Catalog" block
 2. Configure filters:
    - Filter by: Category, Make, Model, Year
    - Select filter values
    - Choose layout: Grid or List
    - Set columns (for grid layout)
    - Set posts per page
-
-#### Vehicle Selector Block
-
-1. Add "CSF Vehicle Selector" block
-2. Configure options:
-   - Year-first or Make-first ordering
-   - Results display: Redirect or inline
-   - Target page for results (if redirecting)
 
 ### Using Async Search
 
@@ -151,6 +142,22 @@ Parameters:
 Returns: Array of compatible parts
 ```
 
+#### Scraper State (requires API key)
+
+Used by the Python scraper to persist state files across ephemeral CI runs.
+
+```
+GET /wp-json/csf/v1/scraper-state/{key}
+Headers: X-CSF-API-Key: <api_key>
+Keys: etags, manifest
+Returns: JSON state data (404 if not yet stored)
+
+POST /wp-json/csf/v1/scraper-state/{key}
+Headers: X-CSF-API-Key: <api_key>, Content-Type: application/json
+Body: JSON state data
+Returns: { success: true, key: "etags", size: 12345 }
+```
+
 ## Data Structure
 
 ### Custom Database Table: `wp_csf_parts`
@@ -190,20 +197,23 @@ Parts data is stored in a dedicated MySQL table for performance and flexibility,
 
 1. **Run Scraper** (Python):
    ```bash
-   carpart scrape --all --check-changes
-   carpart export --format json --output /path/to/exports/
+   # Full pipeline (catalog + details + merged export)
+   carpart scrape
+
+   # Incremental (skip unchanged pages via ETag hashing)
+   carpart scrape --incremental
+
+   # Filter by make/year
+   carpart scrape --make Honda --year 2025
+
+   # Catalog only (no detail pages)
+   carpart scrape --catalog-only
    ```
 
 2. **Upload to WordPress**:
-   - Manual: Upload via admin interface
-   - Automated: Copy to WordPress uploads directory
+   - Manual: Upload zip via Plugins → Add New → Upload Plugin
+   - Data: Navigate to CSF Parts → Import, upload merged JSON
    - API: POST to WordPress REST endpoint (requires auth)
-
-3. **Import in WordPress**:
-   - Navigate to CSF Parts → Import
-   - Select uploaded JSON file
-   - Click "Start Import"
-   - Monitor progress and review log
 
 ### Export File Structure
 
@@ -263,21 +273,35 @@ csf-parts-catalog/
 │   ├── class-csf-parts-taxonomies.php
 │   ├── class-csf-parts-json-importer.php
 │   ├── class-csf-parts-ajax-handler.php
-│   └── class-csf-parts-rest-api.php
+│   ├── class-csf-parts-rest-api.php
+│   ├── class-csf-parts-assets.php
+│   ├── class-csf-parts-database.php
+│   ├── class-csf-parts-url-handler.php
+│   ├── class-csf-parts-detail-fetcher.php
+│   ├── class-csf-parts-customizer.php
+│   ├── helpers.php
+│   └── import-sources/         # Import strategy pattern
 ├── admin/                      # Admin interface
 │   ├── class-csf-parts-admin-menu.php
 │   ├── class-csf-parts-import-manager.php
 │   └── views/
-│       └── import-page.php
-├── blocks/src/                 # Gutenberg blocks (React)
+├── blocks/                     # Gutenberg blocks
+│   ├── build/                  # Compiled block assets
 │   ├── single-product/
-│   ├── product-grid/
-│   └── vehicle-selector/
+│   └── product-catalog/
 ├── public/                     # Frontend assets
 │   ├── js/
-│   │   └── search-async.js
-│   └── css/
-│       └── frontend-styles.css
+│   │   ├── search-async.js
+│   │   └── engine-selector.js
+│   ├── css/
+│   │   ├── frontend-styles.css
+│   │   ├── part-single-modern.css
+│   │   ├── csf-color-system.css
+│   │   └── product-catalog-block.css
+│   └── images/                 # Part images (uploaded separately)
+├── templates/                  # PHP templates
+│   ├── part-single-modern.php
+│   └── part-single.php
 └── tests/                      # PHPUnit tests
 ```
 
@@ -340,6 +364,6 @@ Developed as part of the CSF MyCarParts scraper project.
 
 ---
 
-**Plugin Version**: 1.0.0
-**WordPress Tested**: 6.4
-**Last Updated**: 2025-01-15
+**Plugin Version**: 1.8.1
+**WordPress Tested**: 6.7
+**Last Updated**: 2026-03-04

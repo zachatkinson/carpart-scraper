@@ -12,7 +12,7 @@ from typing import Any
 import structlog
 
 from src.models.part import Part
-from src.models.vehicle import VehicleCompatibility
+from src.models.vehicle import Vehicle, VehicleCompatibility
 
 logger = structlog.get_logger()
 
@@ -246,6 +246,69 @@ class JSONExporter:
         else:
             return output_path
 
+    def export_complete(
+        self,
+        parts: list[Part],
+        compatibility_map: dict[str, list[Vehicle]],
+        filename: str = "parts_complete.json",
+        pretty: bool = True,
+    ) -> Path:
+        """Export merged parts with inline vehicle compatibility.
+
+        Produces a single JSON file where each part includes its compatible
+        vehicles inline, suitable for standalone import or cron pipelines.
+
+        Args:
+            parts: List of validated Part instances
+            compatibility_map: Dict mapping SKU to list of compatible Vehicles
+            filename: Output filename (default: "parts_complete.json")
+            pretty: Whether to pretty-print JSON (default: True)
+
+        Returns:
+            Path to created JSON file
+
+        Raises:
+            IOError: If export fails
+        """
+        output_path = self.output_dir / filename
+
+        try:
+            merged_parts = []
+            for part in parts:
+                part_dict = self._part_to_dict(part)
+                vehicles = compatibility_map.get(part.sku, [])
+                part_dict["compatibility"] = [v.model_dump(mode="json") for v in vehicles]
+                merged_parts.append(part_dict)
+
+            export_data = {
+                "metadata": {
+                    "export_date": datetime.now(UTC).isoformat(),
+                    "total_parts": len(parts),
+                    "version": "1.0",
+                },
+                "parts": merged_parts,
+            }
+
+            with output_path.open("w", encoding="utf-8") as f:
+                if pretty:
+                    json.dump(export_data, f, indent=2, ensure_ascii=False)
+                else:
+                    json.dump(export_data, f, ensure_ascii=False)
+
+            logger.info(
+                "complete_export_finished",
+                filename=filename,
+                count=len(parts),
+                path=str(output_path),
+            )
+
+        except Exception as e:
+            logger.exception("complete_export_failed", filename=filename, error=str(e))
+            msg = f"Failed to export complete data: {e}"
+            raise OSError(msg) from e
+        else:
+            return output_path
+
     def _part_to_dict(self, part: Part) -> dict[str, Any]:
         """Convert Part to dict for JSON serialization.
 
@@ -261,7 +324,7 @@ class JSONExporter:
         data = part.model_dump(mode="json")
 
         # Convert Decimal to string for better JSON compatibility
-        if "price" in data:
+        if "price" in data and data["price"] is not None:
             data["price"] = str(data["price"])
 
         return data

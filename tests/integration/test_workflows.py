@@ -91,8 +91,7 @@ class TestScrapingWorkflow:
         assert part.category == "Radiator"
         assert part.manufacturer == "CSF"
         assert part.in_stock is True
-        assert len(part.images) == 1
-        assert part.images[0].is_primary is True
+        assert len(part.images) == 0  # Images extracted from detail page, not application page
 
         # Cleanup
         fetcher.close()
@@ -937,16 +936,23 @@ class TestErrorRecoveryWorkflow:
         mock_page = Mock(spec=Page)
         mock_page.content.return_value = "<html><body>Browser content</body></html>"
         mock_page.goto = Mock()
+        mock_page.evaluate = Mock()
+        mock_page.wait_for_load_state = Mock()
+        mock_page.close = Mock()
+
+        mock_context = Mock()
+        mock_context.new_page.return_value = mock_page
 
         mock_browser = Mock(spec=Browser)
-        mock_browser.new_page.return_value = mock_page
+        mock_browser.new_context.return_value = mock_context
         mock_browser.close = Mock()
 
         mock_playwright = Mock()
         mock_playwright.chromium.launch.return_value = mock_browser
 
+        # _ensure_browser() calls sync_playwright().start(), not __enter__
         mock_sync_playwright = mocker.patch("src.scraper.fetcher.sync_playwright")
-        mock_sync_playwright.return_value.__enter__.return_value = mock_playwright
+        mock_sync_playwright.return_value.start.return_value = mock_playwright
 
         fetcher = RespectfulFetcher()
 
@@ -955,7 +961,6 @@ class TestErrorRecoveryWorkflow:
 
         # Assert
         assert html == "<html><body>Browser content</body></html>"
-        mock_browser.close.assert_called_once()
 
         # Cleanup
         fetcher.close()

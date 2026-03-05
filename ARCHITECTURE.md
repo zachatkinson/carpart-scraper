@@ -9,45 +9,65 @@ This document defines the **single source of truth** for each scraping operation
 ## Pipeline Overview
 
 ```
-scrape_catalog.py          enrich_details.py          merge_for_import.py
-     Phase 1                    Phase 2                    Phase 3
- ┌─────────────┐          ┌─────────────────┐        ┌──────────────┐
- │ Hierarchy    │          │ Detail pages    │        │ Merge compat │
- │ Applications │──parts──→│ Descriptions    │──parts─→│ into parts   │
- │ Basic parts  │  .json   │ Specs, images   │  _with  │              │
- │ Compat data  │          │ Interchange     │ details │              │
- └─────────────┘          └─────────────────┘  .json  └──────┬───────┘
-       │                                                      │
-       └── compatibility.json                    parts_complete.json
+                        carpart scrape
+            (single command, calls orchestrator directly)
+
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │  [State Pull]          ScraperOrchestrator              [State Push]         │
+ │  etags.json ←─WP                                        etags.json ─→WP     │
+ │  manifest.json←WP                                       manifest.json─→WP   │
+ │                                                                              │
+ │  1. Hierarchy    2. Application   3. Detail + Stream  4. Export              │
+ │     (AJAX)          Scraping         Enrichment + Sync                       │
+ │  ┌────────────┐  ┌─────────────┐  ┌────────────────┐  ┌─────────┐          │
+ │  │Makes/Years │  │ Fetch pages │  │Descriptions    │  │parts.   │          │
+ │  │Models/Apps │─→│ Extract     │─→│Specs, images   │─→│json     │          │
+ │  │via AJAX    │  │ Dedup+track │  │AVIF+ETag       │  │compat.  │          │
+ │  │            │  │ ETag hashing│  │Stream sync/del │  │complete │          │
+ │  └────────────┘  └─────────────┘  └────────────────┘  └─────────┘          │
+ └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-`run_scrape.py` orchestrates all three phases when using `--catalog --details`.
+`carpart scrape` invokes the orchestrator directly — no subprocess delegation.
+
+- `--catalog-only` stops after step 2 (skips detail enrichment and merged export)
+- Default (no flag) runs steps 1-4, producing `parts_complete.json`
+- `--sync-images` enables streaming sync: images are synced and deleted per-SKU during step 3
+- Remote mode (`--wp-url https://...`) auto-pulls state before scraping and pushes after
 
 ---
 
-## Phase 1: Catalog Scraping
+## Step 1: Hierarchy Enumeration (AJAX)
 
-**Single Source:** `scrape_catalog.py` (delegates to `src/scraper/orchestrator.py`)
+**Single Source:** `src/scraper/orchestrator.py` (`_build_hierarchy`)
 
 **Responsibilities:**
-- Build vehicle hierarchy (makes, years, models, applications)
+- Enumerate makes, years, models, and application IDs via AJAX endpoints
+- Build the full vehicle hierarchy tree
+
+---
+
+## Step 2: Application Scraping
+
+**Single Source:** `src/scraper/orchestrator.py` (`_scrape_applications`)
+
+**Responsibilities:**
 - Fetch application pages for each vehicle configuration
 - Extract basic part data: SKU, name, category, manufacturer, stock status, specs
 - Deduplicate parts across application pages
 - Track vehicle compatibility per part
 - Save checkpoints for resume capability
+- ETag-based content hashing for incremental mode
 
-**Output:**
+**Output (via export):**
 - `exports/parts.json` — Part catalog with basic info
 - `exports/compatibility.json` — Vehicle compatibility data
 
-**Never duplicated elsewhere.**
-
 ---
 
-## Phase 2: Detail Page Enrichment
+## Step 3: Detail Page Enrichment
 
-**Single Source:** `enrich_details.py`
+**Single Source:** `src/scraper/orchestrator.py` (`_fetch_detail_pages`)
 
 **Responsibilities:**
 - Fetch detail pages (one per part SKU) from `csf.autocaredata.com`
@@ -59,46 +79,53 @@ scrape_catalog.py          enrich_details.py          merge_for_import.py
   - Gallery images (large images only)
 - Download images and convert to AVIF format
 - Merge detail data into catalog data
-- Skip already-enriched parts (unless `--force`)
-
-**Output:**
-- `exports/parts_with_details.json` — Complete enriched data
-
-**This is the ONLY script that fetches detail pages. Never duplicated elsewhere.**
 
 ---
 
-## Phase 3: Auto-Merge
+## Step 4: Export
 
-**Single Source:** `merge_for_import.py` (also built into `run_scrape.py`)
+**Single Source:** `src/exporters/json_exporter.py`
 
 **Responsibilities:**
-- Merge `compatibility.json` into `parts_with_details.json`
-- Produce the final import-ready file
+- `export_data()` — Write `parts.json` + `compatibility.json`
+- `export_complete()` — Write merged `parts_complete.json` with parts + inline compatibility
 
 **Output:**
+- `exports/parts.json` — Basic catalog data
+- `exports/compatibility.json` — Vehicle fitment data
 - `exports/parts_complete.json` — Final merged data for WordPress import
 
 ---
 
 ## Change Detection
 
-### Tier 1: Hierarchy Fingerprint
+### ETag-Based Content Hashing
 
-**File:** `src/scraper/orchestrator.py` (`_get_hierarchy_fingerprint`)
+**File:** `src/scraper/etag_store.py`
 
-MD5 hash of the entire vehicle hierarchy structure (makes, years, models, application IDs). Stored in `checkpoints/hierarchy_fingerprint_*.txt`.
+Per-application-page content hashing that detects ALL changes:
+
+- New parts added to an application
+- Parts removed from an application
+- Price changes, spec changes, any field changes
 
 ```bash
-python scrape_catalog.py --check-changes
+# Auto-detects previous data and runs incrementally
+carpart scrape
+
+# Explicit incremental mode
+carpart scrape --incremental
 ```
 
-- If fingerprint matches previous run: **skip entire scrape**
-- If fingerprint differs: proceed with scrape
-- Detects: new vehicles, removed vehicles, new applications
-- Does NOT detect: part detail changes (price, description, images)
+**How it works:**
+1. Each application page response is hashed
+2. On subsequent runs, the hash is compared to the stored value
+3. If unchanged: **skip that page entirely**
+4. If changed: re-scrape and process the page
 
-### Tier 2: Part Content Hashing
+The orchestrator auto-promotes to incremental mode when previous ETag data or exports exist.
+
+### Part Content Hashing
 
 **File:** `src/scraper/orchestrator.py` (`_content_hash`)
 
@@ -116,11 +143,7 @@ content = {
 - `scraped_at` — Volatile timestamp
 - `description`, `tech_notes`, `interchange_numbers` — Enrichment-only fields
 
-```bash
-python scrape_catalog.py --incremental
-```
-
-Loads previous `parts.json`, computes hashes, compares during deduplication. Only changed parts are flagged.
+Used during deduplication to flag which specific parts changed between runs.
 
 ---
 
@@ -136,7 +159,7 @@ Checkpoints save every 10 applications and include:
 
 ```bash
 # Resume from latest checkpoint
-python scrape_catalog.py --resume
+carpart scrape --resume
 ```
 
 Failed applications are **not** added to `processed_application_ids`, so they are automatically retried on resume.
@@ -150,7 +173,7 @@ Failed applications are **not** added to `processed_application_ids`, so they ar
 | Method | Purpose | Called By |
 |--------|---------|-----------|
 | `extract_all_parts_from_application_page()` | Extract all parts from an application page | `orchestrator.py` |
-| `extract_detail_page_data()` | Extract complete detail page data | `enrich_details.py` |
+| `extract_detail_page_data()` | Extract complete detail page data | `orchestrator.py` |
 | `_extract_vehicle_qualifiers()` | Parse engine, aspiration, transmission from HTML table | Internal |
 | `_extract_gallery_images()` | Extract large S3 images from detail page | Internal |
 | `_extract_clean_engine_spec()` | Clean engine strings, remove non-engine data | Internal |
@@ -159,12 +182,12 @@ Failed applications are **not** added to `processed_application_ids`, so they ar
 
 | Method | Purpose |
 |--------|---------|
-| `scrape_all()` | Main entry point for catalog scraping |
+| `scrape_all()` | Main entry point — runs full pipeline |
 | `_deduplicate_and_track()` | Deduplicate parts, track compatibility, detect changes |
 | `_content_hash()` | MD5 hash of part content for change detection |
-| `_get_hierarchy_fingerprint()` | MD5 hash of hierarchy for change detection |
 | `_save_checkpoint()` / `_load_checkpoint()` | Checkpoint persistence |
 | `export_data()` | Export parts and compatibility to JSON |
+| `export_complete()` | Export merged parts + compatibility to single JSON |
 
 ### Fetcher (`src/scraper/fetcher.py`)
 
@@ -181,9 +204,43 @@ Failed applications are **not** added to `processed_application_ids`, so they ar
 | Feature | Implementation |
 |---------|---------------|
 | Download | Fetches gallery images from S3 URLs |
+| ETag conditionals | Sends `If-None-Match` header; skips download on 304 Not Modified |
 | Conversion | Converts to AVIF (quality 85) |
 | Naming | `CSF-{sku}_{index}.avif` |
-| Dedup | Skips already-downloaded images |
+| Dedup | Content hash + ETag-based staleness detection |
+| Manifest | `images/manifest.json` tracks source_hash, etag, and sync status |
+| Sync tracking | `mark_synced()`, `get_unsynced_files()`, `get_synced_files()` |
+
+### Image Syncer (`src/scraper/image_syncer.py`)
+
+| Feature | Implementation |
+|---------|---------------|
+| Strategy pattern | `ImageSyncStrategy` ABC with two backends |
+| Local sync | `LocalFileSyncer` — copies AVIFs to WordPress uploads directory |
+| Remote sync | `RemoteAPISyncer` — uploads via `POST /wp-json/csf/v1/images/upload` |
+| Batch sync | `ImageSyncer.sync()` — syncs all unsynced files at once |
+| Streaming sync | `ImageSyncer.sync_and_cleanup_for_sku()` — syncs per-SKU during detail enrichment |
+| Cumulative tracking | `cumulative_result` attribute aggregates totals across streaming calls |
+| Cleanup | Streaming: deletes per-SKU after sync. Batch: `cleanup()` for synced=True files |
+
+### State Syncer (`src/scraper/state_syncer.py`)
+
+| Feature | Implementation |
+|---------|---------------|
+| Purpose | Persist state files across ephemeral CI runs |
+| Pull | `StateSyncer.pull()` — downloads etags.json/manifest.json from WordPress |
+| Push | `StateSyncer.push()` — uploads state files to WordPress |
+| Endpoint | `GET/POST /wp-json/csf/v1/scraper-state/{key}` |
+| Key allowlist | Only `etags` and `manifest` keys are permitted |
+| Auto-trigger | Activated when `--wp-url` is an HTTP URL with `--wp-api-key` |
+
+### ETag Store (`src/scraper/etag_store.py`)
+
+| Feature | Implementation |
+|---------|---------------|
+| Storage | JSON file mapping URLs to content hashes |
+| Comparison | Compares current page hash to stored hash |
+| Scope | Per-application-page granularity |
 
 ---
 
@@ -228,7 +285,7 @@ images = detail_data["additional_images"]
 Before adding new functionality:
 
 - [ ] Does this duplicate existing functionality?
-- [ ] Can I extend an existing script instead of creating a new one?
+- [ ] Can I extend an existing module instead of creating a new one?
 - [ ] Am I calling the correct single source of truth?
 - [ ] Does this violate DRY principles?
 - [ ] Have I updated this architecture document?
@@ -239,15 +296,20 @@ Before adding new functionality:
 
 | Task | Single Source | Never Use |
 |------|-------------|-----------|
-| Catalog scraping | `scrape_catalog.py` | Direct parser calls |
-| Detail enrichment | `enrich_details.py` | Separate image/spec scripts |
-| Orchestration | `run_scrape.py` | Manual subprocess calls |
+| Full pipeline | `carpart scrape` (CLI) | Subprocess chains |
+| Catalog scraping | `ScraperOrchestrator.scrape_all()` | Direct parser calls |
+| Detail enrichment | `ScraperOrchestrator._fetch_detail_pages()` | Separate image/spec scripts |
+| Merged export | `JSONExporter.export_complete()` | Manual merge scripts |
 | Image extraction | `parser.extract_detail_page_data()` | `parser._extract_gallery_images()` |
 | Spec extraction | `parser.extract_detail_page_data()` | Custom parsing logic |
-| Change detection | `orchestrator._content_hash()` | Manual file diffing |
+| Change detection | ETag store + `_content_hash()` | Manual file diffing |
+| Streaming image sync | `ImageSyncer.sync_and_cleanup_for_sku()` via orchestrator | Batch-at-end sync |
+| Batch image sync | `ImageSyncer.sync()` + `cleanup()` | Manual `cp -r` |
+| Standalone image sync | `carpart sync-images` | Manual file copying |
+| State persistence | `StateSyncer.pull()` / `push()` | Manual file management |
 
-**Golden Rule:** One task, one script, one method. No exceptions.
+**Golden Rule:** One task, one module, one method. No exceptions.
 
 ---
 
-**Last Updated**: 2026-03-04
+**Last Updated**: 2026-03-05

@@ -1,11 +1,16 @@
 """Unit tests for ImageProcessor.
 
 Tests cover:
+- ETag-based conditional downloads (304 Not Modified)
+- Enhanced manifest schema with etag/synced fields
+- Legacy manifest migration (flat string → rich dict)
+- Manifest relocation from avif/ to images/
 - Manifest-based staleness detection
 - Re-encoding when source image changes
 - Encoding when no manifest entry exists
 - Manifest persistence across sessions
 - Corrupted manifest recovery
+- Sync helper methods (mark_synced, get_unsynced_files, get_synced_files)
 """
 
 import hashlib
@@ -58,6 +63,8 @@ def mock_client(mocker: MockerFixture) -> Mock:
     client = mocker.Mock(spec=httpx.Client)
     response = mocker.Mock(spec=httpx.Response)
     response.content = RED_JPEG
+    response.status_code = 200
+    response.headers = {"etag": '"abc123"'}
     response.raise_for_status = mocker.Mock()
     client.get.return_value = response
     return client
@@ -81,10 +88,10 @@ IMAGE_ENTRY = {
 class TestProcessImagesManifest:
     """Test manifest-based staleness detection in process_images."""
 
-    def test_first_run_downloads_encodes_and_stores_hash(
+    def test_first_run_downloads_encodes_and_stores_entry(
         self, images_dir: Path, mock_client: Mock
     ) -> None:
-        """First run with no AVIF on disk encodes and stores hash."""
+        """First run with no AVIF on disk encodes and stores rich manifest entry."""
         # Arrange
         processor = _make_processor(images_dir, mock_client)
 
@@ -95,7 +102,10 @@ class TestProcessImagesManifest:
         assert len(result) == 1
         assert result[0]["url"] == "images/avif/CSF-100_0.avif"
         assert (images_dir / "avif" / "CSF-100_0.avif").exists()
-        assert processor._manifest["CSF-100_0.avif"] == RED_HASH  # noqa: SLF001
+        entry = processor._manifest["CSF-100_0.avif"]  # noqa: SLF001
+        assert entry["source_hash"] == RED_HASH
+        assert entry["etag"] == '"abc123"'
+        assert entry["synced"] is False
 
         processor.close()
 
@@ -124,7 +134,6 @@ class TestProcessImagesManifest:
         # Arrange — first run with red image
         processor = _make_processor(images_dir, mock_client)
         processor.process_images("CSF-100", [IMAGE_ENTRY])
-        avif_path = images_dir / "avif" / "CSF-100_0.avif"
 
         # Act — second run with blue image (different content)
         response_mock = mock_client.get.return_value
@@ -133,9 +142,8 @@ class TestProcessImagesManifest:
 
         # Assert — AVIF was re-encoded, manifest updated
         assert len(result) == 1
-        assert processor._manifest["CSF-100_0.avif"] == BLUE_HASH  # noqa: SLF001
-        # File was rewritten (size may differ for different source colors)
-        assert avif_path.exists()
+        entry = processor._manifest["CSF-100_0.avif"]  # noqa: SLF001
+        assert entry["source_hash"] == BLUE_HASH
 
         processor.close()
 
@@ -153,10 +161,178 @@ class TestProcessImagesManifest:
         # Act
         result = processor.process_images("CSF-100", [IMAGE_ENTRY])
 
-        # Assert — encoding was called, manifest now has the hash
+        # Assert — encoding was called, manifest now has the entry
         assert len(result) == 1
         encode_spy.assert_called_once()
-        assert processor._manifest["CSF-100_0.avif"] == RED_HASH  # noqa: SLF001
+        entry = processor._manifest["CSF-100_0.avif"]  # noqa: SLF001
+        assert entry["source_hash"] == RED_HASH
+
+        processor.close()
+
+
+class TestETagConditionalDownloads:
+    """Test ETag-based conditional request handling."""
+
+    def test_304_not_modified_skips_download_and_encoding(
+        self, images_dir: Path, mock_client: Mock, mocker: MockerFixture
+    ) -> None:
+        """When server returns 304, no download or AVIF encoding occurs."""
+        # Arrange — first run to populate manifest with ETag
+        processor = _make_processor(images_dir, mock_client)
+        processor.process_images("CSF-100", [IMAGE_ENTRY])
+        encode_spy = mocker.spy(processor, "_encode_avif")
+
+        # Set up 304 response for second request
+        response_304 = mocker.Mock(spec=httpx.Response)
+        response_304.status_code = 304
+        mock_client.get.return_value = response_304
+
+        # Act
+        result = processor.process_images("CSF-100", [IMAGE_ENTRY])
+
+        # Assert — image reference returned, but no encoding
+        assert len(result) == 1
+        assert result[0]["url"] == "images/avif/CSF-100_0.avif"
+        encode_spy.assert_not_called()
+
+        processor.close()
+
+    def test_sends_if_none_match_header_when_etag_stored(
+        self, images_dir: Path, mock_client: Mock
+    ) -> None:
+        """Sends If-None-Match header when ETag exists in manifest."""
+        # Arrange — first run populates manifest with ETag
+        processor = _make_processor(images_dir, mock_client)
+        processor.process_images("CSF-100", [IMAGE_ENTRY])
+
+        # Act — second request
+        processor.process_images("CSF-100", [IMAGE_ENTRY])
+
+        # Assert — second call should include If-None-Match
+        calls = mock_client.get.call_args_list
+        assert len(calls) == 2
+        second_call_headers = calls[1].kwargs.get("headers", {})
+        assert second_call_headers.get("If-None-Match") == '"abc123"'
+
+        processor.close()
+
+    def test_no_if_none_match_when_no_etag_stored(
+        self, images_dir: Path, mock_client: Mock
+    ) -> None:
+        """Does not send If-None-Match when no ETag is in manifest."""
+        # Arrange — fresh processor, no manifest entries
+        processor = _make_processor(images_dir, mock_client)
+
+        # Act
+        processor.process_images("CSF-100", [IMAGE_ENTRY])
+
+        # Assert — first call should have empty headers
+        call_headers = mock_client.get.call_args.kwargs.get("headers", {})
+        assert "If-None-Match" not in call_headers
+
+        processor.close()
+
+    def test_no_if_none_match_when_avif_missing_from_disk(
+        self, images_dir: Path, mock_client: Mock
+    ) -> None:
+        """Does not send If-None-Match if AVIF file is missing from disk."""
+        # Arrange — populate manifest with ETag but don't create AVIF file
+        processor = _make_processor(images_dir, mock_client)
+        processor._manifest["CSF-100_0.avif"] = {  # noqa: SLF001
+            "source_hash": RED_HASH,
+            "etag": '"abc123"',
+            "synced": False,
+        }
+        # No AVIF file on disk
+
+        # Act
+        processor.process_images("CSF-100", [IMAGE_ENTRY])
+
+        # Assert — should NOT send If-None-Match since AVIF is missing
+        call_headers = mock_client.get.call_args.kwargs.get("headers", {})
+        assert "If-None-Match" not in call_headers
+
+        processor.close()
+
+    def test_stores_etag_from_response(self, images_dir: Path, mock_client: Mock) -> None:
+        """ETag from HTTP response is stored in manifest."""
+        # Arrange
+        mock_client.get.return_value.headers = {"etag": '"new-etag-value"'}
+        processor = _make_processor(images_dir, mock_client)
+
+        # Act
+        processor.process_images("CSF-100", [IMAGE_ENTRY])
+
+        # Assert
+        entry = processor._manifest["CSF-100_0.avif"]  # noqa: SLF001
+        assert entry["etag"] == '"new-etag-value"'
+
+        processor.close()
+
+
+class TestManifestMigration:
+    """Test manifest format and location migration."""
+
+    def test_legacy_flat_manifest_migrated_to_rich_format(self, images_dir: Path) -> None:
+        """Legacy manifest with flat string values is auto-migrated."""
+        # Arrange — write legacy format manifest at new location
+        images_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = images_dir / "manifest.json"
+        legacy_data = {"CSF-100_0.avif": RED_HASH, "CSF-200_0.avif": BLUE_HASH}
+        manifest_path.write_text(json.dumps(legacy_data))
+
+        # Act
+        processor = ImageProcessor(images_dir=images_dir)
+
+        # Assert — all entries migrated to rich format
+        for filename in ("CSF-100_0.avif", "CSF-200_0.avif"):
+            entry = processor._manifest[filename]  # noqa: SLF001
+            assert isinstance(entry, dict)
+            assert "source_hash" in entry
+            assert entry["etag"] is None
+            assert entry["synced"] is False
+
+        processor.close()
+
+    def test_manifest_relocated_from_avif_dir(self, images_dir: Path) -> None:
+        """Legacy manifest in avif/ directory is moved to images/."""
+        # Arrange — write manifest at old location
+        avif_dir = images_dir / "avif"
+        avif_dir.mkdir(parents=True, exist_ok=True)
+        old_path = avif_dir / "manifest.json"
+        old_path.write_text(json.dumps({"CSF-100_0.avif": RED_HASH}))
+
+        # Act
+        processor = ImageProcessor(images_dir=images_dir)
+
+        # Assert — file moved to new location
+        new_path = images_dir / "manifest.json"
+        assert new_path.exists()
+        assert not old_path.exists()
+        assert "CSF-100_0.avif" in processor._manifest  # noqa: SLF001
+
+        processor.close()
+
+    def test_new_location_preferred_over_legacy(self, images_dir: Path) -> None:
+        """If both old and new manifest exist, new location is used (no move)."""
+        # Arrange — both files exist
+        images_dir.mkdir(parents=True, exist_ok=True)
+        avif_dir = images_dir / "avif"
+        avif_dir.mkdir(parents=True, exist_ok=True)
+
+        old_path = avif_dir / "manifest.json"
+        old_path.write_text(json.dumps({"OLD_0.avif": "oldhash"}))
+
+        new_path = images_dir / "manifest.json"
+        new_path.write_text(json.dumps({"NEW_0.avif": "newhash"}))
+
+        # Act
+        processor = ImageProcessor(images_dir=images_dir)
+
+        # Assert — new location data is loaded, old file untouched
+        assert "NEW_0.avif" in processor._manifest  # noqa: SLF001
+        assert "OLD_0.avif" not in processor._manifest  # noqa: SLF001
+        assert old_path.exists()  # old file not deleted
 
         processor.close()
 
@@ -177,22 +353,21 @@ class TestManifestPersistence:
         processor2.client = mock_client
 
         # Assert
-        assert processor2._manifest.get("CSF-200_0.avif") == RED_HASH  # noqa: SLF001
+        entry = processor2._manifest.get("CSF-200_0.avif")  # noqa: SLF001
+        assert isinstance(entry, dict)
+        assert entry["source_hash"] == RED_HASH
 
-        # Verify manifest.json exists on disk
-        manifest_path = images_dir / "avif" / "manifest.json"
+        # Verify manifest.json exists at new location (images/, not avif/)
+        manifest_path = images_dir / "manifest.json"
         assert manifest_path.exists()
-        stored = json.loads(manifest_path.read_text())
-        assert stored["CSF-200_0.avif"] == RED_HASH
 
         processor2.close()
 
     def test_corrupted_manifest_resets_gracefully(self, images_dir: Path) -> None:
         """Corrupted manifest.json is handled without crashing."""
         # Arrange — write invalid JSON to manifest
-        avif_dir = images_dir / "avif"
-        avif_dir.mkdir(parents=True, exist_ok=True)
-        (avif_dir / "manifest.json").write_text("{invalid json!!!")
+        images_dir.mkdir(parents=True, exist_ok=True)
+        (images_dir / "manifest.json").write_text("{invalid json!!!")
 
         # Act — creating processor should not raise
         processor = ImageProcessor(images_dir=images_dir)
@@ -211,10 +386,92 @@ class TestManifestPersistence:
             processor.process_images("CSF-300", [IMAGE_ENTRY])
 
         # Assert — manifest was saved by __exit__
-        manifest_path = images_dir / "avif" / "manifest.json"
+        manifest_path = images_dir / "manifest.json"
         assert manifest_path.exists()
         stored = json.loads(manifest_path.read_text())
         assert "CSF-300_0.avif" in stored
+
+
+class TestSyncHelpers:
+    """Test manifest sync helper methods."""
+
+    def test_mark_synced_sets_flag(self, images_dir: Path, mock_client: Mock) -> None:
+        """mark_synced() sets synced=True for a manifest entry."""
+        # Arrange
+        processor = _make_processor(images_dir, mock_client)
+        processor.process_images("CSF-100", [IMAGE_ENTRY])
+
+        # Act
+        processor.mark_synced("CSF-100_0.avif")
+
+        # Assert
+        entry = processor._manifest["CSF-100_0.avif"]  # noqa: SLF001
+        assert entry["synced"] is True
+
+        processor.close()
+
+    def test_get_unsynced_files_returns_unsynced(self, images_dir: Path, mock_client: Mock) -> None:
+        """get_unsynced_files() returns files not yet synced."""
+        # Arrange
+        processor = _make_processor(images_dir, mock_client)
+        processor.process_images("CSF-100", [IMAGE_ENTRY])
+        processor.process_images("CSF-200", [IMAGE_ENTRY])
+        processor.mark_synced("CSF-100_0.avif")
+
+        # Act
+        unsynced = processor.get_unsynced_files()
+
+        # Assert
+        assert "CSF-200_0.avif" in unsynced
+        assert "CSF-100_0.avif" not in unsynced
+
+        processor.close()
+
+    def test_get_synced_files_returns_synced(self, images_dir: Path, mock_client: Mock) -> None:
+        """get_synced_files() returns files that have been synced."""
+        # Arrange
+        processor = _make_processor(images_dir, mock_client)
+        processor.process_images("CSF-100", [IMAGE_ENTRY])
+        processor.mark_synced("CSF-100_0.avif")
+
+        # Act
+        synced = processor.get_synced_files()
+
+        # Assert
+        assert "CSF-100_0.avif" in synced
+
+        processor.close()
+
+    def test_new_images_default_to_unsynced(self, images_dir: Path, mock_client: Mock) -> None:
+        """Newly processed images start with synced=False."""
+        # Arrange
+        processor = _make_processor(images_dir, mock_client)
+
+        # Act
+        processor.process_images("CSF-100", [IMAGE_ENTRY])
+
+        # Assert
+        unsynced = processor.get_unsynced_files()
+        assert "CSF-100_0.avif" in unsynced
+
+        processor.close()
+
+    def test_legacy_entries_treated_as_unsynced(self, images_dir: Path) -> None:
+        """Legacy flat-string manifest entries are treated as unsynced."""
+        # Arrange — write legacy format
+        images_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = images_dir / "manifest.json"
+        manifest_path.write_text(json.dumps({"CSF-100_0.avif": RED_HASH}))
+
+        processor = ImageProcessor(images_dir=images_dir)
+
+        # Act — after migration, entries should be in new format
+        unsynced = processor.get_unsynced_files()
+
+        # Assert
+        assert "CSF-100_0.avif" in unsynced
+
+        processor.close()
 
 
 class TestProcessImagesEdgeCases:

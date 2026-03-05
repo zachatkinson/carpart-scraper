@@ -1237,3 +1237,122 @@ def test_export_hierarchical_multiple_vehicles(tmp_path: Path) -> None:
     assert data["metadata"]["total_years"] == 2
     assert "2020" in data["data"] or 2020 in data["data"]
     assert "2021" in data["data"] or 2021 in data["data"]
+
+
+# ============================================================================
+# Test JSONExporter.export_complete()
+# ============================================================================
+
+
+def test_export_complete_creates_merged_json(
+    tmp_path: Path,
+    sample_part: Part,
+    sample_vehicle: Vehicle,
+) -> None:
+    """Test that export_complete() creates merged JSON with parts and inline compatibility.
+
+    Arrange: Create exporter, parts, and compatibility map
+    Act: Export complete
+    Assert: File created with correct merged structure
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+    parts = [sample_part]
+    compat_map = {sample_part.sku: [sample_vehicle]}
+
+    # Act
+    output_path = exporter.export_complete(parts, compat_map)
+
+    # Assert
+    assert output_path.exists()
+    assert output_path == tmp_path / "parts_complete.json"
+
+    with output_path.open(encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert "metadata" in data
+    assert "parts" in data
+    assert data["metadata"]["total_parts"] == 1
+    assert len(data["parts"]) == 1
+
+    part_entry = data["parts"][0]
+    assert part_entry["sku"] == "CSF-12345"
+    assert "compatibility" in part_entry
+    assert len(part_entry["compatibility"]) == 1
+    assert part_entry["compatibility"][0]["make"] == "Audi"
+    assert part_entry["compatibility"][0]["year"] == 2020
+
+
+def test_export_complete_part_without_compatibility_gets_empty_list(
+    tmp_path: Path,
+    sample_part: Part,
+) -> None:
+    """Test that parts without compatibility get an empty compatibility list.
+
+    Arrange: Create exporter, parts, and empty compatibility map
+    Act: Export complete
+    Assert: Part has empty compatibility array
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+    parts = [sample_part]
+    compat_map: dict[str, list[Vehicle]] = {}
+
+    # Act
+    output_path = exporter.export_complete(parts, compat_map)
+
+    # Assert
+    with output_path.open(encoding="utf-8") as f:
+        data = json.load(f)
+
+    part_entry = data["parts"][0]
+    assert part_entry["compatibility"] == []
+
+
+def test_export_complete_multiple_vehicles_inline(
+    tmp_path: Path,
+    sample_part: Part,
+) -> None:
+    """Test that multiple compatible vehicles are inlined correctly.
+
+    Arrange: Create part with multiple compatible vehicles
+    Act: Export complete
+    Assert: All vehicles present in compatibility array
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+    vehicles = [
+        Vehicle(make="Audi", model="A4", year=2020),
+        Vehicle(make="Audi", model="A4", year=2021),
+        Vehicle(make="Audi", model="A5", year=2020),
+    ]
+    compat_map = {sample_part.sku: vehicles}
+
+    # Act
+    output_path = exporter.export_complete([sample_part], compat_map)
+
+    # Assert
+    with output_path.open(encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert len(data["parts"][0]["compatibility"]) == 3
+
+
+def test_export_complete_raises_oserror_on_write_failure(
+    tmp_path: Path,
+    sample_part: Part,
+) -> None:
+    """Test that export_complete() raises OSError when file write fails.
+
+    Arrange: Create exporter and make output path a directory so write fails
+    Act: Try to export complete
+    Assert: OSError raised with descriptive message
+    """
+    # Arrange
+    exporter = JSONExporter(output_dir=tmp_path)
+    bad_path = tmp_path / "parts_complete.json"
+    bad_path.mkdir()
+
+    # Act & Assert
+    with pytest.raises(OSError, match="Failed to export complete data"):
+        exporter.export_complete([sample_part], {})

@@ -233,7 +233,7 @@ get_header();
 					<?php if ( count( $engine_variants ) > 1 ) : ?>
 						<div class="your-vehicle-engine-selector">
 						<div class="engine-notice">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 								<circle cx="12" cy="12" r="10"></circle>
 								<line x1="12" y1="16" x2="12" y2="12"></line>
 								<line x1="12" y1="8" x2="12.01" y2="8"></line>
@@ -263,7 +263,7 @@ get_header();
 							<span class="engine-label">Engine:</span>
 							<span class="engine-value"><?php echo esc_html( $engine_variants[0] ); ?></span>
 						</div>
-						<div class="engine-verify-notice" style="margin-top: 8px; padding: 8px 12px; background: var(--global-palette8, #F7FAFC); border-left: 3px solid var(--global-palette5, #4A5568); border-radius: 0 4px 4px 0; font-size: 13px; color: var(--global-palette5, #4A5568);">
+						<div class="engine-verify-notice" style="margin-top: 8px; padding: 8px 12px; background: var(--global-palette12, var(--csf-accent)); border-left: 3px solid var(--global-palette12, var(--csf-accent)); border-radius: 0 4px 4px 0; font-size: 13px; color: var(--global-palette4, #1E1E1E);">
 							Please verify this matches your vehicle's engine before purchasing.
 						</div>
 					<?php endif; ?>

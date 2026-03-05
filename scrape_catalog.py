@@ -99,9 +99,9 @@ def _run_scrape(  # noqa: PLR0913
     output_dir: str,
     output_path: Path,
     incremental: bool = False,
-    check_changes: bool = False,
     resume: bool = False,
     fetch_details: bool = False,
+    force_full: bool = False,
 ) -> None:
     """Run the scraping workflow within a context manager.
 
@@ -111,9 +111,9 @@ def _run_scrape(  # noqa: PLR0913
         output_dir: Output directory string
         output_path: Output directory Path
         incremental: Load previous export as baseline, only process changes
-        check_changes: Check hierarchy fingerprint before scraping
         resume: Resume from latest checkpoint
         fetch_details: Fetch detail pages for parts
+        force_full: Force full scrape, ignoring previous data
     """
     with ScraperOrchestrator(
         output_dir=output_path,
@@ -127,9 +127,9 @@ def _run_scrape(  # noqa: PLR0913
             make_filter=make,
             year_filter=year,
             resume=resume,
-            check_changes=check_changes,
             fetch_details=fetch_details,
             fetch_details_new_only=True,
+            force_full=force_full,
         )
 
         orchestrator.export_data()
@@ -164,6 +164,10 @@ def _print_results(stats: dict[str, Any], output_path: Path) -> None:
     print(f"  New Parts:       {stats.get('new_parts', 0)}")
     print(f"  Changed Parts:   {stats.get('changed_parts', 0)}")
     print(f"  Apps Processed:  {stats['applications_processed']}")
+    skipped = stats.get("applications_skipped_unchanged", 0)
+    total = stats.get("total_applications", 0)
+    if skipped > 0:
+        print(f"  Apps Skipped:    {skipped} / {total} (unchanged)")
     print(f"  Apps Failed:     {stats['applications_failed']}")
     _print_failure_summary(stats)
     print("  Output files:")
@@ -205,11 +209,6 @@ def _print_results(stats: dict[str, Any], output_path: Path) -> None:
     help="Load previous export as baseline, only process changes",
 )
 @click.option(
-    "--check-changes",
-    is_flag=True,
-    help="Check hierarchy fingerprint before scraping",
-)
-@click.option(
     "--resume",
     is_flag=True,
     help="Resume from latest checkpoint",
@@ -219,15 +218,20 @@ def _print_results(stats: dict[str, Any], output_path: Path) -> None:
     is_flag=True,
     help="Fetch detail pages for parts",
 )
+@click.option(
+    "--full",
+    is_flag=True,
+    help="Force full scrape, ignoring previous ETags and export data",
+)
 def main(  # noqa: PLR0913
     make: str | None,
     year: int | None,
     output_dir: str,
     verbose: bool,  # noqa: ARG001
     incremental: bool,
-    check_changes: bool,
     resume: bool,
     fetch_details: bool,
+    full: bool,
 ) -> None:
     """Scrape CSF MyCarParts catalog (hierarchy + applications only).
 
@@ -258,7 +262,8 @@ def main(  # noqa: PLR0913
         print("  Year Filter:     All years")
 
     print(f"  Output Dir:      {output_dir}")
-    print(f"  Incremental:     {'Yes' if incremental else 'No'}")
+    print(f"  Incremental:     {'Yes' if incremental else 'Auto-detect'}")
+    print(f"  Force Full:      {'Yes' if full else 'No'}")
     print(f"  Fetch Details:   {'Yes' if fetch_details else 'No'}")
     print(f"  Resume:          {'Yes' if resume else 'No'}")
     print()
@@ -273,9 +278,9 @@ def main(  # noqa: PLR0913
             output_dir,
             output_path,
             incremental=incremental,
-            check_changes=check_changes,
             resume=resume,
             fetch_details=fetch_details,
+            force_full=full,
         )
 
     except KeyboardInterrupt:

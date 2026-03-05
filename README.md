@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-950%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-994%20passing-brightgreen.svg)](#testing)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > A production-grade web scraper and WordPress plugin for extracting automotive parts data from csf.mycarparts.com, built with strict adherence to DRY, SOLID, and AAA principles.
@@ -21,14 +21,16 @@ The **CSF MyCarParts Scraper** extracts complete automotive parts data and displ
 ### Web Scraper
 
 - **1,728 parts** across 8,764 application pages and 32,500+ vehicle configurations
-- **Two-phase pipeline** — Catalog scraping + detail enrichment run independently
-- **Intelligent change detection** — MD5 fingerprinting skips unchanged catalogs
+- **Single-command pipeline** — `carpart scrape` runs the full pipeline (catalog + details + merged export)
+- **ETag-based change detection** — Per-page content hashing skips unchanged application pages
 - **Incremental updates** — Content hashing detects changed parts without re-scraping everything
 - **Checkpoint/resume** — Recover from interruptions without losing progress
 - **Respectful scraping** — 1-3 second delays, descriptive user-agent, robots.txt compliance
 - **Retry logic** — Exponential backoff on failures
 - **Data validation** — Pydantic models ensure data quality
 - **AVIF image conversion** — Gallery images downloaded and optimized
+- **ETag-based image caching** — Conditional HTTP requests skip unchanged images (304 Not Modified)
+- **Automatic image sync** — Push AVIF images to WordPress via local copy or REST API
 
 ### WordPress Plugin
 
@@ -57,38 +59,40 @@ The **CSF MyCarParts Scraper** extracts complete automotive parts data and displ
 │  └──────────┘  └─────────┘  └───┬────┘│
 └─────────────────────────────────┼─────┘
                                   │
-         Phase 1                  ▼              Phase 2
-  ┌──────────────────┐   ┌────────────────┐   ┌──────────────────┐
-  │ scrape_catalog.py│   │  parts.json    │   │enrich_details.py │
-  │ - Hierarchy      │──→│  compat.json   │──→│ - Descriptions   │
-  │ - Applications   │   └────────────────┘   │ - Specs (22 flds)│
-  │ - Basic parts    │                        │ - Tech notes     │
-  └──────────────────┘                        │ - Interchange    │
-                                              │ - Images → AVIF  │
-                                              └────────┬─────────┘
-                                                       │
-                                                       ▼
-                                              ┌────────────────────┐
-                                              │parts_with_details  │
-                                              │    .json           │
-                                              └────────┬───────────┘
-                                                       │  merge
-                                                       ▼
-         ┌────────────────────────────────────────────────────┐
-         │              WordPress Site                         │
-         │  ┌──────────────┐  ┌─────────────┐  ┌───────────┐ │
-         │  │ wp_csf_parts │  │ Gutenberg   │  │ REST API  │ │
-         │  │ (custom DB)  │  │ Blocks      │  │ /wp-json/ │ │
-         │  └──────────────┘  └─────────────┘  └───────────┘ │
-         └────────────────────────────────────────────────────┘
+                    carpart scrape│(single command)
+                                  ▼
+  ┌───────────────────────────────────────────────────┐
+  │              ScraperOrchestrator                    │
+  │  1. Hierarchy  2. Applications  3. Details  4. Export│
+  │  (AJAX)        (ETag hashing)   (images)   (.json) │
+  └──────────────────────────┬────────────────────────┘
+                             │
+                             ▼
+  ┌───────────────────────────────────────────────┐
+  │  exports/                                      │
+  │  ├── parts.json          (basic catalog)       │
+  │  ├── compatibility.json  (vehicle fitment)     │
+  │  └── parts_complete.json (merged, for import)  │
+  └──────────────────────────┬────────────────────┘
+                             │  wp csf-parts import
+                             ▼
+         ┌────────────────────────────────────────────────┐
+         │              WordPress Site                     │
+         │  ┌──────────────┐  ┌─────────────┐  ┌───────┐ │
+         │  │ wp_csf_parts │  │ Gutenberg   │  │ REST  │ │
+         │  │ (custom DB)  │  │ Blocks      │  │ API   │ │
+         │  └──────────────┘  └─────────────┘  └───────┘ │
+         └────────────────────────────────────────────────┘
 ```
 
 ### Change Detection
 
-The scraper uses a two-tier change detection system:
+The scraper uses ETag-based content hashing for intelligent change detection:
 
-1. **Hierarchy fingerprint** — MD5 of the full vehicle hierarchy. If nothing changed, the entire scrape is skipped.
-2. **Part content hashing** — MD5 of each part's content-relevant fields (excludes volatile fields like `scraped_at` and enrichment-only fields). Detects which specific parts changed between runs.
+- Each application page response is hashed and stored
+- On subsequent runs, only pages with changed content are re-scraped
+- Detects all changes: new parts, removed parts, price changes, spec changes
+- Auto-promotes to incremental mode when previous data exists
 
 ## Quick Start
 
@@ -115,12 +119,26 @@ playwright install chromium
 ### Run a Full Scrape
 
 ```bash
-# Full pipeline (catalog + details + auto-merge)
-python run_scrape.py --catalog --details
+# Full pipeline (catalog + details + merged export)
+carpart scrape
 
-# Or run phases separately
-python scrape_catalog.py --output-dir exports/
-python enrich_details.py
+# Catalog only (no detail pages)
+carpart scrape --catalog-only
+
+# Filter by make/year
+carpart scrape --make Honda --year 2025
+
+# Incremental (skip unchanged pages)
+carpart scrape --incremental
+
+# Resume after interruption
+carpart scrape --resume
+
+# Scrape and sync images to local WordPress (DDEV)
+carpart scrape --sync-images --wp-url /path/to/wp-content/uploads
+
+# Sync images separately (after a previous scrape)
+carpart sync-images --wp-url /path/to/wp-content/uploads
 ```
 
 See [WORKFLOW.md](WORKFLOW.md) for the complete guide.
@@ -134,7 +152,9 @@ carpart-scraper/
 │   │   ├── fetcher.py         # Playwright + httpx with retry/rate-limiting
 │   │   ├── parser.py          # HTML parsing (application + detail pages)
 │   │   ├── orchestrator.py    # Scrape coordination, dedup, checkpoints
-│   │   ├── image_processor.py # Image download + AVIF conversion
+│   │   ├── image_processor.py # Image download + AVIF conversion + ETag caching
+│   │   ├── image_syncer.py   # Image sync to WordPress (local/remote)
+│   │   ├── etag_store.py      # ETag-based content change detection
 │   │   ├── ajax_parser.py     # AJAX response parsing
 │   │   ├── validator.py       # Part validation
 │   │   └── protocols.py       # Protocol definitions
@@ -143,7 +163,7 @@ carpart-scraper/
 │   │   ├── vehicle.py         # Vehicle model
 │   │   └── validators.py      # Shared validators
 │   ├── exporters/              # Data export
-│   │   └── json_exporter.py   # JSON export with metadata
+│   │   └── json_exporter.py   # JSON export with metadata + merged export
 │   └── cli/                    # Click CLI application
 │       ├── main.py
 │       └── commands/           # CLI subcommands
@@ -155,12 +175,11 @@ carpart-scraper/
 │   ├── public/                # Frontend assets (CSS, JS, images)
 │   └── templates/             # PHP templates
 ├── tests/
-│   ├── unit/                  # 950 unit tests (AAA pattern)
+│   ├── unit/                  # 994 unit tests (AAA pattern)
 │   └── e2e/                   # End-to-end tests (Playwright)
-├── run_scrape.py              # Unified orchestrator
-├── scrape_catalog.py          # Phase 1: Catalog scraping
-├── enrich_details.py          # Phase 2: Detail enrichment
-├── merge_for_import.py        # Merge compatibility into enriched data
+├── scrape_catalog.py          # Standalone catalog scraper (advanced)
+├── enrich_details.py          # Standalone detail enrichment (advanced)
+├── merge_for_import.py        # Standalone merge utility (advanced)
 ├── exports/                   # JSON output (gitignored)
 ├── checkpoints/               # Resume checkpoints (gitignored)
 ├── images/                    # Downloaded images (gitignored)
@@ -218,4 +237,4 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 ---
 
-**Last Updated**: 2026-03-04
+**Last Updated**: 2026-03-05

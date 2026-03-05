@@ -10,6 +10,8 @@ Tests cover:
 - Rate limiting timing
 - Browser fetching (persistent browser, scroll, retries)
 - Context manager cleanup
+- Content hash change detection (check_etag)
+- HTML normalization for stable hashing
 """
 
 import time
@@ -21,6 +23,7 @@ from playwright.sync_api import Browser, Page, Playwright
 from pytest_mock import MockerFixture
 
 from src.scraper.fetcher import (
+    BROWSER_MAX_RETRIES,
     RespectfulFetcher,
     _is_retryable_browser_error,
     _is_retryable_http_error,
@@ -1022,6 +1025,203 @@ class TestPersistentBrowser:
         # Only one attempt (no retry)
         assert mock_context.new_page.call_count == 1
         mock_page.close.assert_called_once()
+
+        # Cleanup
+        fetcher.close()
+
+    def test_fetch_with_browser_raises_after_all_retries_exhausted(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test fetch_with_browser raises RuntimeError after all retries exhausted."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.time.sleep")
+
+        mock_page = Mock(spec=Page)
+        mock_page.goto = Mock(side_effect=Exception("Navigation timeout exceeded"))
+        mock_page.close = Mock()
+
+        mock_context = Mock()
+        mock_context.new_page.return_value = mock_page
+
+        mock_browser = Mock(spec=Browser)
+        mock_browser.new_context.return_value = mock_context
+
+        mock_playwright = Mock(spec=Playwright)
+        mock_playwright.chromium.launch.return_value = mock_browser
+
+        mock_sync_playwright = mocker.patch("src.scraper.fetcher.sync_playwright")
+        mock_sync_playwright.return_value.start.return_value = mock_playwright
+
+        fetcher = RespectfulFetcher()
+
+        # Act & Assert
+        with pytest.raises(RuntimeError, match=f"Browser fetch failed after {BROWSER_MAX_RETRIES}"):
+            fetcher.fetch_with_browser("https://example.com")
+
+        # All retries were attempted
+        assert mock_context.new_page.call_count == BROWSER_MAX_RETRIES
+        assert mock_page.close.call_count == BROWSER_MAX_RETRIES
+
+        # Cleanup
+        fetcher.close()
+
+
+class TestNormalizeHtml:
+    """Test RespectfulFetcher._normalize_html() static method."""
+
+    def test_normalize_html_strips_csrf_tokens(self) -> None:
+        """Test _normalize_html removes CSRF meta tag content."""
+        # Arrange
+        html = '<meta name="csrf-token" content="abc123XYZ+/=" />'
+
+        # Act
+        result = RespectfulFetcher._normalize_html(html)  # noqa: SLF001
+
+        # Assert
+        assert 'content=""' in result
+        assert "abc123XYZ+/=" not in result
+
+    def test_normalize_html_strips_authenticity_tokens(self) -> None:
+        """Test _normalize_html removes form authenticity token values."""
+        # Arrange
+        html = '<input type="hidden" name="authenticity_token" value="secretToken123+/=" />'
+
+        # Act
+        result = RespectfulFetcher._normalize_html(html)  # noqa: SLF001
+
+        # Assert
+        assert 'value=""' in result
+        assert "secretToken123+/=" not in result
+
+    def test_normalize_html_preserves_other_content(self) -> None:
+        """Test _normalize_html preserves non-token HTML content."""
+        # Arrange
+        html = '<div class="product"><h1>Radiator CSF-3951</h1></div>'
+
+        # Act
+        result = RespectfulFetcher._normalize_html(html)  # noqa: SLF001
+
+        # Assert
+        assert result == html
+
+
+class TestCheckEtag:
+    """Test RespectfulFetcher.check_etag() content change detection."""
+
+    def test_check_etag_returns_changed_true_for_first_check(self, mocker: MockerFixture) -> None:
+        """Test check_etag returns (True, hash) when no previous hash exists."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.time.sleep")
+        mocker.patch("src.scraper.fetcher.time.time", return_value=0.0)
+
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.status_code = 200
+        mock_response.text = "<html><body>Content</body></html>"
+        mock_response.raise_for_status = Mock()
+
+        fetcher = RespectfulFetcher()
+        mocker.patch.object(fetcher.client, "get", return_value=mock_response)
+
+        # Act
+        changed, current_hash = fetcher.check_etag("https://example.com", None)
+
+        # Assert
+        assert changed is True
+        assert isinstance(current_hash, str)
+        assert len(current_hash) == 32  # MD5 hex digest length
+
+        # Cleanup
+        fetcher.close()
+
+    def test_check_etag_returns_changed_false_for_same_content(self, mocker: MockerFixture) -> None:
+        """Test check_etag returns (False, hash) when content is unchanged."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.time.sleep")
+        mocker.patch("src.scraper.fetcher.time.time", return_value=0.0)
+
+        html = "<html><body>Same Content</body></html>"
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.status_code = 200
+        mock_response.text = html
+        mock_response.raise_for_status = Mock()
+
+        fetcher = RespectfulFetcher()
+        mocker.patch.object(fetcher.client, "get", return_value=mock_response)
+
+        # First check to get the hash
+        _, first_hash = fetcher.check_etag("https://example.com", None)
+
+        # Act - check again with same content
+        changed, second_hash = fetcher.check_etag("https://example.com", first_hash)
+
+        # Assert
+        assert changed is False
+        assert second_hash == first_hash
+
+        # Cleanup
+        fetcher.close()
+
+    def test_check_etag_returns_changed_true_for_different_content(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test check_etag returns (True, new_hash) when content has changed."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.time.sleep")
+        mocker.patch("src.scraper.fetcher.time.time", return_value=0.0)
+
+        mock_response_1 = Mock(spec=httpx.Response)
+        mock_response_1.status_code = 200
+        mock_response_1.text = "<html><body>Original</body></html>"
+        mock_response_1.raise_for_status = Mock()
+
+        mock_response_2 = Mock(spec=httpx.Response)
+        mock_response_2.status_code = 200
+        mock_response_2.text = "<html><body>Updated</body></html>"
+        mock_response_2.raise_for_status = Mock()
+
+        fetcher = RespectfulFetcher()
+        mocker.patch.object(fetcher.client, "get", side_effect=[mock_response_1, mock_response_2])
+
+        # First check
+        _, first_hash = fetcher.check_etag("https://example.com", None)
+
+        # Act - check with different content
+        changed, second_hash = fetcher.check_etag("https://example.com", first_hash)
+
+        # Assert
+        assert changed is True
+        assert second_hash != first_hash
+
+        # Cleanup
+        fetcher.close()
+
+    def test_check_etag_returns_changed_true_on_http_error(self, mocker: MockerFixture) -> None:
+        """Test check_etag returns (True, previous_hash) on HTTP error."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.time.sleep")
+        mocker.patch("src.scraper.fetcher.time.time", return_value=0.0)
+
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.status_code = 500
+        mock_response.raise_for_status = Mock(
+            side_effect=httpx.HTTPStatusError(
+                "Server Error",
+                request=Mock(spec=httpx.Request),
+                response=mock_response,
+            )
+        )
+
+        fetcher = RespectfulFetcher()
+        mocker.patch.object(fetcher.client, "get", return_value=mock_response)
+
+        previous_hash = "abc123"
+
+        # Act
+        changed, returned_hash = fetcher.check_etag("https://example.com", previous_hash)
+
+        # Assert - on error, assume changed and return previous hash
+        assert changed is True
+        assert returned_hash == previous_hash
 
         # Cleanup
         fetcher.close()

@@ -201,6 +201,7 @@
 
 			if (!selectedEngine || selectedEngine === '') {
 				// Revert to original state
+				noticeBox.classList.remove('engine-confirmed');
 				if (svg) {
 					svg.innerHTML = '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>';
 				}
@@ -212,6 +213,7 @@
 				}
 			} else {
 				// Update to confirmed state
+				noticeBox.classList.add('engine-confirmed');
 				if (svg) {
 					svg.innerHTML = '<polyline points="20 6 9 17 4 12" stroke-width="2"></polyline>';
 				}
