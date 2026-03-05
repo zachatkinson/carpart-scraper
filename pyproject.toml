@@ -37,6 +37,9 @@ dependencies = [
     "click>=8.1.7",
     "rich>=13.7.0",
 
+    # Image processing
+    "Pillow>=10.0.0",
+
     # Utilities
     "python-dotenv>=1.0.0",
     "structlog>=24.1.0",
