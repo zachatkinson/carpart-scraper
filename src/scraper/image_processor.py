@@ -124,7 +124,8 @@ class ImageProcessor:
                 entry = self._manifest.get(avif_filename, {})
                 stored_etag = entry.get("etag") if isinstance(entry, dict) else None
 
-                if stored_etag and avif_path.exists():
+                is_synced = entry.get("synced", False) if isinstance(entry, dict) else False
+                if stored_etag and (avif_path.exists() or is_synced):
                     headers["If-None-Match"] = stored_etag
 
                 response = self.client.get(s3_url, headers=headers)
