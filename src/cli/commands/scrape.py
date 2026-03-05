@@ -65,6 +65,12 @@ FAILURE_RATE_THRESHOLD = 0.05
     help="Use incremental mode — skip unchanged pages via content hashing",
 )
 @click.option(
+    "--force-full",
+    is_flag=True,
+    default=False,
+    help="Force full scrape, ignoring cached ETags and previous exports",
+)
+@click.option(
     "--resume",
     is_flag=True,
     default=False,
@@ -96,6 +102,7 @@ def scrape(  # noqa: PLR0913
     output_dir: Path,
     catalog_only: bool,
     incremental: bool,
+    force_full: bool,
     resume: bool,
     sync_images: bool,
     wp_url: str | None,
@@ -163,6 +170,7 @@ def scrape(  # noqa: PLR0913
                 year_filter=year,
                 fetch_details=fetch_details,
                 resume=resume,
+                force_full=force_full,
             )
 
             # Export parts.json + compatibility.json

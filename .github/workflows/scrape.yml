@@ -10,11 +10,11 @@ on:
         required: false
         type: string
         default: ""
-      incremental:
-        description: "Use incremental mode (skip unchanged pages). Disable for first run or to force full re-scrape."
+      force_full:
+        description: "Force full re-scrape, ignoring cached ETags. Use for first run or to reset."
         required: false
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: scrape-catalog
@@ -98,13 +98,13 @@ jobs:
           CSF_WP_URL: ${{ secrets.CSF_WP_URL }}
           CSF_WP_API_KEY: ${{ secrets.CSF_WP_API_KEY }}
         run: |
-          INCREMENTAL_FLAG=""
-          if [ "${{ inputs.incremental }}" != "false" ]; then
-            INCREMENTAL_FLAG="--incremental"
+          FORCE_FLAG=""
+          if [ "${{ inputs.force_full }}" = "true" ]; then
+            FORCE_FLAG="--force-full"
           fi
           uv run carpart scrape \
             --make "${{ matrix.make }}" \
-            $INCREMENTAL_FLAG \
+            $FORCE_FLAG \
             --sync-images \
             --wp-url "$CSF_WP_URL" \
             --wp-api-key "$CSF_WP_API_KEY"
