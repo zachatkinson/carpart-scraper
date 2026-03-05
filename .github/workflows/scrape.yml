@@ -10,6 +10,11 @@ on:
         required: false
         type: string
         default: ""
+      incremental:
+        description: "Use incremental mode (skip unchanged pages). Disable for first run or to force full re-scrape."
+        required: false
+        type: boolean
+        default: true
 
 concurrency:
   group: scrape-catalog
@@ -93,9 +98,13 @@ jobs:
           CSF_WP_URL: ${{ secrets.CSF_WP_URL }}
           CSF_WP_API_KEY: ${{ secrets.CSF_WP_API_KEY }}
         run: |
+          INCREMENTAL_FLAG=""
+          if [ "${{ inputs.incremental }}" != "false" ]; then
+            INCREMENTAL_FLAG="--incremental"
+          fi
           uv run carpart scrape \
             --make "${{ matrix.make }}" \
-            --incremental \
+            $INCREMENTAL_FLAG \
             --sync-images \
             --wp-url "$CSF_WP_URL" \
             --wp-api-key "$CSF_WP_API_KEY"
