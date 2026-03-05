@@ -185,6 +185,11 @@ def scrape(  # noqa: PLR0913
             if orchestrator.image_syncer is not None:
                 sync_result = orchestrator.image_syncer.cumulative_result
 
+            # Push parts data to WordPress for remote mode
+            if state_syncer is not None and "complete" in export_paths:
+                console.print("[bold]Importing parts to WordPress...[/bold]")
+                state_syncer.push_parts(export_paths["complete"])
+
         # Print summary
         _print_summary(stats, export_paths, sync_result)
 

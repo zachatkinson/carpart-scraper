@@ -135,6 +135,53 @@ class StateSyncer:
             )
             return True
 
+    def push_parts(self, parts_file: Path) -> bool:
+        """Push parts_complete.json to WordPress import endpoint.
+
+        Posts the parts JSON data to /csf/v1/import, which triggers
+        the WP plugin's importer to create/update part posts.
+
+        Args:
+            parts_file: Path to parts_complete.json
+
+        Returns:
+            True if import succeeded, False on error
+        """
+        if not parts_file.exists():
+            logger.info("parts_push_file_missing", path=str(parts_file))
+            return False
+
+        try:
+            content = parts_file.read_text()
+            endpoint = f"{self.wp_url}/wp-json/csf/v1/import"
+
+            response = self.client.post(
+                endpoint,
+                headers={
+                    "X-CSF-API-Key": self.api_key,
+                    "Content-Type": "application/json",
+                },
+                content=content,
+                timeout=120,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            results = result.get("results", {})
+            logger.info(
+                "parts_push_success",
+                created=results.get("created", 0),
+                updated=results.get("updated", 0),
+                skipped=results.get("skipped", 0),
+                path=str(parts_file),
+            )
+
+        except httpx.HTTPError as e:
+            logger.exception("parts_push_failed", error=str(e), path=str(parts_file))
+            return False
+        else:
+            return True
+
     def close(self) -> None:
         """Close the HTTP client."""
         self.client.close()

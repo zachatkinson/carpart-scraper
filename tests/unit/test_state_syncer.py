@@ -250,3 +250,58 @@ class TestAllowedKeys:
         """Random keys are not in the allowlist."""
         assert "passwords" not in ALLOWED_KEYS
         assert "wp_config" not in ALLOWED_KEYS
+
+
+# ---------------------------------------------------------------------------
+# push_parts Tests
+# ---------------------------------------------------------------------------
+
+
+class TestPushParts:
+    """Test push_parts method for importing parts into WordPress."""
+
+    def test_push_parts_success(
+        self, syncer: StateSyncer, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """Successfully pushes parts JSON to WP import endpoint."""
+        # Arrange
+        parts_file = tmp_path / "parts_complete.json"
+        parts_file.write_text(json.dumps({"parts": [{"sku": "CSF-001"}]}))
+
+        mock_response = mocker.Mock(spec=httpx.Response)
+        mock_response.json.return_value = {
+            "success": True,
+            "results": {"created": 1, "updated": 0, "skipped": 0},
+        }
+        syncer.client.post.return_value = mock_response
+
+        # Act
+        result = syncer.push_parts(parts_file)
+
+        # Assert
+        assert result is True
+        syncer.client.post.assert_called_once()
+        call_url = syncer.client.post.call_args.args[0]
+        assert "/wp-json/csf/v1/import" in call_url
+
+    def test_push_parts_file_missing(self, syncer: StateSyncer, tmp_path: Path) -> None:
+        """Returns False when parts file does not exist."""
+        # Act
+        result = syncer.push_parts(tmp_path / "nonexistent.json")
+
+        # Assert
+        assert result is False
+        syncer.client.post.assert_not_called()
+
+    def test_push_parts_http_error(self, syncer: StateSyncer, tmp_path: Path) -> None:
+        """Returns False on HTTP error."""
+        # Arrange
+        parts_file = tmp_path / "parts_complete.json"
+        parts_file.write_text('{"parts": []}')
+        syncer.client.post.side_effect = httpx.HTTPError("Server error")
+
+        # Act
+        result = syncer.push_parts(parts_file)
+
+        # Assert
+        assert result is False
