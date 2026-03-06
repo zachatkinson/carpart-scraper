@@ -370,14 +370,14 @@ class RespectfulFetcher:
                         response.raise_for_status()
                     except httpx.HTTPError:
                         logger.warning("async_content_hash_check_failed", url=url)
-                        return True, previous_hash or ""
-
-                    normalized = self._normalize_html(response.text)
-                    current_hash = hashlib.md5(  # noqa: S324
-                        normalized.encode()
-                    ).hexdigest()
-
-                    changed = previous_hash is None or current_hash != previous_hash
+                        changed = True
+                        current_hash = previous_hash or ""
+                    else:
+                        normalized = self._normalize_html(response.text)
+                        current_hash = hashlib.md5(  # noqa: S324
+                            normalized.encode()
+                        ).hexdigest()
+                        changed = previous_hash is None or current_hash != previous_hash
 
                 async with count_lock:
                     completed_count += 1
