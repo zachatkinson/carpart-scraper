@@ -6,12 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       make:
-        description: "Vehicle make (e.g. Honda). Empty = scheduled rotation."
+        description: "Vehicle make (e.g. Honda). Empty = all makes."
         required: false
         type: string
         default: ""
       force_full:
-        description: "Force full re-scrape, ignoring cached ETags. Use for first run or to reset."
+        description: "Force full re-scrape, ignoring cached ETags."
         required: false
         type: boolean
         default: false
@@ -21,60 +21,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  plan:
-    name: Plan Makes
-    runs-on: ubuntu-latest
-    outputs:
-      makes: ${{ steps.pick.outputs.makes }}
-    steps:
-      - id: pick
-        name: Select makes to scrape
-        shell: python3 {0}
-        run: |
-          import json, os
-
-          # All 51 makes in ID order (matches MAKES dict in orchestrator.py)
-          ALL_MAKES = [
-              "Nissan", "Ford", "Honda", "Toyota", "Scion", "Mazda", "Lexus",
-              "Kia", "Hyundai", "Dodge", "Chevrolet", "GMC", "Buick",
-              "Peterbilt", "Kenworth", "International", "Freightliner",
-              "Lincoln", "Ram", "Mercury", "Volvo", "Subaru", "Jeep",
-              "Volkswagen", "Mercedes-Benz", "Mitsubishi", "INFINITI",
-              "Land Rover", "Chrysler", "Pontiac", "Saturn", "BMW", "Audi",
-              "Cadillac", "Fiat", "Acura", "Hummer", "Isuzu", "Mack",
-              "Sterling Truck", "Suzuki", "Porsche", "Jaguar", "Mini",
-              "Oldsmobile", "Plymouth", "Saab", "Geo", "Daewoo", "Eagle",
-              "Tesla",
-          ]
-
-          manual_make = "${{ inputs.make }}".strip()
-
-          if manual_make:
-              makes = [manual_make]
-          else:
-              # Cycle 3 makes per day based on day-of-year.
-              # 51 makes / 3 per day = full cycle every 17 days.
-              from datetime import datetime, timezone
-              day = datetime.now(timezone.utc).timetuple().tm_yday
-              start = ((day - 1) * 3) % len(ALL_MAKES)
-              makes = [ALL_MAKES[(start + i) % len(ALL_MAKES)] for i in range(3)]
-
-          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"makes={json.dumps(makes)}\n")
-
-          print(f"Selected makes: {makes}")
-
   scrape:
-    name: "Scrape: ${{ matrix.make }}"
-    needs: plan
+    name: Scrape Catalog
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        make: ${{ fromJSON(needs.plan.outputs.makes) }}
-
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 
@@ -93,7 +43,7 @@ jobs:
       - name: Install Playwright Chromium
         run: uv run playwright install --with-deps chromium
 
-      - name: Scrape ${{ matrix.make }}
+      - name: Scrape
         env:
           CSF_WP_URL: ${{ secrets.CSF_WP_URL }}
           CSF_WP_API_KEY: ${{ secrets.CSF_WP_API_KEY }}
@@ -102,8 +52,14 @@ jobs:
           if [ "${{ inputs.force_full }}" = "true" ]; then
             FORCE_FLAG="--force-full"
           fi
+
+          MAKE_FLAG=""
+          if [ -n "${{ inputs.make }}" ]; then
+            MAKE_FLAG="--make ${{ inputs.make }}"
+          fi
+
           uv run carpart scrape \
-            --make "${{ matrix.make }}" \
+            $MAKE_FLAG \
             $FORCE_FLAG \
             --sync-images \
             --wp-url "$CSF_WP_URL" \
@@ -113,7 +69,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-${{ matrix.make }}
+          name: debug-scrape
           path: |
             exports/
             checkpoints/

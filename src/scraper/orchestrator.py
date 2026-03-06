@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, Self
 
 import structlog
+from bs4 import BeautifulSoup
 
 from src.exporters.json_exporter import JSONExporter
 from src.models.part import Part
@@ -298,6 +300,63 @@ class ScraperOrchestrator:
             delay_override=delay_override,
         )
 
+    def _enumerate_makes(self) -> dict[int, str]:
+        """Discover all vehicle makes from the CSF homepage dropdown.
+
+        Fetches the homepage and parses the makes dropdown to find all
+        ``<a data-remote>`` links whose ``href`` contains ``get_year_by_make``.
+        Falls back to the static ``MAKES`` constant if the homepage fetch
+        or parsing fails.
+
+        Returns:
+            Dict mapping make_id to make name (same shape as ``MAKES``)
+        """
+        homepage_url = "https://csf.mycarparts.com/"
+        try:
+            response = self.fetcher.fetch(homepage_url)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "make_discovery_failed_using_fallback",
+                error_type=type(e).__name__,
+                error=str(e),
+            )
+            return dict(MAKES)
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        discovered: dict[int, str] = {}
+        for link in soup.find_all("a", attrs={"data-remote": True}):
+            href = link.get("href", "")
+            if "get_year_by_make" not in href:
+                continue
+
+            # Extract make_id from last path segment (e.g. "/get_year_by_make/3" -> 3)
+            match = re.search(r"/get_year_by_make/(\d+)", href)
+            if not match:
+                continue
+
+            make_id = int(match.group(1))
+            make_name = link.get_text(strip=True)
+            if make_name:
+                discovered[make_id] = make_name
+
+        if not discovered:
+            logger.warning("no_makes_discovered_from_homepage", url=homepage_url)
+            return dict(MAKES)
+
+        # Log any newly discovered makes not in the fallback constant
+        known_ids = set(MAKES.keys())
+        for mid, mname in discovered.items():
+            if mid not in known_ids:
+                logger.info("new_make_discovered", make_id=mid, make_name=mname)
+
+        logger.info(
+            "makes_discovered",
+            count=len(discovered),
+            new_count=len(set(discovered.keys()) - known_ids),
+        )
+        return discovered
+
     def _enumerate_years(self, make_id: int, make_name: str) -> dict[int, str]:
         """Enumerate all years for a given make.
 
@@ -377,11 +436,16 @@ class ScraperOrchestrator:
         """
         hierarchy = []
 
+        # Dynamically discover makes from homepage (falls back to MAKES constant)
+        discovered_makes = self._enumerate_makes()
+
         # Filter makes if requested
-        makes_to_process: list[tuple[int, str]] = list(MAKES.items())
+        makes_to_process: list[tuple[int, str]] = list(discovered_makes.items())
         if make_filter:
             makes_to_process = [
-                (mid, mname) for mid, mname in MAKES.items() if mname.lower() == make_filter.lower()
+                (mid, mname)
+                for mid, mname in discovered_makes.items()
+                if mname.lower() == make_filter.lower()
             ]
 
         logger.info(

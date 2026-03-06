@@ -21,7 +21,7 @@ from src.models.part import Part
 from src.models.vehicle import Vehicle
 from src.scraper.ajax_parser import AJAXParsingError, AJAXResponseParser
 from src.scraper.etag_store import ETagStore
-from src.scraper.orchestrator import DeduplicationResult, FailureTracker, ScraperOrchestrator
+from src.scraper.orchestrator import MAKES, DeduplicationResult, FailureTracker, ScraperOrchestrator
 
 
 class TestFailureTracker:
@@ -111,6 +111,122 @@ class TestFailureTracker:
         assert summary["permanent"] == 0
 
 
+class TestEnumerateMakes:
+    """Test _enumerate_makes() dynamic make discovery from homepage."""
+
+    HOMEPAGE_HTML = """
+    <html><body>
+    <ul>
+        <li><a data-remote="true" href="/get_year_by_make/3">Honda</a></li>
+        <li><a data-remote="true" href="/get_year_by_make/4">Toyota</a></li>
+        <li><a data-remote="true" href="/get_year_by_make/99">NewBrand</a></li>
+    </ul>
+    </body></html>
+    """
+
+    def test_enumerate_makes_parses_homepage(self) -> None:
+        """Test _enumerate_makes() extracts makes from homepage HTML."""
+        # Arrange
+        mock_fetcher = Mock()
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.text = self.HOMEPAGE_HTML
+        mock_fetcher.fetch.return_value = mock_response
+
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = mock_fetcher
+
+        # Act
+        makes = orchestrator._enumerate_makes()  # noqa: SLF001
+
+        # Assert
+        assert makes == {3: "Honda", 4: "Toyota", 99: "NewBrand"}
+        mock_fetcher.fetch.assert_called_once_with("https://csf.mycarparts.com/")
+
+    def test_enumerate_makes_falls_back_on_fetch_error(self) -> None:
+        """Test _enumerate_makes() returns MAKES constant when homepage fetch fails."""
+        # Arrange
+        mock_fetcher = Mock()
+        mock_fetcher.fetch.side_effect = httpx.ConnectError("Connection refused")
+
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = mock_fetcher
+
+        # Act
+        makes = orchestrator._enumerate_makes()  # noqa: SLF001
+
+        # Assert — falls back to static MAKES
+        assert makes == MAKES
+
+    def test_enumerate_makes_falls_back_on_empty_html(self) -> None:
+        """Test _enumerate_makes() returns MAKES when no links found."""
+        # Arrange
+        mock_fetcher = Mock()
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.text = "<html><body><p>No dropdown</p></body></html>"
+        mock_fetcher.fetch.return_value = mock_response
+
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = mock_fetcher
+
+        # Act
+        makes = orchestrator._enumerate_makes()  # noqa: SLF001
+
+        # Assert — falls back to static MAKES
+        assert makes == MAKES
+
+    def test_enumerate_makes_logs_new_makes(self, mocker: MockerFixture) -> None:
+        """Test _enumerate_makes() logs makes not in the MAKES fallback."""
+        # Arrange
+        mock_fetcher = Mock()
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.text = self.HOMEPAGE_HTML
+        mock_fetcher.fetch.return_value = mock_response
+
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = mock_fetcher
+
+        mock_logger = mocker.patch("src.scraper.orchestrator.logger")
+
+        # Act
+        makes = orchestrator._enumerate_makes()  # noqa: SLF001
+
+        # Assert — make 99 "NewBrand" is not in MAKES, should be logged
+        mock_logger.info.assert_any_call("new_make_discovered", make_id=99, make_name="NewBrand")
+        assert 99 in makes
+
+    def test_build_hierarchy_uses_discovered_makes(self, mocker: MockerFixture) -> None:
+        """Test _build_hierarchy() calls _enumerate_makes() for make list."""
+        # Arrange
+        mock_fetcher = Mock()
+        mock_ajax = Mock(spec=AJAXResponseParser)
+
+        mock_response_years = Mock(spec=httpx.Response)
+        mock_response_years.text = "years_js"
+        mock_response_models = Mock(spec=httpx.Response)
+        mock_response_models.text = "models_js"
+
+        mock_fetcher.fetch.side_effect = [mock_response_years, mock_response_models]
+
+        mock_ajax.parse_year_response.return_value = {100: "2024"}
+        mock_ajax.parse_model_response.return_value = {8000: "Camry"}
+
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = mock_fetcher
+        orchestrator.ajax_parser = mock_ajax
+        orchestrator.failure_tracker = FailureTracker()
+
+        # Mock _enumerate_makes to return a single make
+        mocker.patch.object(orchestrator, "_enumerate_makes", return_value={4: "Toyota"})
+
+        # Act
+        hierarchy = orchestrator._build_hierarchy()  # noqa: SLF001
+
+        # Assert
+        orchestrator._enumerate_makes.assert_called_once()  # noqa: SLF001
+        assert len(hierarchy) == 1
+        assert hierarchy[0]["make"] == "Toyota"
+
+
 class TestBuildHierarchyErrorHandling:
     """Test _build_hierarchy continues on individual make/year failures."""
 
@@ -146,10 +262,9 @@ class TestBuildHierarchyErrorHandling:
         orchestrator.ajax_parser = mock_ajax
         orchestrator.failure_tracker = FailureTracker()
 
-        # Limit to Honda (id=3) and Toyota (id=4)
-        mocker.patch(
-            "src.scraper.orchestrator.MAKES",
-            {3: "Honda", 4: "Toyota"},
+        # Mock _enumerate_makes to return Honda and Toyota
+        mocker.patch.object(
+            orchestrator, "_enumerate_makes", return_value={3: "Honda", 4: "Toyota"}
         )
 
         # Act
@@ -193,7 +308,7 @@ class TestBuildHierarchyErrorHandling:
         orchestrator.ajax_parser = mock_ajax
         orchestrator.failure_tracker = FailureTracker()
 
-        mocker.patch("src.scraper.orchestrator.MAKES", {3: "Honda"})
+        mocker.patch.object(orchestrator, "_enumerate_makes", return_value={3: "Honda"})
 
         # Act
         hierarchy = orchestrator._build_hierarchy()  # noqa: SLF001
@@ -746,9 +861,8 @@ class TestBuildHierarchyFilters:
         orchestrator.ajax_parser = mock_ajax
         orchestrator.failure_tracker = FailureTracker()
 
-        mocker.patch(
-            "src.scraper.orchestrator.MAKES",
-            {3: "Honda", 4: "Toyota"},
+        mocker.patch.object(
+            orchestrator, "_enumerate_makes", return_value={3: "Honda", 4: "Toyota"}
         )
 
         # Act
@@ -788,7 +902,7 @@ class TestBuildHierarchyFilters:
         orchestrator.ajax_parser = mock_ajax
         orchestrator.failure_tracker = FailureTracker()
 
-        mocker.patch("src.scraper.orchestrator.MAKES", {3: "Honda"})
+        mocker.patch.object(orchestrator, "_enumerate_makes", return_value={3: "Honda"})
 
         # Act
         hierarchy = orchestrator._build_hierarchy(year_filter=2023)  # noqa: SLF001

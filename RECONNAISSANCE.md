@@ -69,23 +69,25 @@ POST /search_pn
 ### Vehicle Selection Flow
 
 ```
-1. User selects MAKE from hardcoded list (51 makes)
+1. Makes are dynamically discovered from the homepage dropdown
+   (falls back to a static list of 51 makes if the homepage is unavailable)
    ↓
 2. AJAX call: /get_year_by_make/[MAKE_ID]
    Response: JavaScript that populates year dropdown
    ↓
-3. User selects YEAR from populated dropdown
-   ↓
-4. AJAX call: /get_model_by_make_year/[YEAR_ID]
+3. AJAX call: /get_model_by_make_year/[YEAR_ID]
    Response: JavaScript that populates model dropdown
    ↓
-5. User selects MODEL from populated dropdown
-   ↓
-6. Navigate to: /applications/[APPLICATION_ID]
+4. Navigate to: /applications/[APPLICATION_ID]
    Shows: All parts compatible with that vehicle
 ```
 
-### Make List (All 51 Makes)
+### Make List (Fallback — 51 Known Makes)
+
+Makes are now discovered dynamically from the homepage dropdown at runtime.
+The list below is kept as a fallback in `orchestrator.py:MAKES` in case the
+homepage is unreachable. New makes added by CSF are automatically detected
+and logged.
 
 ```json
 {
@@ -464,7 +466,8 @@ $("#btnModel").removeClass("disabled")
 ### Recommended Approach
 
 1. **Use Direct API Calls** (faster, more efficient than Playwright)
-   - Fetch `/get_year_by_make/[MAKE_ID]` for all 51 makes
+   - Discover makes dynamically from homepage dropdown (fallback to static list)
+   - Fetch `/get_year_by_make/[MAKE_ID]` for all discovered makes
    - Parse JavaScript responses to extract year endpoints
    - Fetch each year endpoint to get models
    - Parse to extract application IDs
