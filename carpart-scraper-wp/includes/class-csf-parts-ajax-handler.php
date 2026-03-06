@@ -282,8 +282,13 @@ class CSF_Parts_AJAX_Handler {
 			$filters['search'] = $search_query;
 		}
 
+		// Get pagination parameters from request.
+		$per_page     = isset( $_POST['per_page'] ) ? absint( $_POST['per_page'] ) : 12;
+		$per_page     = min( max( $per_page, 1 ), 100 ); // Clamp between 1 and 100.
+		$current_page = isset( $_POST['page'] ) ? max( 1, absint( $_POST['page'] ) ) : 1;
+
 		// Query parts using shared database instance.
-		$result      = $this->database->query_parts( $filters, 100, 1 );
+		$result      = $this->database->query_parts( $filters, $per_page, $current_page );
 		$parts       = $result['parts'] ?? array();
 		$total_parts = $result['total'] ?? 0;
 
@@ -407,10 +412,15 @@ class CSF_Parts_AJAX_Handler {
 		}
 		$html = ob_get_clean();
 
+		$total_pages = $per_page > 0 ? (int) ceil( $total_parts / $per_page ) : 1;
+
 		wp_send_json_success(
 			array(
-				'html'  => $html,
-				'count' => $total_parts,
+				'html'        => $html,
+				'count'       => $total_parts,
+				'total_pages' => $total_pages,
+				'per_page'    => $per_page,
+				'page'        => $current_page,
 			)
 		);
 	}

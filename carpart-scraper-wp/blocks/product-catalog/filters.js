@@ -183,9 +183,14 @@
 
 	/**
 	 * Trigger filter update via AJAX (no page reload, maintains scroll position).
+	 *
+	 * @param {HTMLFormElement} form     The filter form element.
+	 * @param {HTMLElement}     loadingOverlay Loading overlay element.
+	 * @param {number}         page     Page number to fetch (default 1).
 	 */
-	function triggerFilterUpdate(form, loadingOverlay) {
-		console.log('CSF Filters: Triggering filter update via AJAX');
+	function triggerFilterUpdate(form, loadingOverlay, page) {
+		var requestedPage = page || 1;
+		console.log('CSF Filters: Triggering filter update via AJAX, page:', requestedPage);
 
 		// Show loading overlay.
 		if (loadingOverlay) {
@@ -199,9 +204,10 @@
 		const model = formData.get('csf_model') || '';
 		const searchQuery = formData.get('csf_search') || '';
 
-		// Get default categories from block data attribute.
+		// Get block attributes.
 		const block = form.closest('.csf-product-catalog');
 		const defaultCategories = block ? (block.dataset.defaultCategories || '') : '';
+		const perPage = block ? (block.dataset.perPage || '12') : '12';
 
 		// Build AJAX data.
 		const data = new FormData();
@@ -211,11 +217,13 @@
 		data.append('csf_make', make);
 		data.append('csf_model', model);
 		data.append('csf_search', searchQuery);
+		data.append('per_page', perPage);
+		data.append('page', requestedPage);
 		if (defaultCategories) {
 			data.append('default_categories', defaultCategories);
 		}
 
-		console.log('CSF Filters: Fetching filtered results...', {year, make, model, searchQuery, defaultCategories});
+		console.log('CSF Filters: Fetching filtered results...', {year, make, model, searchQuery, defaultCategories, perPage, page: requestedPage});
 
 		// Fetch filtered results.
 		fetch(csfPartsFilters.ajaxUrl, {
@@ -223,28 +231,61 @@
 			body: data,
 			credentials: 'same-origin'
 		})
-		.then(response => response.json())
-		.then(response => {
+		.then(function(response) { return response.json(); })
+		.then(function(response) {
 			console.log('CSF Filters: Filter response:', response);
 
 			if (response.success && response.data.html) {
+				var catalog = form.closest('.csf-product-catalog');
+
 				// Update results grid with new HTML.
-				const resultsGrid = form.closest('.csf-product-catalog').querySelector('.csf-grid-items');
+				var resultsGrid = catalog.querySelector('.csf-grid-items');
 				if (resultsGrid) {
 					resultsGrid.innerHTML = response.data.html;
 					console.log('CSF Filters: Results updated successfully');
 				}
 
+				// Regenerate pagination from response metadata.
+				var pagination = catalog.querySelector('.csf-pagination');
+				var totalPages = response.data.total_pages || 1;
+				var currentPage = response.data.page || 1;
+
+				if (totalPages > 1) {
+					var paginationHTML = buildPaginationHTML(currentPage, totalPages);
+					if (pagination) {
+						pagination.innerHTML = paginationHTML;
+						pagination.style.display = '';
+					} else {
+						// Create pagination container if it didn't exist.
+						pagination = document.createElement('div');
+						pagination.className = 'csf-pagination';
+						pagination.style.cssText = 'margin-top: 32px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;';
+						pagination.innerHTML = paginationHTML;
+						var gridContainer = resultsGrid ? resultsGrid.parentNode : null;
+						if (gridContainer) {
+							gridContainer.appendChild(pagination);
+						}
+					}
+					// Bind click handlers to new pagination buttons.
+					bindPaginationHandlers(pagination, form, loadingOverlay);
+				} else if (pagination) {
+					pagination.style.display = 'none';
+				}
+
 				// Update URL without page reload (for shareable links).
-				updateURLParams({
+				var urlParams = {
 					csf_year: year,
 					csf_make: make,
 					csf_model: model,
 					csf_search: searchQuery
-				});
+				};
+				if (currentPage > 1) {
+					urlParams.csf_page = String(currentPage);
+				}
+				updateURLParams(urlParams);
 
 				// Update results count if present.
-				const resultsHeader = form.closest('.csf-product-catalog').querySelector('.csf-results-header__title');
+				var resultsHeader = catalog.querySelector('.csf-results-header__title');
 				if (resultsHeader && response.data.count !== undefined) {
 					resultsHeader.textContent = response.data.count + ' ' + (response.data.count === 1 ? csfPartsFilters.resultSingular : csfPartsFilters.resultPlural);
 				}
@@ -257,13 +298,99 @@
 				loadingOverlay.style.display = 'none';
 			}
 		})
-		.catch(error => {
+		.catch(function(error) {
 			console.error('CSF Filters: Error fetching filtered results:', error);
 
 			// Hide loading overlay.
 			if (loadingOverlay) {
 				loadingOverlay.style.display = 'none';
 			}
+		});
+	}
+
+	/**
+	 * Build pagination HTML matching server-rendered markup from render.php.
+	 *
+	 * @param {number} currentPage Current page number.
+	 * @param {number} totalPages  Total number of pages.
+	 * @return {string} Pagination inner HTML.
+	 */
+	function buildPaginationHTML(currentPage, totalPages) {
+		var html = '';
+		var btnStyle = 'padding: 8px 12px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease; cursor: pointer; border: none;';
+		var navBtnStyle = 'padding: 8px 16px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease; cursor: pointer; border: none;';
+		var currentStyle = 'padding: 8px 12px; background: transparent; color: var(--global-palette2, #0099CC); border: 2px solid var(--global-palette2, #0099CC); border-radius: 4px; font-size: 14px; font-weight: 600; transition: all 0.3s ease;';
+		var ellipsisStyle = 'padding: 8px 4px; color: var(--global-palette3, #5A5A5A);';
+
+		// Previous button.
+		if (currentPage > 1) {
+			html += '<button type="button" class="csf-pagination-btn csf-pagination-prev" data-page="' + (currentPage - 1) + '" style="' + navBtnStyle + '">';
+			html += '\u2190 Previous';
+			html += '</button>';
+		}
+
+		// Calculate visible page range (2 pages around current).
+		var rangeSize = 2;
+		var start = Math.max(1, currentPage - rangeSize);
+		var end = Math.min(totalPages, currentPage + rangeSize);
+
+		// First page + leading ellipsis.
+		if (start > 1) {
+			html += '<button type="button" class="csf-pagination-btn" data-page="1" style="' + btnStyle + '">1</button>';
+			if (start > 2) {
+				html += '<span style="' + ellipsisStyle + '">...</span>';
+			}
+		}
+
+		// Page number buttons.
+		for (var i = start; i <= end; i++) {
+			if (i === currentPage) {
+				html += '<span class="csf-pagination-btn csf-pagination-current" style="' + currentStyle + '">' + i + '</span>';
+			} else {
+				html += '<button type="button" class="csf-pagination-btn" data-page="' + i + '" style="' + btnStyle + '">' + i + '</button>';
+			}
+		}
+
+		// Trailing ellipsis + last page.
+		if (end < totalPages) {
+			if (end < totalPages - 1) {
+				html += '<span style="' + ellipsisStyle + '">...</span>';
+			}
+			html += '<button type="button" class="csf-pagination-btn" data-page="' + totalPages + '" style="' + btnStyle + '">' + totalPages + '</button>';
+		}
+
+		// Next button.
+		if (currentPage < totalPages) {
+			html += '<button type="button" class="csf-pagination-btn csf-pagination-next" data-page="' + (currentPage + 1) + '" style="' + navBtnStyle + '">';
+			html += 'Next \u2192';
+			html += '</button>';
+		}
+
+		return html;
+	}
+
+	/**
+	 * Bind click handlers to AJAX pagination buttons.
+	 *
+	 * @param {HTMLElement}     paginationContainer The pagination wrapper element.
+	 * @param {HTMLFormElement} form                The filter form element.
+	 * @param {HTMLElement}     loadingOverlay      Loading overlay element.
+	 */
+	function bindPaginationHandlers(paginationContainer, form, loadingOverlay) {
+		var buttons = paginationContainer.querySelectorAll('button[data-page]');
+		buttons.forEach(function(btn) {
+			btn.addEventListener('click', function(e) {
+				e.preventDefault();
+				var targetPage = parseInt(btn.getAttribute('data-page'), 10);
+				if (targetPage > 0) {
+					// Scroll to top of catalog for better UX.
+					var catalog = form.closest('.csf-product-catalog');
+					if (catalog) {
+						catalog.scrollIntoView({ behavior: 'smooth', block: 'start' });
+					}
+					triggerFilterUpdate(form, loadingOverlay, targetPage);
+				}
+			});
 		});
 	}
 
@@ -278,6 +405,7 @@
 		url.searchParams.delete('csf_make');
 		url.searchParams.delete('csf_model');
 		url.searchParams.delete('csf_search');
+		url.searchParams.delete('csf_page');
 
 		// Add new params (only if they have values).
 		Object.keys(params).forEach(key => {

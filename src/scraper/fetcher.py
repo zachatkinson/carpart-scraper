@@ -1,7 +1,7 @@
 """HTTP fetcher with respectful scraping practices.
 
 This module implements respectful web scraping with:
-- Rate limiting (1-3 second delays)
+- Rate limiting (0.3-0.8s for HTTP, 1-3s for browser fetches)
 - Polite user-agent
 - Exponential backoff on errors
 - Request timeout
@@ -96,8 +96,10 @@ class RespectfulFetcher:
         TIMEOUT_SECONDS: Request timeout
     """
 
-    MIN_DELAY_SECONDS: Final[float] = 1.0
-    MAX_DELAY_SECONDS: Final[float] = 3.0
+    MIN_DELAY_SECONDS: Final[float] = 0.3
+    MAX_DELAY_SECONDS: Final[float] = 0.8
+    BROWSER_MIN_DELAY_SECONDS: Final[float] = 1.0
+    BROWSER_MAX_DELAY_SECONDS: Final[float] = 3.0
     USER_AGENT: Final[str] = "CSF-Parts-Scraper/1.0 (contact@example.com)"
     MAX_RETRIES: Final[int] = 3
     TIMEOUT_SECONDS: Final[int] = 30
@@ -148,28 +150,30 @@ class RespectfulFetcher:
         time.sleep(SCROLL_WAIT_SECONDS)
         page.wait_for_load_state("networkidle")
 
-    def _apply_rate_limit(self) -> None:
+    def _apply_rate_limit(self, *, browser: bool = False) -> None:
         """Apply rate limiting delay between requests.
 
-        Ensures we wait 1-3 seconds between requests to be respectful.
-        Uses random delay to mimic human behavior.
+        Uses shorter delays for lightweight HTTP requests and longer
+        delays for browser-driven fetches that put more load on the server.
+
+        Args:
+            browser: If True, use longer browser-appropriate delays (1-3s).
+                     If False (default), use shorter HTTP delays (0.3-0.8s).
         """
+        min_delay = self.BROWSER_MIN_DELAY_SECONDS if browser else self.MIN_DELAY_SECONDS
+        max_delay = self.BROWSER_MAX_DELAY_SECONDS if browser else self.MAX_DELAY_SECONDS
+
         if self._last_request_time > 0:
             elapsed = time.time() - self._last_request_time
-            min_delay = self.MIN_DELAY_SECONDS
 
             if elapsed < min_delay:
-                delay = random.uniform(min_delay - elapsed, self.MAX_DELAY_SECONDS)  # noqa: S311
+                delay = random.uniform(min_delay - elapsed, max_delay)  # noqa: S311
                 logger.debug(
                     "rate_limit_delay",
-                    delay=delay,
-                    elapsed_since_last=elapsed,
+                    delay=round(delay, 2),
+                    elapsed_since_last=round(elapsed, 2),
+                    mode="browser" if browser else "http",
                 )
-                time.sleep(delay)
-            else:
-                # Even if enough time has passed, add small random delay
-                delay = random.uniform(0.5, 1.5)  # noqa: S311
-                logger.debug("human_behavior_delay", delay=delay)
                 time.sleep(delay)
 
         self._last_request_time = time.time()
@@ -339,7 +343,7 @@ class RespectfulFetcher:
             >>> "<!DOCTYPE html>" in html
             True
         """
-        self._apply_rate_limit()
+        self._apply_rate_limit(browser=True)
 
         logger.info("fetching_url_with_browser", url=url)
 

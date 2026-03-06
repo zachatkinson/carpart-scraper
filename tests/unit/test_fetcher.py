@@ -39,8 +39,10 @@ class TestRespectfulFetcherInit:
         fetcher = RespectfulFetcher()
 
         # Assert
-        assert fetcher.MIN_DELAY_SECONDS == 1.0
-        assert fetcher.MAX_DELAY_SECONDS == 3.0
+        assert fetcher.MIN_DELAY_SECONDS == 0.3
+        assert fetcher.MAX_DELAY_SECONDS == 0.8
+        assert fetcher.BROWSER_MIN_DELAY_SECONDS == 1.0
+        assert fetcher.BROWSER_MAX_DELAY_SECONDS == 3.0
         assert fetcher.USER_AGENT == "CSF-Parts-Scraper/1.0 (contact@example.com)"
         assert fetcher.MAX_RETRIES == 3
         assert fetcher.TIMEOUT_SECONDS == 30
@@ -355,19 +357,21 @@ class TestRespectfulFetcherFetch:
         # Total elapsed time should be at least the minimum delay (accounting for mocked sleep)
         # Since sleep is mocked, elapsed should be minimal but sleep was called
         sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
-        # Verify delays are reasonable (0.5-3.0s range based on implementation)
-        assert all(0.4 <= delay <= 3.5 for delay in sleep_calls)
+        # Verify delays are reasonable (HTTP mode: 0.3-0.8s range)
+        assert all(0.1 <= delay <= 1.0 for delay in sleep_calls)
 
         # Cleanup
         fetcher.close()
 
-    def test_fetch_applies_human_behavior_delay_when_enough_time_passed(
-        self, mocker: MockerFixture
-    ) -> None:
-        """Test fetch() applies small delay even when enough time has passed."""
+    def test_fetch_skips_delay_when_enough_time_passed(self, mocker: MockerFixture) -> None:
+        """Test fetch() skips delay when elapsed time exceeds min delay."""
         # Arrange
         mock_sleep = mocker.patch("src.scraper.fetcher.time.sleep")
-        # Allow real time to pass so we can test the human behavior delay
+        mock_time = mocker.patch("src.scraper.fetcher.time.time")
+        # First request: time() sets _last_request_time = 1.0
+        # Second request: time() returns 2.0, elapsed = 1.0s > MIN_DELAY 0.3s
+        # Third call: time() updates _last_request_time = 2.0
+        mock_time.side_effect = [1.0, 2.0, 2.0]
 
         mock_response = Mock(spec=httpx.Response)
         mock_response.status_code = 200
@@ -379,16 +383,10 @@ class TestRespectfulFetcherFetch:
 
         # Act
         fetcher.fetch("https://example.com/first")
-        # Wait long enough that MIN_DELAY passes (simulating real delay with mock)
-        time.sleep(1.1)  # Sleep for 1.1s (longer than MIN_DELAY of 1.0s)
         fetcher.fetch("https://example.com/second")
 
-        # Assert
-        # Should still apply human behavior delay (0.5-1.5s) even though enough time passed
-        assert mock_sleep.call_count >= 1
-        sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
-        # Human behavior delay is 0.5-1.5s
-        assert any(0.4 <= delay <= 1.6 for delay in sleep_calls)
+        # Assert — no rate-limit sleep since elapsed (1.0s) > MIN_DELAY (0.3s)
+        mock_sleep.assert_not_called()
 
         # Cleanup
         fetcher.close()
@@ -552,13 +550,13 @@ class TestRespectfulFetcherBrowser:
         # Act
         fetcher.fetch_with_browser("https://example.com/first")
         # After first request, _last_request_time = 1.0
-        # Second request checks: elapsed = 1.5 - 1.0 = 0.5s < MIN_DELAY 1.0s
+        # Second request checks: elapsed = 1.5 - 1.0 = 0.5s < BROWSER_MIN_DELAY 1.0s
         fetcher.fetch_with_browser("https://example.com/second")
 
         # Assert
-        # Should apply delay on second request (elapsed 0.5s < MIN_DELAY 1.0s)
+        # Should apply delay on second request (elapsed 0.5s < BROWSER_MIN_DELAY 1.0s)
         assert mock_sleep.call_count >= 1
-        # Verify the delay is in the expected range (min_delay - elapsed to max_delay)
+        # Verify the delay is in the expected range (browser mode: 1-3s)
         sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
         # Should delay between (1.0 - 0.5) = 0.5 and 3.0 seconds
         assert any(0.4 <= delay <= 3.5 for delay in sleep_calls)
@@ -657,13 +655,13 @@ class TestRespectfulFetcherRateLimiting:
         # Arrange
         mock_sleep = mocker.patch("src.scraper.fetcher.time.sleep")
         mock_time = mocker.patch("src.scraper.fetcher.time.time")
-        # First request: time() to set _last_request_time = 1.0 (non-zero!)
-        # Second request: time() to check elapsed (returns 1.5, so elapsed = 0.5s)
-        # Third call: time() to update _last_request_time = 1.5
-        mock_time.side_effect = [1.0, 1.5, 1.5]  # 0.5s elapsed
+        # First request: time() to set _last_request_time = 1.0
+        # Second request: time() to check elapsed (returns 1.1, so elapsed = 0.1s < 0.3s)
+        # Third call: time() to update _last_request_time = 1.1
+        mock_time.side_effect = [1.0, 1.1, 1.1]  # 0.1s elapsed
 
         mock_random = mocker.patch("src.scraper.fetcher.random.uniform")
-        mock_random.return_value = 2.0  # Fixed delay for testing
+        mock_random.return_value = 0.5  # Fixed delay for testing
 
         mock_response = Mock(spec=httpx.Response)
         mock_response.status_code = 200
@@ -676,19 +674,18 @@ class TestRespectfulFetcherRateLimiting:
         # Act
         fetcher.fetch("https://example.com/first")
         # After first request, _last_request_time = 1.0
-        # Second request checks elapsed time (1.5 - 1.0 = 0.5s < MIN_DELAY 1.0s)
+        # Second request: elapsed = 1.1 - 1.0 = 0.1s < MIN_DELAY 0.3s → delay applied
         fetcher.fetch("https://example.com/second")
 
         # Assert
         # Should call uniform with (min_delay - elapsed, max_delay)
-        # = (1.0 - 0.5, 3.0) = (0.5, 3.0)
+        # = (0.3 - 0.1, 0.8) = (0.2, 0.8)
         assert mock_random.call_count >= 1, "random.uniform should be called for rate limiting"
-        # Check if any call matches our expected arguments
         call_args = [call[0] for call in mock_random.call_args_list]
-        assert any(args == (0.5, 3.0) for args in call_args), (
-            f"Expected uniform(0.5, 3.0), got {call_args}"
+        assert any(abs(args[0] - 0.2) < 0.01 and abs(args[1] - 0.8) < 0.01 for args in call_args), (
+            f"Expected uniform(0.2, 0.8), got {call_args}"
         )
-        mock_sleep.assert_called_with(2.0)
+        mock_sleep.assert_called_with(0.5)
 
         # Cleanup
         fetcher.close()

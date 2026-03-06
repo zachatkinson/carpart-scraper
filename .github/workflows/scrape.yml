@@ -55,6 +55,7 @@ jobs:
         env:
           CSF_WP_URL: ${{ secrets.CSF_WP_URL }}
           CSF_WP_API_KEY: ${{ secrets.CSF_WP_API_KEY }}
+          PYTHONUNBUFFERED: "1"
         run: |
           FORCE_FLAG=""
           if [ "${{ inputs.force_full }}" = "true" ]; then
