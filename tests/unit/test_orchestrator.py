@@ -8,6 +8,7 @@ Tests cover:
 - Failure stats in scrape_all return value
 """
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +22,7 @@ from src.models.part import Part
 from src.models.vehicle import Vehicle
 from src.scraper.ajax_parser import AJAXParsingError, AJAXResponseParser
 from src.scraper.etag_store import ETagStore
+from src.scraper.hierarchy_cache import HierarchyCache
 from src.scraper.orchestrator import MAKES, DeduplicationResult, FailureTracker, ScraperOrchestrator
 
 
@@ -194,7 +196,9 @@ class TestEnumerateMakes:
         mock_logger.info.assert_any_call("new_make_discovered", make_id=99, make_name="NewBrand")
         assert 99 in makes
 
-    def test_build_hierarchy_uses_discovered_makes(self, mocker: MockerFixture) -> None:
+    def test_build_hierarchy_uses_discovered_makes(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test _build_hierarchy() calls _enumerate_makes() for make list."""
         # Arrange
         mock_fetcher = Mock()
@@ -214,6 +218,7 @@ class TestEnumerateMakes:
         orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = mock_ajax
         orchestrator.failure_tracker = FailureTracker()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
 
         # Mock _enumerate_makes to return a single make
         mocker.patch.object(orchestrator, "_enumerate_makes", return_value={4: "Toyota"})
@@ -230,7 +235,9 @@ class TestEnumerateMakes:
 class TestBuildHierarchyErrorHandling:
     """Test _build_hierarchy continues on individual make/year failures."""
 
-    def test_build_hierarchy_continues_on_failed_make(self, mocker: MockerFixture) -> None:
+    def test_build_hierarchy_continues_on_failed_make(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test _build_hierarchy skips failed make and continues with others."""
         # Arrange
         mock_fetcher = Mock()
@@ -261,6 +268,7 @@ class TestBuildHierarchyErrorHandling:
         orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = mock_ajax
         orchestrator.failure_tracker = FailureTracker()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
 
         # Mock _enumerate_makes to return Honda and Toyota
         mocker.patch.object(
@@ -279,7 +287,9 @@ class TestBuildHierarchyErrorHandling:
         failures = orchestrator.failure_tracker.get_failed_identifiers("hierarchy")
         assert "make:Honda" in failures
 
-    def test_build_hierarchy_continues_on_failed_year(self, mocker: MockerFixture) -> None:
+    def test_build_hierarchy_continues_on_failed_year(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test _build_hierarchy skips failed year and continues with others."""
         # Arrange
         mock_fetcher = Mock()
@@ -307,6 +317,7 @@ class TestBuildHierarchyErrorHandling:
         orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = mock_ajax
         orchestrator.failure_tracker = FailureTracker()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
 
         mocker.patch.object(orchestrator, "_enumerate_makes", return_value={3: "Honda"})
 
@@ -835,7 +846,7 @@ class TestDeduplicateWithChanges:
 class TestBuildHierarchyFilters:
     """Test _build_hierarchy with make_filter and year_filter."""
 
-    def test_build_hierarchy_with_make_filter(self, mocker: MockerFixture) -> None:
+    def test_build_hierarchy_with_make_filter(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Test _build_hierarchy only processes matching make when make_filter is set."""
         # Arrange
         mock_fetcher = Mock()
@@ -860,6 +871,7 @@ class TestBuildHierarchyFilters:
         orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = mock_ajax
         orchestrator.failure_tracker = FailureTracker()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
 
         mocker.patch.object(
             orchestrator, "_enumerate_makes", return_value={3: "Honda", 4: "Toyota"}
@@ -875,7 +887,7 @@ class TestBuildHierarchyFilters:
         # fetch() was called only twice (Honda years + Honda 2024 models)
         assert mock_fetcher.fetch.call_count == 2
 
-    def test_build_hierarchy_with_year_filter(self, mocker: MockerFixture) -> None:
+    def test_build_hierarchy_with_year_filter(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Test _build_hierarchy filters years when year_filter is set."""
         # Arrange
         mock_fetcher = Mock()
@@ -901,6 +913,7 @@ class TestBuildHierarchyFilters:
         orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = mock_ajax
         orchestrator.failure_tracker = FailureTracker()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
 
         mocker.patch.object(orchestrator, "_enumerate_makes", return_value={3: "Honda"})
 
@@ -1192,6 +1205,7 @@ class TestScrapeAllPhase2:
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
         orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
         return orchestrator
 
     def test_successful_scrape_loop(self, mocker: MockerFixture, tmp_path: Path) -> None:
@@ -1300,6 +1314,7 @@ class TestScrapeAllPhase3:
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
         orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
         return orchestrator
 
     def test_fetch_details_new_only(self, mocker: MockerFixture, tmp_path: Path) -> None:
@@ -1407,6 +1422,7 @@ class TestScrapeAllResume:
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
         orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
 
         # Create a checkpoint file
         checkpoint_data = {
@@ -1491,6 +1507,7 @@ class TestScrapeAllIncremental:
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
         orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
 
         mocker.patch.object(orchestrator, "_build_hierarchy", return_value=[])
         mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
@@ -1619,3 +1636,263 @@ class TestExportData:
         orchestrator.exporter.export_compatibility_incremental.assert_called_once()
         assert paths["parts"] == tmp_path / "parts.json"
         assert paths["compatibility"] == tmp_path / "compat.json"
+
+
+class TestHierarchyCaching:
+    """Test hierarchy cache integration in _build_hierarchy."""
+
+    def test_cache_hit_skips_model_enumeration(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test that a cache hit reuses cached entries and skips _enumerate_models."""
+        # Arrange
+        mock_fetcher = Mock()
+        mock_ajax = Mock(spec=AJAXResponseParser)
+
+        # The years response text that will be hashed
+        years_response_text = "years_js_content"
+        mock_response_years = Mock(spec=httpx.Response)
+        mock_response_years.text = years_response_text
+        mock_fetcher.fetch.return_value = mock_response_years
+
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = mock_fetcher
+        orchestrator.ajax_parser = mock_ajax
+        orchestrator.failure_tracker = FailureTracker()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+
+        # Pre-populate cache with matching hash and entries
+        expected_hash = hashlib.md5(years_response_text.encode()).hexdigest()  # noqa: S324
+        years_url = "https://csf.mycarparts.com/get_year_by_make/3"
+        orchestrator.hierarchy_cache.set_url_hash(years_url, expected_hash)
+        cached_entries = [
+            {
+                "make_id": 3,
+                "make": "Honda",
+                "year_id": 100,
+                "year": "2024",
+                "application_id": 8000,
+                "model": "Civic",
+            },
+            {
+                "make_id": 3,
+                "make": "Honda",
+                "year_id": 101,
+                "year": "2023",
+                "application_id": 8001,
+                "model": "Accord",
+            },
+        ]
+        orchestrator.hierarchy_cache.set_make_hierarchy(3, cached_entries)
+
+        mocker.patch.object(orchestrator, "_enumerate_makes", return_value={3: "Honda"})
+
+        # Act
+        hierarchy = orchestrator._build_hierarchy()  # noqa: SLF001
+
+        # Assert — cached entries used, models NOT enumerated
+        assert len(hierarchy) == 2
+        assert hierarchy[0]["model"] == "Civic"
+        assert hierarchy[1]["model"] == "Accord"
+        mock_ajax.parse_model_response.assert_not_called()
+        # Only 1 fetch call (years URL), no model fetches
+        assert mock_fetcher.fetch.call_count == 1
+
+    def test_cache_miss_enumerates_normally_and_updates_cache(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """Test that a cache miss proceeds with normal enumeration and updates cache."""
+        # Arrange
+        mock_fetcher = Mock()
+        mock_ajax = Mock(spec=AJAXResponseParser)
+
+        mock_response_years = Mock(spec=httpx.Response)
+        mock_response_years.text = "new_years_content"
+        mock_response_models = Mock(spec=httpx.Response)
+        mock_response_models.text = "models_js"
+
+        mock_fetcher.fetch = Mock(
+            side_effect=[
+                mock_response_years,  # Honda years
+                mock_response_models,  # Honda 2024 models
+            ]
+        )
+
+        mock_ajax.parse_year_response.return_value = {100: "2024"}
+        mock_ajax.parse_model_response.return_value = {8000: "Civic"}
+
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = mock_fetcher
+        orchestrator.ajax_parser = mock_ajax
+        orchestrator.failure_tracker = FailureTracker()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+
+        # Pre-populate cache with DIFFERENT hash (causes miss)
+        years_url = "https://csf.mycarparts.com/get_year_by_make/3"
+        orchestrator.hierarchy_cache.set_url_hash(years_url, "old_stale_hash")
+        orchestrator.hierarchy_cache.set_make_hierarchy(3, [{"make": "Honda", "model": "OLD"}])
+
+        mocker.patch.object(orchestrator, "_enumerate_makes", return_value={3: "Honda"})
+
+        # Act
+        hierarchy = orchestrator._build_hierarchy()  # noqa: SLF001
+
+        # Assert — normal enumeration happened
+        assert len(hierarchy) == 1
+        assert hierarchy[0]["model"] == "Civic"
+        mock_ajax.parse_year_response.assert_called_once()
+        mock_ajax.parse_model_response.assert_called_once()
+
+        # Cache was updated
+        expected_hash = hashlib.md5(b"new_years_content").hexdigest()  # noqa: S324
+        assert orchestrator.hierarchy_cache.get_url_hash(years_url) == expected_hash
+        cached = orchestrator.hierarchy_cache.get_make_hierarchy(3)
+        assert cached is not None
+        assert len(cached) == 1
+        assert cached[0]["model"] == "Civic"
+
+    def test_empty_cache_proceeds_normally(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test that an empty cache (first run) enumerates everything normally."""
+        # Arrange
+        mock_fetcher = Mock()
+        mock_ajax = Mock(spec=AJAXResponseParser)
+
+        mock_response_years = Mock(spec=httpx.Response)
+        mock_response_years.text = "years_js"
+        mock_response_models = Mock(spec=httpx.Response)
+        mock_response_models.text = "models_js"
+
+        mock_fetcher.fetch = Mock(
+            side_effect=[
+                mock_response_years,  # Honda years
+                mock_response_models,  # Honda 2024 models
+            ]
+        )
+
+        mock_ajax.parse_year_response.return_value = {100: "2024"}
+        mock_ajax.parse_model_response.return_value = {8000: "Civic"}
+
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = mock_fetcher
+        orchestrator.ajax_parser = mock_ajax
+        orchestrator.failure_tracker = FailureTracker()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+
+        mocker.patch.object(orchestrator, "_enumerate_makes", return_value={3: "Honda"})
+
+        # Act
+        hierarchy = orchestrator._build_hierarchy()  # noqa: SLF001
+
+        # Assert — full enumeration happened
+        assert len(hierarchy) == 1
+        assert hierarchy[0]["model"] == "Civic"
+        mock_ajax.parse_year_response.assert_called_once()
+        mock_ajax.parse_model_response.assert_called_once()
+
+    def test_year_filter_applied_to_cached_entries(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """Test that year_filter is applied to cached hierarchy entries."""
+        # Arrange
+        mock_fetcher = Mock()
+        mock_ajax = Mock(spec=AJAXResponseParser)
+
+        years_response_text = "years_js_content"
+        mock_response_years = Mock(spec=httpx.Response)
+        mock_response_years.text = years_response_text
+        mock_fetcher.fetch.return_value = mock_response_years
+
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = mock_fetcher
+        orchestrator.ajax_parser = mock_ajax
+        orchestrator.failure_tracker = FailureTracker()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+
+        # Pre-populate cache with entries for multiple years
+        expected_hash = hashlib.md5(years_response_text.encode()).hexdigest()  # noqa: S324
+        years_url = "https://csf.mycarparts.com/get_year_by_make/3"
+        orchestrator.hierarchy_cache.set_url_hash(years_url, expected_hash)
+        cached_entries = [
+            {
+                "make_id": 3,
+                "make": "Honda",
+                "year_id": 100,
+                "year": "2024",
+                "application_id": 8000,
+                "model": "Civic",
+            },
+            {
+                "make_id": 3,
+                "make": "Honda",
+                "year_id": 101,
+                "year": "2023",
+                "application_id": 8001,
+                "model": "Accord",
+            },
+        ]
+        orchestrator.hierarchy_cache.set_make_hierarchy(3, cached_entries)
+
+        mocker.patch.object(orchestrator, "_enumerate_makes", return_value={3: "Honda"})
+
+        # Act — only want year 2023
+        hierarchy = orchestrator._build_hierarchy(year_filter=2023)  # noqa: SLF001
+
+        # Assert — only 2023 entry returned
+        assert len(hierarchy) == 1
+        assert hierarchy[0]["year"] == "2023"
+        assert hierarchy[0]["model"] == "Accord"
+
+    def test_use_cache_false_bypasses_cache(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test that use_cache=False ignores cached data and enumerates normally."""
+        # Arrange
+        mock_fetcher = Mock()
+        mock_ajax = Mock(spec=AJAXResponseParser)
+
+        years_response_text = "years_js_content"
+        mock_response_years = Mock(spec=httpx.Response)
+        mock_response_years.text = years_response_text
+        mock_response_models = Mock(spec=httpx.Response)
+        mock_response_models.text = "models_js"
+
+        mock_fetcher.fetch = Mock(
+            side_effect=[
+                mock_response_years,  # Honda years
+                mock_response_models,  # Honda 2024 models
+            ]
+        )
+
+        mock_ajax.parse_year_response.return_value = {100: "2024"}
+        mock_ajax.parse_model_response.return_value = {8000: "Civic"}
+
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = mock_fetcher
+        orchestrator.ajax_parser = mock_ajax
+        orchestrator.failure_tracker = FailureTracker()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+
+        # Pre-populate cache with matching hash (would normally be a hit)
+        expected_hash = hashlib.md5(years_response_text.encode()).hexdigest()  # noqa: S324
+        years_url = "https://csf.mycarparts.com/get_year_by_make/3"
+        orchestrator.hierarchy_cache.set_url_hash(years_url, expected_hash)
+        orchestrator.hierarchy_cache.set_make_hierarchy(
+            3,
+            [
+                {
+                    "make_id": 3,
+                    "make": "Honda",
+                    "year_id": 999,
+                    "year": "2020",
+                    "application_id": 9999,
+                    "model": "CACHED_OLD",
+                }
+            ],
+        )
+
+        mocker.patch.object(orchestrator, "_enumerate_makes", return_value={3: "Honda"})
+
+        # Act — bypass cache
+        hierarchy = orchestrator._build_hierarchy(use_cache=False)  # noqa: SLF001
+
+        # Assert — fresh enumeration, not cached data
+        assert len(hierarchy) == 1
+        assert hierarchy[0]["model"] == "Civic"
+        mock_ajax.parse_year_response.assert_called_once()
+        mock_ajax.parse_model_response.assert_called_once()

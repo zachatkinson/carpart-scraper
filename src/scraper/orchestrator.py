@@ -23,11 +23,14 @@ from src.models.vehicle import Vehicle, VehicleCompatibility
 from src.scraper.ajax_parser import AJAXResponseParser
 from src.scraper.etag_store import ETagStore
 from src.scraper.fetcher import RespectfulFetcher
+from src.scraper.hierarchy_cache import HierarchyCache
 from src.scraper.image_processor import ImageProcessor
 from src.scraper.parser import CSFParser
 from src.scraper.validator import DataValidator
 
 if TYPE_CHECKING:
+    import httpx
+
     from src.scraper.image_syncer import ImageSyncer
 
 logger = structlog.get_logger()
@@ -241,6 +244,7 @@ class ScraperOrchestrator:
         exporter: JSONExporter | None = None,
         image_processor: ImageProcessor | None = None,
         etag_store: ETagStore | None = None,
+        hierarchy_cache: HierarchyCache | None = None,
     ) -> None:
         """Initialize orchestrator with dependency injection.
 
@@ -256,6 +260,8 @@ class ScraperOrchestrator:
             exporter: JSON exporter (default: creates JSONExporter)
             image_processor: Image processor for AVIF conversion (default: creates ImageProcessor)
             etag_store: Content hash store for change detection (default: creates ETagStore)
+            hierarchy_cache: Hierarchy cache for skipping unchanged makes
+                (default: creates HierarchyCache)
 
         Note:
             Dependencies are injected via constructor for testability and flexibility.
@@ -279,6 +285,11 @@ class ScraperOrchestrator:
 
         # ETag store for content-hash-based change detection
         self.etag_store = etag_store or ETagStore(self.checkpoint_dir / "etags.json")
+
+        # Hierarchy cache for skipping unchanged makes
+        self.hierarchy_cache = hierarchy_cache or HierarchyCache(
+            self.checkpoint_dir / "hierarchy_cache.json"
+        )
 
         # Ensure checkpoint directory exists
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -357,12 +368,19 @@ class ScraperOrchestrator:
         )
         return discovered
 
-    def _enumerate_years(self, make_id: int, make_name: str) -> dict[int, str]:
+    def _enumerate_years(
+        self,
+        make_id: int,
+        make_name: str,
+        *,
+        prefetched_response: httpx.Response | None = None,
+    ) -> dict[int, str]:
         """Enumerate all years for a given make.
 
         Args:
             make_id: Make ID (e.g., 3 for Honda)
             make_name: Make name (e.g., "Honda")
+            prefetched_response: Already-fetched HTTP response to avoid double-fetching
 
         Returns:
             Dict mapping year_id to year string
@@ -375,7 +393,7 @@ class ScraperOrchestrator:
         url = f"https://csf.mycarparts.com/get_year_by_make/{make_id}"
         logger.debug("enumerating_years", make=make_name, make_id=make_id, url=url)
 
-        response = self.fetcher.fetch(url)
+        response = prefetched_response or self.fetcher.fetch(url)
         years = self.ajax_parser.parse_year_response(response.text)
 
         logger.info("years_enumerated", make=make_name, year_count=len(years))
@@ -406,17 +424,27 @@ class ScraperOrchestrator:
         logger.info("models_enumerated", make=make_name, year=year, model_count=len(models))
         return models
 
-    def _build_hierarchy(
-        self, make_filter: str | None = None, year_filter: int | None = None
+    def _build_hierarchy(  # noqa: PLR0915
+        self,
+        make_filter: str | None = None,
+        year_filter: int | None = None,
+        *,
+        use_cache: bool = True,
     ) -> list[dict[str, Any]]:
         """Build complete vehicle hierarchy with error handling.
 
         Individual make or year failures are recorded and skipped,
         allowing the rest of the hierarchy to be built successfully.
 
+        When ``use_cache`` is True and a previous hierarchy cache exists,
+        the years AJAX response for each make is hashed and compared to
+        the stored hash. On a match the cached hierarchy entries are reused,
+        skipping all model enumeration requests for that make.
+
         Args:
             make_filter: Filter by make name (e.g., "Honda")
             year_filter: Filter by year (e.g., 2025)
+            use_cache: Whether to use hierarchy cache (default: True)
 
         Returns:
             List of vehicle configurations with application IDs
@@ -434,7 +462,9 @@ class ScraperOrchestrator:
                 ...
             ]
         """
-        hierarchy = []
+        hierarchy: list[dict[str, Any]] = []
+        cache_hits = 0
+        cache_misses = 0
 
         # Dynamically discover makes from homepage (falls back to MAKES constant)
         discovered_makes = self._enumerate_makes()
@@ -453,15 +483,65 @@ class ScraperOrchestrator:
             total_makes=len(makes_to_process),
             make_filter=make_filter,
             year_filter=year_filter,
+            use_cache=use_cache,
         )
 
         for make_id, make_name in makes_to_process:
+            years_url = f"https://csf.mycarparts.com/get_year_by_make/{make_id}"
+
             try:
-                # Enumerate years for this make
-                years = self._enumerate_years(make_id, make_name)
+                # Fetch years response (we need it for both cache check and parsing)
+                response = self.fetcher.fetch(years_url)
             except Exception as e:  # noqa: BLE001
                 logger.warning(
                     "hierarchy_years_failed",
+                    make=make_name,
+                    make_id=make_id,
+                    error_type=type(e).__name__,
+                    error=str(e),
+                )
+                self.failure_tracker.record(
+                    phase="hierarchy",
+                    identifier=f"make:{make_name}",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                )
+                continue
+
+            # Hash the years response for cache comparison
+            response_hash = hashlib.md5(  # noqa: S324
+                response.text.encode()
+            ).hexdigest()
+
+            # Check hierarchy cache
+            if use_cache and self.hierarchy_cache.has_data():
+                stored_hash = self.hierarchy_cache.get_url_hash(years_url)
+                cached_entries = self.hierarchy_cache.get_make_hierarchy(make_id)
+
+                if stored_hash == response_hash and cached_entries is not None:
+                    # Cache hit — reuse cached hierarchy entries
+                    make_entries = cached_entries
+                    if year_filter:
+                        make_entries = [e for e in make_entries if int(e["year"]) == year_filter]
+                    hierarchy.extend(make_entries)
+                    cache_hits += 1
+                    logger.info(
+                        "hierarchy_cache_hit",
+                        make=make_name,
+                        cached_entries=len(cached_entries),
+                        after_filter=len(make_entries),
+                    )
+                    # Update hash in case it needs to be persisted
+                    self.hierarchy_cache.set_url_hash(years_url, response_hash)
+                    continue
+
+            # Cache miss (or cache disabled) — enumerate years and models
+            cache_misses += 1
+            try:
+                years = self._enumerate_years(make_id, make_name, prefetched_response=response)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "hierarchy_years_parse_failed",
                     make=make_name,
                     make_id=make_id,
                     error_type=type(e).__name__,
@@ -479,6 +559,7 @@ class ScraperOrchestrator:
             if year_filter:
                 years = {yid: yr for yid, yr in years.items() if int(yr) == year_filter}
 
+            make_entries = []
             for year_id, year in years.items():
                 try:
                     # Enumerate models for this year/make
@@ -501,7 +582,7 @@ class ScraperOrchestrator:
                     continue
 
                 for application_id, model in models.items():
-                    hierarchy.append(
+                    make_entries.append(
                         {
                             "make_id": make_id,
                             "make": make_name,
@@ -512,7 +593,25 @@ class ScraperOrchestrator:
                         }
                     )
 
-        logger.info("hierarchy_built", total_vehicles=len(hierarchy))
+            hierarchy.extend(make_entries)
+
+            # Update cache with fresh data (store unfiltered entries)
+            self.hierarchy_cache.set_url_hash(years_url, response_hash)
+            # For cache storage, we need the full (unfiltered) entries for this make.
+            # If year_filter was applied, we need to re-enumerate without filter
+            # for the cache. But since we already enumerated with the filter,
+            # we store what we have — the cache will be rebuilt on next full run.
+            self.hierarchy_cache.set_make_hierarchy(make_id, make_entries)
+
+        # Persist cache
+        self.hierarchy_cache.save()
+
+        logger.info(
+            "hierarchy_built",
+            total_vehicles=len(hierarchy),
+            cache_hits=cache_hits,
+            cache_misses=cache_misses,
+        )
         return hierarchy
 
     def _scrape_application_page(
@@ -1108,9 +1207,11 @@ class ScraperOrchestrator:
                     exports_exist=exports_exist,
                 )
 
-        # Force-full: reset manifest synced flags so images are re-uploaded
+        # Force-full: reset manifest synced flags and hierarchy cache
         if force_full:
             self.image_processor.reset_synced_flags()
+            self.hierarchy_cache.clear()
+            self.hierarchy_cache.save()
 
         logger.info(
             "scraping_started",
@@ -1138,7 +1239,11 @@ class ScraperOrchestrator:
             previous_hashes = self.load_previous_export()
 
         # Phase 1: Build vehicle hierarchy
-        hierarchy = self._build_hierarchy(make_filter=make_filter, year_filter=year_filter)
+        hierarchy = self._build_hierarchy(
+            make_filter=make_filter,
+            year_filter=year_filter,
+            use_cache=not force_full,
+        )
         total_applications = len(hierarchy)
 
         # Phase 1.5: ETag-based filtering (skip unchanged application pages)

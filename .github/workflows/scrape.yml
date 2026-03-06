@@ -43,6 +43,14 @@ jobs:
       - name: Install Playwright Chromium
         run: uv run playwright install --with-deps chromium
 
+      - name: Restore checkpoints cache
+        uses: actions/cache@v4
+        with:
+          path: checkpoints/
+          key: scrape-checkpoints-${{ github.ref_name }}
+          restore-keys: |
+            scrape-checkpoints-
+
       - name: Scrape
         env:
           CSF_WP_URL: ${{ secrets.CSF_WP_URL }}
