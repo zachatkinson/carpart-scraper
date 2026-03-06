@@ -206,6 +206,20 @@ class ImageProcessor:
         if entry is not None:
             entry["synced"] = True
 
+    def reset_synced_flags(self) -> None:
+        """Reset all synced flags to False.
+
+        Used by --force-full to ensure all images are re-uploaded,
+        even if the manifest claims they were previously synced.
+        """
+        count = 0
+        for entry in self._manifest.values():
+            if isinstance(entry, dict) and entry.get("synced", False):
+                entry["synced"] = False
+                count += 1
+        if count > 0:
+            logger.info("manifest_synced_flags_reset", count=count)
+
     def get_unsynced_files(self) -> list[str]:
         """Get list of AVIF filenames that haven't been synced.
 

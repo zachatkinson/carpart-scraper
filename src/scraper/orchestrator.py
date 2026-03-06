@@ -1044,6 +1044,10 @@ class ScraperOrchestrator:
                     exports_exist=exports_exist,
                 )
 
+        # Force-full: reset manifest synced flags so images are re-uploaded
+        if force_full:
+            self.image_processor.reset_synced_flags()
+
         logger.info(
             "scraping_started",
             make_filter=make_filter,
