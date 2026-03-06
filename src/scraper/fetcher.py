@@ -11,6 +11,7 @@ This module implements respectful web scraping with:
 - Lightweight content-hash checks for change detection
 """
 
+import asyncio
 import hashlib
 import random
 import re
@@ -320,6 +321,77 @@ class RespectfulFetcher:
             logger.debug("content_hash_unchanged", url=url)
 
         return changed, current_hash
+
+    async def async_check_etags(
+        self,
+        urls_and_hashes: list[tuple[str, str | None]],
+        concurrency: int = 10,
+        progress_every: int = 500,
+    ) -> list[tuple[bool, str]]:
+        """Check multiple pages for changes concurrently using async HTTP.
+
+        Runs up to ``concurrency`` lightweight GET requests in parallel,
+        each with a random 0.3-0.8s delay to stay respectful. Results
+        are returned in the same order as the input list.
+
+        Args:
+            urls_and_hashes: List of (url, previous_hash_or_None) pairs
+            concurrency: Maximum number of simultaneous requests
+            progress_every: Log progress every N completions
+
+        Returns:
+            List of (changed, current_hash) tuples, one per input pair
+        """
+        semaphore = asyncio.Semaphore(concurrency)
+        completed_count = 0
+        total = len(urls_and_hashes)
+        count_lock = asyncio.Lock()
+
+        async with httpx.AsyncClient(
+            headers={"User-Agent": self.USER_AGENT},
+            timeout=self.TIMEOUT_SECONDS,
+            follow_redirects=True,
+        ) as async_client:
+
+            async def _check_one(url: str, previous_hash: str | None) -> tuple[bool, str]:
+                nonlocal completed_count
+
+                async with semaphore:
+                    delay = random.uniform(  # noqa: S311
+                        self.MIN_DELAY_SECONDS, self.MAX_DELAY_SECONDS
+                    )
+                    await asyncio.sleep(delay)
+
+                    try:
+                        response = await async_client.get(
+                            url,
+                            headers={"Accept": "text/html,application/xhtml+xml"},
+                        )
+                        response.raise_for_status()
+                    except httpx.HTTPError:
+                        logger.warning("async_content_hash_check_failed", url=url)
+                        return True, previous_hash or ""
+
+                    normalized = self._normalize_html(response.text)
+                    current_hash = hashlib.md5(  # noqa: S324
+                        normalized.encode()
+                    ).hexdigest()
+
+                    changed = previous_hash is None or current_hash != previous_hash
+
+                async with count_lock:
+                    completed_count += 1
+                    if completed_count % progress_every == 0 or completed_count == total:
+                        logger.info(
+                            "etag_check_progress",
+                            completed=completed_count,
+                            total=total,
+                        )
+
+                return changed, current_hash
+
+            tasks = [_check_one(url, prev_hash) for url, prev_hash in urls_and_hashes]
+            return list(await asyncio.gather(*tasks))
 
     def fetch_with_browser(self, url: str) -> str:
         """Fetch URL using persistent headless browser for JavaScript content.

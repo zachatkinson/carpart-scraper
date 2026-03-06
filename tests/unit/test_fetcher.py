@@ -12,8 +12,11 @@ Tests cover:
 - Context manager cleanup
 - Content hash change detection (check_etag)
 - HTML normalization for stable hashing
+- Async batch ETag checking (async_check_etags)
 """
 
+import asyncio
+import hashlib
 import time
 from unittest.mock import Mock
 
@@ -1219,6 +1222,186 @@ class TestCheckEtag:
         # Assert - on error, assume changed and return previous hash
         assert changed is True
         assert returned_hash == previous_hash
+
+        # Cleanup
+        fetcher.close()
+
+
+class TestAsyncCheckEtags:
+    """Test RespectfulFetcher.async_check_etags() concurrent batch checking."""
+
+    async def test_async_check_etags_returns_results_for_all_urls(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test async_check_etags returns correct (changed, hash) for each URL."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.asyncio.sleep", return_value=None)
+
+        html_a = "<html><body>Page A</body></html>"
+        html_b = "<html><body>Page B</body></html>"
+        hash_a = hashlib.md5(html_a.encode()).hexdigest()  # noqa: S324
+
+        mock_response_a = httpx.Response(200, text=html_a, request=httpx.Request("GET", "http://a"))
+        mock_response_b = httpx.Response(200, text=html_b, request=httpx.Request("GET", "http://b"))
+
+        async def mock_get(url: str, **kwargs: object) -> httpx.Response:
+            if "a" in url:
+                return mock_response_a
+            return mock_response_b
+
+        mock_client = mocker.AsyncMock()
+        mock_client.get = mock_get
+        mock_client.__aenter__ = mocker.AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = mocker.AsyncMock(return_value=False)
+        mocker.patch("src.scraper.fetcher.httpx.AsyncClient", return_value=mock_client)
+
+        fetcher = RespectfulFetcher()
+
+        urls_and_hashes: list[tuple[str, str | None]] = [
+            ("https://example.com/a", hash_a),  # unchanged
+            ("https://example.com/b", None),  # first check → changed
+            ("https://example.com/a2", "stale_hash"),  # changed (hash mismatch)
+        ]
+
+        # Act
+        results = await fetcher.async_check_etags(urls_and_hashes, progress_every=100)
+
+        # Assert
+        assert len(results) == 3
+        # URL a: same hash → unchanged
+        assert results[0] == (False, hash_a)
+        # URL b: no previous hash → changed
+        assert results[1][0] is True
+        assert isinstance(results[1][1], str)
+        # URL a2: different previous hash → changed
+        assert results[2][0] is True
+
+        # Cleanup
+        fetcher.close()
+
+    async def test_async_check_etags_respects_concurrency_limit(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test that semaphore limits in-flight requests to concurrency."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.asyncio.sleep", return_value=None)
+
+        peak_concurrent = 0
+        current_concurrent = 0
+        concurrency_lock = asyncio.Lock()
+
+        async def mock_get(url: str, **kwargs: object) -> httpx.Response:
+            nonlocal peak_concurrent, current_concurrent
+            async with concurrency_lock:
+                current_concurrent += 1
+                peak_concurrent = max(peak_concurrent, current_concurrent)
+            # Simulate work
+            await asyncio.sleep(0)
+            async with concurrency_lock:
+                current_concurrent -= 1
+            return httpx.Response(
+                200,
+                text="<html>ok</html>",
+                request=httpx.Request("GET", url),
+            )
+
+        mock_client = mocker.AsyncMock()
+        mock_client.get = mock_get
+        mock_client.__aenter__ = mocker.AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = mocker.AsyncMock(return_value=False)
+        mocker.patch("src.scraper.fetcher.httpx.AsyncClient", return_value=mock_client)
+
+        fetcher = RespectfulFetcher()
+
+        # 20 URLs but concurrency=3
+        urls_and_hashes: list[tuple[str, str | None]] = [
+            (f"https://example.com/{i}", None) for i in range(20)
+        ]
+
+        # Act
+        results = await fetcher.async_check_etags(
+            urls_and_hashes, concurrency=3, progress_every=100
+        )
+
+        # Assert
+        assert len(results) == 20
+        assert peak_concurrent <= 3
+
+        # Cleanup
+        fetcher.close()
+
+    async def test_async_check_etags_handles_http_errors(self, mocker: MockerFixture) -> None:
+        """Test that HTTP errors return (True, previous_hash) gracefully."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.asyncio.sleep", return_value=None)
+
+        async def mock_get(url: str, **kwargs: object) -> httpx.Response:
+            msg = "Connection refused"
+            raise httpx.ConnectError(msg)
+
+        mock_client = mocker.AsyncMock()
+        mock_client.get = mock_get
+        mock_client.__aenter__ = mocker.AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = mocker.AsyncMock(return_value=False)
+        mocker.patch("src.scraper.fetcher.httpx.AsyncClient", return_value=mock_client)
+
+        fetcher = RespectfulFetcher()
+
+        urls_and_hashes: list[tuple[str, str | None]] = [
+            ("https://example.com/1", "prev_hash_1"),
+            ("https://example.com/2", None),
+        ]
+
+        # Act
+        results = await fetcher.async_check_etags(urls_and_hashes, progress_every=100)
+
+        # Assert — on error, assume changed and return previous hash (or "")
+        assert results[0] == (True, "prev_hash_1")
+        assert results[1] == (True, "")
+
+        # Cleanup
+        fetcher.close()
+
+    async def test_async_check_etags_logs_progress(self, mocker: MockerFixture) -> None:
+        """Test that progress logging fires at correct intervals."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.asyncio.sleep", return_value=None)
+
+        async def mock_get(url: str, **kwargs: object) -> httpx.Response:
+            return httpx.Response(
+                200,
+                text="<html>ok</html>",
+                request=httpx.Request("GET", url),
+            )
+
+        mock_client = mocker.AsyncMock()
+        mock_client.get = mock_get
+        mock_client.__aenter__ = mocker.AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = mocker.AsyncMock(return_value=False)
+        mocker.patch("src.scraper.fetcher.httpx.AsyncClient", return_value=mock_client)
+
+        mock_logger = mocker.patch("src.scraper.fetcher.logger")
+
+        fetcher = RespectfulFetcher()
+
+        # 5 URLs with progress_every=2
+        urls_and_hashes: list[tuple[str, str | None]] = [
+            (f"https://example.com/{i}", None) for i in range(5)
+        ]
+
+        # Act
+        await fetcher.async_check_etags(urls_and_hashes, progress_every=2)
+
+        # Assert — progress logged at 2, 4, and 5 (final)
+        progress_calls = [
+            call
+            for call in mock_logger.info.call_args_list
+            if call.args and call.args[0] == "etag_check_progress"
+        ]
+        completed_values = [call.kwargs["completed"] for call in progress_calls]
+        assert 2 in completed_values
+        assert 4 in completed_values
+        assert 5 in completed_values
 
         # Cleanup
         fetcher.close()

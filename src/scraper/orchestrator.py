@@ -6,6 +6,7 @@ fetching, parsing, deduplication, and export of automotive parts data.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -962,9 +963,9 @@ class ScraperOrchestrator:
     def _filter_by_etags(self, hierarchy: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Filter hierarchy to only applications whose pages have changed.
 
-        Sends lightweight HTTP GET requests for each application URL and
-        computes content hashes. Pages whose hash matches the previously
-        stored value are skipped. New hashes are stored for future runs.
+        Runs concurrent HTTP GET requests (capped by fetcher semaphore) for
+        each application URL and computes content hashes. Pages whose hash
+        matches the previously stored value are skipped.
 
         Args:
             hierarchy: Full vehicle hierarchy from _build_hierarchy
@@ -972,52 +973,35 @@ class ScraperOrchestrator:
         Returns:
             Filtered hierarchy containing only changed/new applications
         """
-        if not self.etag_store.has_data():
-            logger.info("etag_store_empty_skipping_filter")
-            # First run: compute and store hashes for all pages
-            # but don't filter (all are "new")
-            total = len(hierarchy)
-            for idx, config in enumerate(hierarchy, 1):
-                application_id = config["application_id"]
-                url = f"https://csf.mycarparts.com/applications/{application_id}"
-                _changed, current_hash = self.fetcher.check_etag(url, None)
-                self.etag_store.set(url, current_hash)
-                logger.info(
-                    "etag_initial_hash",
-                    progress=f"{idx}/{total}",
-                    application_id=application_id,
-                )
-            self.etag_store.save()
-            return hierarchy
+        has_data = self.etag_store.has_data()
 
-        changed: list[dict[str, Any]] = []
-        skipped = 0
-        total = len(hierarchy)
+        if not has_data:
+            logger.info("etag_store_empty_first_run")
 
-        for idx, config in enumerate(hierarchy, 1):
+        # Build batch of (url, previous_hash) pairs
+        urls_and_hashes: list[tuple[str, str | None]] = []
+        for config in hierarchy:
             application_id = config["application_id"]
             url = f"https://csf.mycarparts.com/applications/{application_id}"
-            previous_hash = self.etag_store.get(url)
+            prev = self.etag_store.get(url) if has_data else None
+            urls_and_hashes.append((url, prev))
 
-            is_changed, current_hash = self.fetcher.check_etag(url, previous_hash)
+        # Run concurrent checks
+        results = asyncio.run(self.fetcher.async_check_etags(urls_and_hashes))
 
-            # Always update stored hash
+        # Process results sequentially
+        changed: list[dict[str, Any]] = []
+        skipped = 0
+
+        for config, (is_changed, current_hash) in zip(hierarchy, results, strict=True):
+            application_id = config["application_id"]
+            url = f"https://csf.mycarparts.com/applications/{application_id}"
             self.etag_store.set(url, current_hash)
 
             if is_changed:
                 changed.append(config)
-                logger.info(
-                    "content_hash_changed",
-                    progress=f"{idx}/{total}",
-                    application_id=application_id,
-                )
             else:
                 skipped += 1
-                logger.debug(
-                    "content_hash_unchanged",
-                    progress=f"{idx}/{total}",
-                    application_id=application_id,
-                )
 
         self.etag_store.save()
 
@@ -1027,6 +1011,10 @@ class ScraperOrchestrator:
             changed=len(changed),
             skipped=skipped,
         )
+
+        # First run: return all (all are "new")
+        if not has_data:
+            return hierarchy
 
         return changed
 

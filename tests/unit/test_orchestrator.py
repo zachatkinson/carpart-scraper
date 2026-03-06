@@ -12,7 +12,7 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
@@ -1188,7 +1188,9 @@ class TestScrapeAllPhase2:
     def _make_orchestrator(self, tmp_path: Path) -> ScraperOrchestrator:
         """Create a minimally configured orchestrator for scrape_all tests."""
         orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.fetcher = Mock()
+        mock_fetcher = Mock()
+        mock_fetcher.async_check_etags = AsyncMock(return_value=[])
+        orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
         orchestrator.html_parser = Mock()
         orchestrator.validator = Mock()
@@ -1297,7 +1299,9 @@ class TestScrapeAllPhase3:
     def _make_orchestrator(self, tmp_path: Path) -> ScraperOrchestrator:
         """Create a minimally configured orchestrator for scrape_all tests."""
         orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.fetcher = Mock()
+        mock_fetcher = Mock()
+        mock_fetcher.async_check_etags = AsyncMock(return_value=[])
+        orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
         orchestrator.html_parser = Mock()
         orchestrator.validator = Mock()
@@ -1405,7 +1409,9 @@ class TestScrapeAllResume:
         """Test resume loads checkpoint and skips already-processed applications."""
         # Arrange
         orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.fetcher = Mock()
+        mock_fetcher = Mock()
+        mock_fetcher.async_check_etags = AsyncMock(return_value=[])
+        orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
         orchestrator.html_parser = Mock()
         orchestrator.validator = Mock()
@@ -1490,7 +1496,9 @@ class TestScrapeAllIncremental:
         """Test incremental mode calls load_previous_export."""
         # Arrange
         orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.fetcher = Mock()
+        mock_fetcher = Mock()
+        mock_fetcher.async_check_etags = AsyncMock(return_value=[])
+        orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
         orchestrator.html_parser = Mock()
         orchestrator.validator = Mock()
