@@ -976,18 +976,25 @@ class ScraperOrchestrator:
             logger.info("etag_store_empty_skipping_filter")
             # First run: compute and store hashes for all pages
             # but don't filter (all are "new")
-            for config in hierarchy:
+            total = len(hierarchy)
+            for idx, config in enumerate(hierarchy, 1):
                 application_id = config["application_id"]
                 url = f"https://csf.mycarparts.com/applications/{application_id}"
                 _changed, current_hash = self.fetcher.check_etag(url, None)
                 self.etag_store.set(url, current_hash)
+                logger.info(
+                    "etag_initial_hash",
+                    progress=f"{idx}/{total}",
+                    application_id=application_id,
+                )
             self.etag_store.save()
             return hierarchy
 
         changed: list[dict[str, Any]] = []
         skipped = 0
+        total = len(hierarchy)
 
-        for config in hierarchy:
+        for idx, config in enumerate(hierarchy, 1):
             application_id = config["application_id"]
             url = f"https://csf.mycarparts.com/applications/{application_id}"
             previous_hash = self.etag_store.get(url)
@@ -999,8 +1006,18 @@ class ScraperOrchestrator:
 
             if is_changed:
                 changed.append(config)
+                logger.info(
+                    "content_hash_changed",
+                    progress=f"{idx}/{total}",
+                    application_id=application_id,
+                )
             else:
                 skipped += 1
+                logger.debug(
+                    "content_hash_unchanged",
+                    progress=f"{idx}/{total}",
+                    application_id=application_id,
+                )
 
         self.etag_store.save()
 

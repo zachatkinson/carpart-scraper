@@ -315,7 +315,7 @@ class RespectfulFetcher:
         changed = current_hash != previous_hash
 
         if changed:
-            logger.info("content_hash_changed", url=url)
+            logger.debug("content_hash_changed", url=url)
         else:
             logger.debug("content_hash_unchanged", url=url)
 
