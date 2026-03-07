@@ -5,8 +5,7 @@ This module implements respectful web scraping with:
 - Polite user-agent
 - Exponential backoff on errors
 - Request timeout
-- Persistent browser for efficiency
-- Scroll-to-bottom for lazy-loaded content
+- Persistent browser for efficiency (with resource blocking)
 - Smart retry (skip non-retryable HTTP errors like 404)
 - Lightweight content-hash checks for change detection
 """
@@ -20,7 +19,7 @@ from typing import Final
 
 import httpx
 import structlog
-from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
+from playwright.sync_api import Browser, BrowserContext, Playwright, sync_playwright
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 logger = structlog.get_logger()
@@ -28,7 +27,6 @@ logger = structlog.get_logger()
 # Browser retry constants
 BROWSER_MAX_RETRIES: Final[int] = 3
 BROWSER_BACKOFF_BASE: Final[int] = 2
-SCROLL_WAIT_SECONDS: Final[float] = 1.0
 
 
 def _is_retryable_http_error(exception: BaseException) -> bool:
@@ -122,6 +120,9 @@ class RespectfulFetcher:
     def _ensure_browser(self) -> tuple[Browser, BrowserContext]:
         """Lazily initialize persistent Playwright browser on first use.
 
+        Blocks images, stylesheets, fonts, and other non-HTML resources
+        via route interception since the parser only needs HTML structure.
+
         Returns:
             Tuple of (browser, browser_context) objects
 
@@ -134,22 +135,15 @@ class RespectfulFetcher:
             self._playwright = pw
             self._browser = pw.chromium.launch(headless=True)
             self._browser_context = self._browser.new_context(user_agent=self.USER_AGENT)
+            self._browser_context.route(
+                "**/*.{png,jpg,jpeg,gif,svg,ico,woff,woff2,ttf,eot,css}",
+                lambda route: route.abort(),
+            )
             logger.info("browser_initialized")
 
         assert self._browser is not None  # noqa: S101
         assert self._browser_context is not None  # noqa: S101
         return self._browser, self._browser_context
-
-    @staticmethod
-    def _scroll_to_bottom(page: Page) -> None:
-        """Scroll page to bottom to trigger lazy-loaded content.
-
-        Args:
-            page: Playwright Page object
-        """
-        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        time.sleep(SCROLL_WAIT_SECONDS)
-        page.wait_for_load_state("networkidle")
 
     def _apply_rate_limit(self, *, browser: bool = False) -> None:
         """Apply rate limiting delay between requests.
@@ -398,7 +392,8 @@ class RespectfulFetcher:
 
         Uses a persistent browser instance (created on first call) and creates
         a fresh page per request. Includes retry logic with exponential backoff
-        for transient errors and scroll-to-bottom for lazy-loaded content.
+        for transient errors. Uses ``domcontentloaded`` wait strategy since
+        only the HTML DOM is needed, not images or analytics scripts.
 
         Args:
             url: URL to fetch
@@ -428,12 +423,9 @@ class RespectfulFetcher:
             try:
                 page.goto(
                     url,
-                    wait_until="networkidle",
+                    wait_until="domcontentloaded",
                     timeout=self.TIMEOUT_SECONDS * 1000,
                 )
-
-                # Scroll to bottom to trigger lazy-loaded content
-                self._scroll_to_bottom(page)
 
                 content: str = page.content()
 

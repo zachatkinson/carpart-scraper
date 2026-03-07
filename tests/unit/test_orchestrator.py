@@ -929,15 +929,19 @@ class TestBuildHierarchyFilters:
 class TestScrapeApplicationPage:
     """Test _scrape_application_page method."""
 
-    def test_scrape_application_page_returns_parts(self) -> None:
-        """Test _scrape_application_page fetches, parses, and validates parts."""
+    def test_scrape_application_page_uses_http_fast_path(self) -> None:
+        """Test _scrape_application_page uses plain HTTP when .row.app is present."""
         # Arrange
         orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
         orchestrator.fetcher = Mock()
         orchestrator.html_parser = Mock()
         orchestrator.validator = Mock()
 
-        orchestrator.fetcher.fetch_with_browser.return_value = "<html>parts page</html>"
+        http_html = '<html><div class="row app">parts</div></html>'
+        mock_response = Mock()
+        mock_response.text = http_html
+        orchestrator.fetcher.fetch.return_value = mock_response
+
         mock_soup = Mock()
         orchestrator.html_parser.parse.return_value = mock_soup
 
@@ -954,18 +958,88 @@ class TestScrapeApplicationPage:
         # Act
         parts, parts_data = orchestrator._scrape_application_page(8430, config)  # noqa: SLF001
 
-        # Assert
+        # Assert — used HTTP, not browser
         assert len(parts) == 1
         assert parts[0].sku == "CSF-1001"
         assert parts_data == raw_parts_data
+        orchestrator.fetcher.fetch.assert_called_once_with(
+            "https://csf.mycarparts.com/applications/8430"
+        )
+        orchestrator.fetcher.fetch_with_browser.assert_not_called()
+        orchestrator.html_parser.parse.assert_called_once_with(http_html)
+        orchestrator.validator.validate_batch.assert_called_once_with(raw_parts_data)
+
+    def test_scrape_application_page_falls_back_to_browser(self) -> None:
+        """Test _scrape_application_page falls back to browser when HTTP lacks parts."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = Mock()
+        orchestrator.html_parser = Mock()
+        orchestrator.validator = Mock()
+
+        # HTTP response has no .row.app containers
+        mock_response = Mock()
+        mock_response.text = "<html><body>no parts here</body></html>"
+        orchestrator.fetcher.fetch.return_value = mock_response
+
+        browser_html = '<html><div class="row app">browser parts</div></html>'
+        orchestrator.fetcher.fetch_with_browser.return_value = browser_html
+
+        mock_soup = Mock()
+        orchestrator.html_parser.parse.return_value = mock_soup
+
+        raw_parts_data = [
+            {"sku": "CSF-1001", "name": "Radiator", "vehicle_qualifiers": {}},
+        ]
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = raw_parts_data
+        orchestrator.validator.validate_batch.return_value = [
+            Part(sku="CSF-1001", name="Radiator", category="Radiator")
+        ]
+
+        config = {"make": "Honda", "model": "Accord", "year": "2020"}
+
+        # Act
+        parts, _parts_data = orchestrator._scrape_application_page(8430, config)  # noqa: SLF001
+
+        # Assert — fell back to browser
+        assert len(parts) == 1
         orchestrator.fetcher.fetch_with_browser.assert_called_once_with(
             "https://csf.mycarparts.com/applications/8430"
         )
-        orchestrator.html_parser.parse.assert_called_once_with("<html>parts page</html>")
-        orchestrator.html_parser.extract_parts_from_application_page.assert_called_once_with(
-            mock_soup
-        )
-        orchestrator.validator.validate_batch.assert_called_once_with(raw_parts_data)
+        orchestrator.html_parser.parse.assert_called_once_with(browser_html)
+
+    def test_scrape_application_page_falls_back_on_http_error(self) -> None:
+        """Test _scrape_application_page falls back to browser when HTTP fetch fails."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = Mock()
+        orchestrator.html_parser = Mock()
+        orchestrator.validator = Mock()
+
+        orchestrator.fetcher.fetch.side_effect = httpx.ConnectError("Connection error")
+
+        browser_html = '<html><div class="row app">browser parts</div></html>'
+        orchestrator.fetcher.fetch_with_browser.return_value = browser_html
+
+        mock_soup = Mock()
+        orchestrator.html_parser.parse.return_value = mock_soup
+
+        raw_parts_data = [
+            {"sku": "CSF-1001", "name": "Radiator", "vehicle_qualifiers": {}},
+        ]
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = raw_parts_data
+        orchestrator.validator.validate_batch.return_value = [
+            Part(sku="CSF-1001", name="Radiator", category="Radiator")
+        ]
+
+        config = {"make": "Honda", "model": "Accord", "year": "2020"}
+
+        # Act
+        parts, _parts_data = orchestrator._scrape_application_page(8430, config)  # noqa: SLF001
+
+        # Assert — fell back to browser
+        assert len(parts) == 1
+        orchestrator.fetcher.fetch_with_browser.assert_called_once()
 
 
 class TestFetchDetailPage:

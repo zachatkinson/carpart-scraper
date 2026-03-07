@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, Self
 
+import httpx
 import structlog
 from bs4 import BeautifulSoup
 
@@ -30,8 +31,6 @@ from src.scraper.parser import CSFParser
 from src.scraper.validator import DataValidator
 
 if TYPE_CHECKING:
-    import httpx
-
     from src.scraper.image_syncer import ImageSyncer
 
 logger = structlog.get_logger()
@@ -620,6 +619,10 @@ class ScraperOrchestrator:
     ) -> tuple[list[Part], list[dict[str, Any]]]:
         """Scrape parts from a vehicle application page.
 
+        Tries plain HTTP first (fast path, ~0.5s) since application pages
+        are server-rendered HTML. Falls back to browser fetch only if the
+        plain HTTP response lacks ``.row.app`` part containers.
+
         Args:
             application_id: Application ID for the vehicle
             vehicle_config: Vehicle configuration dict with make, model, year
@@ -641,8 +644,13 @@ class ScraperOrchestrator:
             url=url,
         )
 
-        # Fetch page with JavaScript rendering
-        html = self.fetcher.fetch_with_browser(url)
+        # Fast path: try plain HTTP (server-rendered HTML, no JS needed)
+        html = self._try_http_fetch(url)
+
+        if html is None:
+            # Fallback: use browser for JS-rendered content
+            logger.info("browser_fallback", application_id=application_id)
+            html = self.fetcher.fetch_with_browser(url)
 
         # Parse parts from application page (returns list of dicts with engine_qualifier)
         soup = self.html_parser.parse(html)
@@ -658,6 +666,33 @@ class ScraperOrchestrator:
         )
 
         return parts, parts_data
+
+    def _try_http_fetch(self, url: str) -> str | None:
+        """Attempt plain HTTP fetch and verify it contains part data.
+
+        Returns the HTML if it contains ``.row.app`` containers (indicating
+        the page content is server-rendered). Returns None if the fetch fails
+        or the response lacks part containers, signaling a browser fallback.
+
+        Args:
+            url: Application page URL to fetch
+
+        Returns:
+            HTML string if usable, None if browser fallback is needed
+        """
+        try:
+            response = self.fetcher.fetch(url)
+            html: str = response.text
+        except (httpx.HTTPError, OSError):
+            logger.debug("http_fast_path_failed", url=url)
+            return None
+
+        if ".row.app" not in html and "row app" not in html:
+            logger.debug("http_fast_path_no_parts", url=url)
+            return None
+
+        logger.debug("http_fast_path_success", url=url)
+        return html
 
     def _deduplicate_and_track(
         self,

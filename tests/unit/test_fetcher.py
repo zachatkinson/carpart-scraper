@@ -454,12 +454,11 @@ class TestRespectfulFetcherBrowser:
         mock_page = Mock(spec=Page)
         mock_page.content.return_value = "<html><body>Browser content</body></html>"
         mock_page.goto = Mock()
-        mock_page.evaluate = Mock()
-        mock_page.wait_for_load_state = Mock()
         mock_page.close = Mock()
 
         mock_context = Mock()
         mock_context.new_page.return_value = mock_page
+        mock_context.route = Mock()
 
         mock_browser = Mock(spec=Browser)
         mock_browser.new_context.return_value = mock_context
@@ -482,7 +481,7 @@ class TestRespectfulFetcherBrowser:
             user_agent="CSF-Parts-Scraper/1.0 (contact@example.com)"
         )
         mock_page.goto.assert_called_once_with(
-            "https://example.com", wait_until="networkidle", timeout=30000
+            "https://example.com", wait_until="domcontentloaded", timeout=30000
         )
         mock_page.content.assert_called_once()
         mock_page.close.assert_called_once()
@@ -845,12 +844,11 @@ class TestPersistentBrowser:
         mock_page = Mock(spec=Page)
         mock_page.content.return_value = "<html>test</html>"
         mock_page.goto = Mock()
-        mock_page.evaluate = Mock()
-        mock_page.wait_for_load_state = Mock()
         mock_page.close = Mock()
 
         mock_context = Mock()
         mock_context.new_page.return_value = mock_page
+        mock_context.route = Mock()
 
         mock_browser = Mock(spec=Browser)
         mock_browser.new_context.return_value = mock_context
@@ -885,12 +883,11 @@ class TestPersistentBrowser:
         mock_page = Mock(spec=Page)
         mock_page.content.return_value = "<html>test</html>"
         mock_page.goto = Mock()
-        mock_page.evaluate = Mock()
-        mock_page.wait_for_load_state = Mock()
         mock_page.close = Mock()
 
         mock_context = Mock()
         mock_context.new_page.return_value = mock_page
+        mock_context.route = Mock()
 
         mock_browser = Mock(spec=Browser)
         mock_browser.new_context.return_value = mock_context
@@ -926,12 +923,11 @@ class TestPersistentBrowser:
         mock_page_success = Mock(spec=Page)
         mock_page_success.content.return_value = "<html>success</html>"
         mock_page_success.goto = Mock()
-        mock_page_success.evaluate = Mock()
-        mock_page_success.wait_for_load_state = Mock()
         mock_page_success.close = Mock()
 
         mock_context = Mock()
         mock_context.new_page.side_effect = [mock_page_fail, mock_page_success]
+        mock_context.route = Mock()
 
         mock_browser = Mock(spec=Browser)
         mock_browser.new_context.return_value = mock_context
@@ -958,20 +954,13 @@ class TestPersistentBrowser:
         # Cleanup
         fetcher.close()
 
-    def test_fetch_with_browser_scrolls_to_bottom(self, mocker: MockerFixture) -> None:
-        """Test fetch_with_browser calls scroll-to-bottom."""
+    def test_ensure_browser_blocks_resources(self, mocker: MockerFixture) -> None:
+        """Test _ensure_browser blocks images, CSS, and fonts via route interception."""
         # Arrange
         mocker.patch("src.scraper.fetcher.time.sleep")
 
-        mock_page = Mock(spec=Page)
-        mock_page.content.return_value = "<html>test</html>"
-        mock_page.goto = Mock()
-        mock_page.evaluate = Mock()
-        mock_page.wait_for_load_state = Mock()
-        mock_page.close = Mock()
-
         mock_context = Mock()
-        mock_context.new_page.return_value = mock_page
+        mock_context.route = Mock()
 
         mock_browser = Mock(spec=Browser)
         mock_browser.new_context.return_value = mock_context
@@ -985,12 +974,14 @@ class TestPersistentBrowser:
         fetcher = RespectfulFetcher()
 
         # Act
-        fetcher.fetch_with_browser("https://example.com")
+        fetcher._ensure_browser()  # noqa: SLF001
 
-        # Assert - scroll was called
-        mock_page.evaluate.assert_called_once_with("window.scrollTo(0, document.body.scrollHeight)")
-        # networkidle waited after scroll
-        mock_page.wait_for_load_state.assert_called_once_with("networkidle")
+        # Assert — route was set up to block non-HTML resources
+        mock_context.route.assert_called_once()
+        route_pattern = mock_context.route.call_args[0][0]
+        assert "png" in route_pattern
+        assert "css" in route_pattern
+        assert "woff" in route_pattern
 
         # Cleanup
         fetcher.close()
