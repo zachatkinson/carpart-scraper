@@ -693,47 +693,12 @@ class ScraperOrchestrator:
 
         return DeduplicationResult(new_skus=new_skus, changed_skus=changed_skus)
 
-    def _fetch_detail_page(self, sku: str) -> dict[str, Any]:
-        """Fetch and parse detail page for a part.
-
-        Args:
-            sku: Part SKU
-
-        Returns:
-            Dict with detailed part information from detail page
-
-        Example:
-            >>> detail = orchestrator._fetch_detail_page("7016")
-            >>> "specifications" in detail
-            True
-        """
-        # Extract numeric part from SKU (CSF-3562 -> 3562)
-        sku_number = sku.replace("CSF-", "").replace("csf-", "")
-        url = f"https://csf.autocaredata.com/items/{sku_number}"
-        logger.info("fetching_detail_page", sku=sku, url=url)
-
-        # Fetch page with JavaScript rendering
-        html = self.fetcher.fetch_with_browser(url)
-
-        # Parse detail page
-        soup = self.html_parser.parse(html)
-        detail_data = self.html_parser.extract_detail_page_data(soup, sku)
-
-        logger.info(
-            "detail_page_fetched",
-            sku=sku,
-            has_description=bool(detail_data.get("full_description")),
-            spec_count=len(detail_data.get("specifications", {})),
-        )
-
-        return detail_data
-
     def _enrich_part_with_details(self, sku: str, detail_data: dict[str, Any]) -> None:
         """Enrich a part with data from its detail page.
 
         Args:
             sku: Part SKU
-            detail_data: Detail page data from _fetch_detail_page
+            detail_data: Detail page data extracted from detail page HTML
 
         Note:
             Creates a new Part object with enriched data since Parts are immutable.
@@ -1359,9 +1324,10 @@ class ScraperOrchestrator:
         # Save final checkpoint
         self._save_checkpoint(make_filter, year_filter)
 
-        # Phase 3: Fetch detail pages for parts
+        # Phase 3: Batch-fetch detail pages concurrently, then enrich sequentially
         details_fetched_count = 0
         details_failed = 0
+        detail_browser_fallback_count = 0
         if fetch_details:
             # Determine which SKUs to fetch details for
             if fetch_details_new_only:
@@ -1380,15 +1346,34 @@ class ScraperOrchestrator:
                 )
 
             if skus_to_fetch:
-                for idx, sku in enumerate(skus_to_fetch, 1):
-                    logger.info(
-                        "fetching_details",
-                        progress=f"{idx}/{len(skus_to_fetch)}",
-                        sku=sku,
-                    )
+                # Step A: Build URLs and async batch fetch
+                sku_list = sorted(skus_to_fetch)
+                detail_urls = [
+                    "https://csf.autocaredata.com/items/"
+                    + sku.replace("CSF-", "").replace("csf-", "")
+                    for sku in sku_list
+                ]
+                detail_html_results = asyncio.run(
+                    self.fetcher.async_fetch_detail_pages(detail_urls)
+                )
 
+                # Step B: Sequential enrichment
+                for sku, detail_url, fetched_html in zip(
+                    sku_list, detail_urls, detail_html_results, strict=True
+                ):
                     try:
-                        detail_data = self._fetch_detail_page(sku)
+                        # Browser fallback for pages where HTTP returned no content
+                        detail_html: str
+                        if fetched_html is None:
+                            logger.info("detail_browser_fallback", sku=sku)
+                            detail_html = self.fetcher.fetch_with_browser(detail_url)
+                            detail_browser_fallback_count += 1
+                        else:
+                            detail_html = fetched_html
+
+                        # Parse and enrich
+                        soup = self.html_parser.parse(detail_html)
+                        detail_data = self.html_parser.extract_detail_page_data(soup, sku)
                         self._enrich_part_with_details(sku, detail_data)
                         details_fetched_count += 1
 
@@ -1416,6 +1401,7 @@ class ScraperOrchestrator:
                     "workflow_phase_3_complete",
                     parts_enriched=details_fetched_count,
                     details_failed=details_failed,
+                    detail_browser_fallback_count=detail_browser_fallback_count,
                     new_only=fetch_details_new_only,
                 )
 

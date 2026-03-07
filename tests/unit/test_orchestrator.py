@@ -926,40 +926,6 @@ class TestBuildHierarchyFilters:
         assert hierarchy[0]["model"] == "Accord"
 
 
-class TestFetchDetailPage:
-    """Test _fetch_detail_page method."""
-
-    def test_fetch_detail_page_returns_detail_data(self) -> None:
-        """Test _fetch_detail_page fetches and parses detail page."""
-        # Arrange
-        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.fetcher = Mock()
-        orchestrator.html_parser = Mock()
-
-        orchestrator.fetcher.fetch_with_browser.return_value = "<html>detail</html>"
-        mock_soup = Mock()
-        orchestrator.html_parser.parse.return_value = mock_soup
-
-        detail_data = {
-            "full_description": "High performance radiator",
-            "specifications": {"Material": "Aluminum"},
-        }
-        orchestrator.html_parser.extract_detail_page_data.return_value = detail_data
-
-        # Act
-        result = orchestrator._fetch_detail_page("CSF-3562")  # noqa: SLF001
-
-        # Assert
-        assert result == detail_data
-        orchestrator.fetcher.fetch_with_browser.assert_called_once_with(
-            "https://csf.autocaredata.com/items/3562"
-        )
-        orchestrator.html_parser.parse.assert_called_once_with("<html>detail</html>")
-        orchestrator.html_parser.extract_detail_page_data.assert_called_once_with(
-            mock_soup, "CSF-3562"
-        )
-
-
 class TestEnrichPartWithDetails:
     """Test _enrich_part_with_details method."""
 
@@ -1310,6 +1276,7 @@ class TestScrapeAllPhase3:
         mock_fetcher = Mock()
         mock_fetcher.async_check_etags = AsyncMock(return_value=[])
         mock_fetcher.async_scrape_application_pages = AsyncMock(return_value=[])
+        mock_fetcher.async_fetch_detail_pages = AsyncMock(return_value=[])
         orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
         orchestrator.html_parser = Mock()
@@ -1331,7 +1298,7 @@ class TestScrapeAllPhase3:
         return orchestrator
 
     def test_fetch_details_new_only(self, mocker: MockerFixture, tmp_path: Path) -> None:
-        """Test Phase 3 fetches details only for new/changed SKUs when new_only=True."""
+        """Test Phase 3 batch-fetches details only for new/changed SKUs."""
         # Arrange
         orchestrator = self._make_orchestrator(tmp_path)
 
@@ -1348,7 +1315,7 @@ class TestScrapeAllPhase3:
         mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
         mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
 
-        # Async batch fetch returns HTML
+        # Phase 2: async batch fetch returns HTML for application page
         app_html = '<html><div class="row app">parts</div></html>'
         orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=[app_html])
 
@@ -1357,8 +1324,12 @@ class TestScrapeAllPhase3:
         orchestrator.html_parser.extract_parts_from_application_page.return_value = parts_data
         orchestrator.validator.validate_batch.return_value = [part]
 
+        # Phase 3: async batch fetch returns HTML for detail page
+        detail_html = '<html><td class="selling-part">1001</td></html>'
+        orchestrator.fetcher.async_fetch_detail_pages = AsyncMock(return_value=[detail_html])
+
         detail_data = {"full_description": "Great radiator", "specifications": {}}
-        mocker.patch.object(orchestrator, "_fetch_detail_page", return_value=detail_data)
+        orchestrator.html_parser.extract_detail_page_data.return_value = detail_data
         mocker.patch.object(orchestrator, "_enrich_part_with_details")
 
         # Act
@@ -1367,13 +1338,15 @@ class TestScrapeAllPhase3:
         # Assert
         assert result["details_fetched_count"] == 1
         assert result["details_failed"] == 0
-        orchestrator._fetch_detail_page.assert_called_once_with("CSF-1001")  # noqa: SLF001
+        orchestrator.fetcher.async_fetch_detail_pages.assert_called_once_with(
+            ["https://csf.autocaredata.com/items/1001"]
+        )
         orchestrator._enrich_part_with_details.assert_called_once_with(  # noqa: SLF001
             "CSF-1001", detail_data
         )
 
     def test_fetch_details_all(self, mocker: MockerFixture, tmp_path: Path) -> None:
-        """Test Phase 3 fetches details for all SKUs when new_only=False."""
+        """Test Phase 3 batch-fetches details for all SKUs when new_only=False."""
         # Arrange
         orchestrator = self._make_orchestrator(tmp_path)
 
@@ -1394,7 +1367,7 @@ class TestScrapeAllPhase3:
         mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
         mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
 
-        # Async batch fetch returns HTML
+        # Phase 2
         app_html = '<html><div class="row app">parts</div></html>'
         orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=[app_html])
 
@@ -1403,8 +1376,14 @@ class TestScrapeAllPhase3:
         orchestrator.html_parser.extract_parts_from_application_page.return_value = parts_data
         orchestrator.validator.validate_batch.return_value = [new_part]
 
+        # Phase 3: both SKUs get detail HTML
+        detail_html = '<html><td class="selling-part">1001</td></html>'
+        orchestrator.fetcher.async_fetch_detail_pages = AsyncMock(
+            return_value=[detail_html, detail_html]
+        )
+
         detail_data = {"full_description": "Great", "specifications": {}}
-        mocker.patch.object(orchestrator, "_fetch_detail_page", return_value=detail_data)
+        orchestrator.html_parser.extract_detail_page_data.return_value = detail_data
         mocker.patch.object(orchestrator, "_enrich_part_with_details")
 
         # Act
@@ -1412,7 +1391,7 @@ class TestScrapeAllPhase3:
 
         # Assert - Both CSF-5000 (existing) and CSF-1001 (new) should have details fetched
         assert result["details_fetched_count"] == 2
-        assert orchestrator._fetch_detail_page.call_count == 2  # noqa: SLF001
+        assert orchestrator.fetcher.async_fetch_detail_pages.call_count == 1
 
 
 class TestScrapeAllResume:

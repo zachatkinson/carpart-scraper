@@ -460,6 +460,79 @@ class RespectfulFetcher:
             tasks = [_fetch_one(url) for url in urls]
             return list(await asyncio.gather(*tasks))
 
+    async def async_fetch_detail_pages(
+        self,
+        urls: list[str],
+        concurrency: int = 10,
+        progress_every: int = 100,
+    ) -> list[str | None]:
+        """Fetch multiple detail pages concurrently using async HTTP.
+
+        Runs up to ``concurrency`` GET requests in parallel, each with a
+        random 0.3-0.8s delay to stay respectful. Returns the HTML string
+        for pages that contain ``selling-part`` content (server-rendered),
+        or None for pages that need browser fallback.
+
+        Args:
+            urls: List of detail page URLs to fetch
+            concurrency: Maximum number of simultaneous requests
+            progress_every: Log progress every N completions
+
+        Returns:
+            List of HTML strings (success) or None (needs browser fallback),
+            one per input URL, in the same order
+        """
+        semaphore = asyncio.Semaphore(concurrency)
+        completed_count = 0
+        total = len(urls)
+        count_lock = asyncio.Lock()
+
+        async with httpx.AsyncClient(
+            headers={"User-Agent": self.USER_AGENT},
+            timeout=self.TIMEOUT_SECONDS,
+            follow_redirects=True,
+        ) as async_client:
+
+            async def _fetch_one(url: str) -> str | None:
+                nonlocal completed_count
+
+                async with semaphore:
+                    delay = random.uniform(  # noqa: S311
+                        self.MIN_DELAY_SECONDS, self.MAX_DELAY_SECONDS
+                    )
+                    await asyncio.sleep(delay)
+
+                    try:
+                        response = await async_client.get(
+                            url,
+                            headers={"Accept": "text/html,application/xhtml+xml"},
+                        )
+                        response.raise_for_status()
+                    except httpx.HTTPError:
+                        logger.warning("async_detail_http_failed", url=url)
+                        html = None
+                    else:
+                        text: str = response.text
+                        if "selling-part" in text:
+                            html = text
+                        else:
+                            logger.debug("async_detail_no_content", url=url)
+                            html = None
+
+                async with count_lock:
+                    completed_count += 1
+                    if completed_count % progress_every == 0 or completed_count == total:
+                        logger.info(
+                            "async_detail_progress",
+                            completed=completed_count,
+                            total=total,
+                        )
+
+                return html
+
+            tasks = [_fetch_one(url) for url in urls]
+            return list(await asyncio.gather(*tasks))
+
     def fetch_with_browser(self, url: str) -> str:
         """Fetch URL using persistent headless browser for JavaScript content.
 
