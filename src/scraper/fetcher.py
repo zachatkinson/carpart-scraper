@@ -430,7 +430,10 @@ class RespectfulFetcher:
                     await asyncio.sleep(delay)
 
                     try:
-                        response = await async_client.get(url)
+                        response = await async_client.get(
+                            url,
+                            headers={"Accept": "text/html,application/xhtml+xml"},
+                        )
                         response.raise_for_status()
                     except httpx.HTTPError:
                         logger.warning("async_scrape_http_failed", url=url)
