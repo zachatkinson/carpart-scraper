@@ -15,7 +15,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, Self
 
-import httpx
 import structlog
 from bs4 import BeautifulSoup
 
@@ -31,6 +30,8 @@ from src.scraper.parser import CSFParser
 from src.scraper.validator import DataValidator
 
 if TYPE_CHECKING:
+    import httpx
+
     from src.scraper.image_syncer import ImageSyncer
 
 logger = structlog.get_logger()
@@ -613,86 +614,6 @@ class ScraperOrchestrator:
             cache_misses=cache_misses,
         )
         return hierarchy
-
-    def _scrape_application_page(
-        self, application_id: int, vehicle_config: dict[str, Any]
-    ) -> tuple[list[Part], list[dict[str, Any]]]:
-        """Scrape parts from a vehicle application page.
-
-        Tries plain HTTP first (fast path, ~0.5s) since application pages
-        are server-rendered HTML. Falls back to browser fetch only if the
-        plain HTTP response lacks ``.row.app`` part containers.
-
-        Args:
-            application_id: Application ID for the vehicle
-            vehicle_config: Vehicle configuration dict with make, model, year
-
-        Returns:
-            Tuple of (Part objects, raw part data dicts with engine_qualifier)
-
-        Example:
-            >>> config = {"make": "Honda", "model": "Accord", "year": "2020"}
-            >>> parts, parts_data = orchestrator._scrape_application_page(8430, config)
-            >>> len(parts) > 0
-            True
-        """
-        url = f"https://csf.mycarparts.com/applications/{application_id}"
-        logger.info(
-            "scraping_application_page",
-            application_id=application_id,
-            vehicle=f"{vehicle_config['year']} {vehicle_config['make']} {vehicle_config['model']}",
-            url=url,
-        )
-
-        # Fast path: try plain HTTP (server-rendered HTML, no JS needed)
-        html = self._try_http_fetch(url)
-
-        if html is None:
-            # Fallback: use browser for JS-rendered content
-            logger.info("browser_fallback", application_id=application_id)
-            html = self.fetcher.fetch_with_browser(url)
-
-        # Parse parts from application page (returns list of dicts with engine_qualifier)
-        soup = self.html_parser.parse(html)
-        parts_data = self.html_parser.extract_parts_from_application_page(soup)
-
-        # Validate and convert to Part objects
-        parts: list[Part] = self.validator.validate_batch(parts_data)
-
-        logger.info(
-            "application_page_scraped",
-            application_id=application_id,
-            parts_found=len(parts),
-        )
-
-        return parts, parts_data
-
-    def _try_http_fetch(self, url: str) -> str | None:
-        """Attempt plain HTTP fetch and verify it contains part data.
-
-        Returns the HTML if it contains ``.row.app`` containers (indicating
-        the page content is server-rendered). Returns None if the fetch fails
-        or the response lacks part containers, signaling a browser fallback.
-
-        Args:
-            url: Application page URL to fetch
-
-        Returns:
-            HTML string if usable, None if browser fallback is needed
-        """
-        try:
-            response = self.fetcher.fetch(url)
-            html: str = response.text
-        except (httpx.HTTPError, OSError):
-            logger.debug("http_fast_path_failed", url=url)
-            return None
-
-        if ".row.app" not in html and "row app" not in html:
-            logger.debug("http_fast_path_no_parts", url=url)
-            return None
-
-        logger.debug("http_fast_path_success", url=url)
-        return html
 
     def _deduplicate_and_track(
         self,
@@ -1314,14 +1235,23 @@ class ScraperOrchestrator:
 
         logger.info("workflow_phase_1_complete", applications_to_process=len(hierarchy))
 
-        # Phase 2: Scrape application pages and deduplicate
+        # Phase 2: Batch-fetch application pages concurrently, then process sequentially
         new_skus_found: set[str] = set()
         changed_skus_found: set[str] = set()
         applications_processed = 0
         applications_failed = 0
+        browser_fallback_count = 0
 
-        for idx, config in enumerate(hierarchy, 1):
+        # Step A: Async batch fetch all application pages (HTTP fast path)
+        urls = [f"https://csf.mycarparts.com/applications/{c['application_id']}" for c in hierarchy]
+        html_results: list[str | None] = []
+        if urls:
+            html_results = asyncio.run(self.fetcher.async_scrape_application_pages(urls))
+
+        # Step B: Sequential processing (dedup, qualifier grouping, checkpoints)
+        for idx, (config, fetched_html) in enumerate(zip(hierarchy, html_results, strict=True), 1):
             application_id = config["application_id"]
+            url = f"https://csf.mycarparts.com/applications/{application_id}"
 
             logger.info(
                 "processing_application",
@@ -1331,8 +1261,19 @@ class ScraperOrchestrator:
             )
 
             try:
-                # Scrape application page (returns parts and raw data with vehicle_qualifiers)
-                parts, parts_data = self._scrape_application_page(application_id, config)
+                # Browser fallback for pages where HTTP fast path returned no content
+                page_html: str
+                if fetched_html is None:
+                    logger.info("browser_fallback", application_id=application_id)
+                    page_html = self.fetcher.fetch_with_browser(url)
+                    browser_fallback_count += 1
+                else:
+                    page_html = fetched_html
+
+                # Parse parts from application page
+                soup = self.html_parser.parse(page_html)
+                parts_data = self.html_parser.extract_parts_from_application_page(soup)
+                parts: list[Part] = self.validator.validate_batch(parts_data)
                 self.parts_scraped += len(parts)
 
                 # Group parts by vehicle qualifiers (engine + aspiration + qualifiers)
@@ -1399,6 +1340,7 @@ class ScraperOrchestrator:
             "workflow_phase_2_complete",
             applications_processed=applications_processed,
             applications_failed=applications_failed,
+            browser_fallback_count=browser_fallback_count,
             unique_parts=len(self.unique_parts),
             new_skus=len(new_skus_found),
             changed_skus=len(changed_skus_found),
@@ -1494,6 +1436,7 @@ class ScraperOrchestrator:
             "details_new_only": fetch_details_new_only,
             "resumed": resume,
             "applications_failed": applications_failed,
+            "browser_fallback_count": browser_fallback_count,
             "details_failed": details_failed,
             "failure_summary": self.failure_tracker.get_summary(),
         }

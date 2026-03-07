@@ -926,122 +926,6 @@ class TestBuildHierarchyFilters:
         assert hierarchy[0]["model"] == "Accord"
 
 
-class TestScrapeApplicationPage:
-    """Test _scrape_application_page method."""
-
-    def test_scrape_application_page_uses_http_fast_path(self) -> None:
-        """Test _scrape_application_page uses plain HTTP when .row.app is present."""
-        # Arrange
-        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.fetcher = Mock()
-        orchestrator.html_parser = Mock()
-        orchestrator.validator = Mock()
-
-        http_html = '<html><div class="row app">parts</div></html>'
-        mock_response = Mock()
-        mock_response.text = http_html
-        orchestrator.fetcher.fetch.return_value = mock_response
-
-        mock_soup = Mock()
-        orchestrator.html_parser.parse.return_value = mock_soup
-
-        raw_parts_data = [
-            {"sku": "CSF-1001", "name": "Radiator", "vehicle_qualifiers": {}},
-        ]
-        orchestrator.html_parser.extract_parts_from_application_page.return_value = raw_parts_data
-
-        validated_part = Part(sku="CSF-1001", name="Radiator", category="Radiator")
-        orchestrator.validator.validate_batch.return_value = [validated_part]
-
-        config = {"make": "Honda", "model": "Accord", "year": "2020"}
-
-        # Act
-        parts, parts_data = orchestrator._scrape_application_page(8430, config)  # noqa: SLF001
-
-        # Assert — used HTTP, not browser
-        assert len(parts) == 1
-        assert parts[0].sku == "CSF-1001"
-        assert parts_data == raw_parts_data
-        orchestrator.fetcher.fetch.assert_called_once_with(
-            "https://csf.mycarparts.com/applications/8430"
-        )
-        orchestrator.fetcher.fetch_with_browser.assert_not_called()
-        orchestrator.html_parser.parse.assert_called_once_with(http_html)
-        orchestrator.validator.validate_batch.assert_called_once_with(raw_parts_data)
-
-    def test_scrape_application_page_falls_back_to_browser(self) -> None:
-        """Test _scrape_application_page falls back to browser when HTTP lacks parts."""
-        # Arrange
-        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.fetcher = Mock()
-        orchestrator.html_parser = Mock()
-        orchestrator.validator = Mock()
-
-        # HTTP response has no .row.app containers
-        mock_response = Mock()
-        mock_response.text = "<html><body>no parts here</body></html>"
-        orchestrator.fetcher.fetch.return_value = mock_response
-
-        browser_html = '<html><div class="row app">browser parts</div></html>'
-        orchestrator.fetcher.fetch_with_browser.return_value = browser_html
-
-        mock_soup = Mock()
-        orchestrator.html_parser.parse.return_value = mock_soup
-
-        raw_parts_data = [
-            {"sku": "CSF-1001", "name": "Radiator", "vehicle_qualifiers": {}},
-        ]
-        orchestrator.html_parser.extract_parts_from_application_page.return_value = raw_parts_data
-        orchestrator.validator.validate_batch.return_value = [
-            Part(sku="CSF-1001", name="Radiator", category="Radiator")
-        ]
-
-        config = {"make": "Honda", "model": "Accord", "year": "2020"}
-
-        # Act
-        parts, _parts_data = orchestrator._scrape_application_page(8430, config)  # noqa: SLF001
-
-        # Assert — fell back to browser
-        assert len(parts) == 1
-        orchestrator.fetcher.fetch_with_browser.assert_called_once_with(
-            "https://csf.mycarparts.com/applications/8430"
-        )
-        orchestrator.html_parser.parse.assert_called_once_with(browser_html)
-
-    def test_scrape_application_page_falls_back_on_http_error(self) -> None:
-        """Test _scrape_application_page falls back to browser when HTTP fetch fails."""
-        # Arrange
-        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
-        orchestrator.fetcher = Mock()
-        orchestrator.html_parser = Mock()
-        orchestrator.validator = Mock()
-
-        orchestrator.fetcher.fetch.side_effect = httpx.ConnectError("Connection error")
-
-        browser_html = '<html><div class="row app">browser parts</div></html>'
-        orchestrator.fetcher.fetch_with_browser.return_value = browser_html
-
-        mock_soup = Mock()
-        orchestrator.html_parser.parse.return_value = mock_soup
-
-        raw_parts_data = [
-            {"sku": "CSF-1001", "name": "Radiator", "vehicle_qualifiers": {}},
-        ]
-        orchestrator.html_parser.extract_parts_from_application_page.return_value = raw_parts_data
-        orchestrator.validator.validate_batch.return_value = [
-            Part(sku="CSF-1001", name="Radiator", category="Radiator")
-        ]
-
-        config = {"make": "Honda", "model": "Accord", "year": "2020"}
-
-        # Act
-        parts, _parts_data = orchestrator._scrape_application_page(8430, config)  # noqa: SLF001
-
-        # Assert — fell back to browser
-        assert len(parts) == 1
-        orchestrator.fetcher.fetch_with_browser.assert_called_once()
-
-
 class TestFetchDetailPage:
     """Test _fetch_detail_page method."""
 
@@ -1264,6 +1148,7 @@ class TestScrapeAllPhase2:
         orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
         mock_fetcher = Mock()
         mock_fetcher.async_check_etags = AsyncMock(return_value=[])
+        mock_fetcher.async_scrape_application_pages = AsyncMock(return_value=[])
         orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
         orchestrator.html_parser = Mock()
@@ -1285,7 +1170,7 @@ class TestScrapeAllPhase2:
         return orchestrator
 
     def test_successful_scrape_loop(self, mocker: MockerFixture, tmp_path: Path) -> None:
-        """Test Phase 2 scrapes applications and deduplicates parts."""
+        """Test Phase 2 batch-fetches pages and deduplicates parts."""
         # Arrange
         orchestrator = self._make_orchestrator(tmp_path)
 
@@ -1302,11 +1187,15 @@ class TestScrapeAllPhase2:
         mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
         mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
 
+        # Async batch fetch returns HTML for the one page
+        app_html = '<html><div class="row app">parts</div></html>'
+        orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=[app_html])
+
+        # Parse chain
         part = Part(sku="CSF-1001", name="Radiator", category="Radiator")
         parts_data = [{"sku": "CSF-1001", "name": "Radiator", "vehicle_qualifiers": {}}]
-        mocker.patch.object(
-            orchestrator, "_scrape_application_page", return_value=([part], parts_data)
-        )
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = parts_data
+        orchestrator.validator.validate_batch.return_value = [part]
 
         # Act
         result = orchestrator.scrape_all(fetch_details=False)
@@ -1317,6 +1206,49 @@ class TestScrapeAllPhase2:
         assert result["unique_parts"] == 1
         assert "CSF-1001" in orchestrator.unique_parts
         assert 8000 in orchestrator.processed_application_ids
+        orchestrator.fetcher.async_scrape_application_pages.assert_called_once_with(
+            ["https://csf.mycarparts.com/applications/8000"]
+        )
+        orchestrator.fetcher.fetch_with_browser.assert_not_called()
+
+    def test_browser_fallback_on_none_result(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test Phase 2 falls back to browser for pages where async fetch returned None."""
+        # Arrange
+        orchestrator = self._make_orchestrator(tmp_path)
+
+        hierarchy = [
+            {
+                "make_id": 3,
+                "make": "Honda",
+                "year_id": 100,
+                "year": "2024",
+                "application_id": 8000,
+                "model": "Civic",
+            },
+        ]
+        mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
+        mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
+
+        # Async fetch returns None (needs browser fallback)
+        orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=[None])
+        browser_html = '<html><div class="row app">browser parts</div></html>'
+        orchestrator.fetcher.fetch_with_browser.return_value = browser_html
+
+        part = Part(sku="CSF-1001", name="Radiator", category="Radiator")
+        parts_data = [{"sku": "CSF-1001", "name": "Radiator", "vehicle_qualifiers": {}}]
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = parts_data
+        orchestrator.validator.validate_batch.return_value = [part]
+
+        # Act
+        result = orchestrator.scrape_all(fetch_details=False)
+
+        # Assert
+        assert result["applications_processed"] == 1
+        assert result["browser_fallback_count"] == 1
+        orchestrator.fetcher.fetch_with_browser.assert_called_once_with(
+            "https://csf.mycarparts.com/applications/8000"
+        )
+        orchestrator.html_parser.parse.assert_called_once_with(browser_html)
 
     def test_failed_application_continues(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Test Phase 2 records failure and continues to next application."""
@@ -1344,18 +1276,20 @@ class TestScrapeAllPhase2:
         mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
         mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
 
+        # First page needs browser fallback (None), second has HTML
+        app_html = '<html><div class="row app">parts</div></html>'
+        orchestrator.fetcher.async_scrape_application_pages = AsyncMock(
+            return_value=[None, app_html]
+        )
+
+        # Browser fallback fails for first application
+        orchestrator.fetcher.fetch_with_browser.side_effect = RuntimeError("Network timeout")
+
+        # Parse chain succeeds for second application
         part = Part(sku="CSF-2001", name="Condenser", category="Condenser")
         parts_data = [{"sku": "CSF-2001", "name": "Condenser", "vehicle_qualifiers": {}}]
-
-        # First application fails, second succeeds
-        mocker.patch.object(
-            orchestrator,
-            "_scrape_application_page",
-            side_effect=[
-                RuntimeError("Network timeout"),
-                ([part], parts_data),
-            ],
-        )
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = parts_data
+        orchestrator.validator.validate_batch.return_value = [part]
 
         # Act
         result = orchestrator.scrape_all(fetch_details=False)
@@ -1375,6 +1309,7 @@ class TestScrapeAllPhase3:
         orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
         mock_fetcher = Mock()
         mock_fetcher.async_check_etags = AsyncMock(return_value=[])
+        mock_fetcher.async_scrape_application_pages = AsyncMock(return_value=[])
         orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
         orchestrator.html_parser = Mock()
@@ -1413,11 +1348,14 @@ class TestScrapeAllPhase3:
         mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
         mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
 
+        # Async batch fetch returns HTML
+        app_html = '<html><div class="row app">parts</div></html>'
+        orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=[app_html])
+
         part = Part(sku="CSF-1001", name="Radiator", category="Radiator")
         parts_data = [{"sku": "CSF-1001", "name": "Radiator", "vehicle_qualifiers": {}}]
-        mocker.patch.object(
-            orchestrator, "_scrape_application_page", return_value=([part], parts_data)
-        )
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = parts_data
+        orchestrator.validator.validate_batch.return_value = [part]
 
         detail_data = {"full_description": "Great radiator", "specifications": {}}
         mocker.patch.object(orchestrator, "_fetch_detail_page", return_value=detail_data)
@@ -1456,11 +1394,14 @@ class TestScrapeAllPhase3:
         mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
         mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
 
+        # Async batch fetch returns HTML
+        app_html = '<html><div class="row app">parts</div></html>'
+        orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=[app_html])
+
         new_part = Part(sku="CSF-1001", name="Radiator", category="Radiator")
         parts_data = [{"sku": "CSF-1001", "name": "Radiator", "vehicle_qualifiers": {}}]
-        mocker.patch.object(
-            orchestrator, "_scrape_application_page", return_value=([new_part], parts_data)
-        )
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = parts_data
+        orchestrator.validator.validate_batch.return_value = [new_part]
 
         detail_data = {"full_description": "Great", "specifications": {}}
         mocker.patch.object(orchestrator, "_fetch_detail_page", return_value=detail_data)
@@ -1485,6 +1426,7 @@ class TestScrapeAllResume:
         orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
         mock_fetcher = Mock()
         mock_fetcher.async_check_etags = AsyncMock(return_value=[])
+        mock_fetcher.async_scrape_application_pages = AsyncMock(return_value=[])
         orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
         orchestrator.html_parser = Mock()
@@ -1546,11 +1488,14 @@ class TestScrapeAllResume:
         mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
         mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
 
+        # Async batch fetch returns HTML for the one remaining application (9000)
+        app_html = '<html><div class="row app">parts</div></html>'
+        orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=[app_html])
+
         part = Part(sku="CSF-2001", name="Condenser", category="Condenser")
         parts_data = [{"sku": "CSF-2001", "name": "Condenser", "vehicle_qualifiers": {}}]
-        mocker.patch.object(
-            orchestrator, "_scrape_application_page", return_value=([part], parts_data)
-        )
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = parts_data
+        orchestrator.validator.validate_batch.return_value = [part]
 
         # Act
         result = orchestrator.scrape_all(resume=True, fetch_details=False)
@@ -1558,8 +1503,9 @@ class TestScrapeAllResume:
         # Assert - Only application 9000 was processed (8000 skipped)
         assert result["applications_processed"] == 1
         assert result["total_applications"] == 2
-        orchestrator._scrape_application_page.assert_called_once_with(  # noqa: SLF001
-            9000, hierarchy[1]
+        # Async batch fetch called only with the remaining application URL
+        orchestrator.fetcher.async_scrape_application_pages.assert_called_once_with(
+            ["https://csf.mycarparts.com/applications/9000"]
         )
 
 
@@ -1572,6 +1518,7 @@ class TestScrapeAllIncremental:
         orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
         mock_fetcher = Mock()
         mock_fetcher.async_check_etags = AsyncMock(return_value=[])
+        mock_fetcher.async_scrape_application_pages = AsyncMock(return_value=[])
         orchestrator.fetcher = mock_fetcher
         orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
         orchestrator.html_parser = Mock()

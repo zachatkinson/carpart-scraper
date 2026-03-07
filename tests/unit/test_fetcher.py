@@ -1396,3 +1396,230 @@ class TestAsyncCheckEtags:
 
         # Cleanup
         fetcher.close()
+
+
+class TestAsyncScrapeApplicationPages:
+    """Test RespectfulFetcher.async_scrape_application_pages() concurrent batch fetching."""
+
+    async def test_async_scrape_returns_html_for_pages_with_row_app(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test pages with .row.app content return HTML string."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.asyncio.sleep", return_value=None)
+
+        html_with_parts = '<html><div class="row app">parts here</div></html>'
+        mock_response = httpx.Response(
+            200, text=html_with_parts, request=httpx.Request("GET", "http://a")
+        )
+
+        async def mock_get(url: str, **kwargs: object) -> httpx.Response:
+            return mock_response
+
+        mock_client = mocker.AsyncMock()
+        mock_client.get = mock_get
+        mock_client.__aenter__ = mocker.AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = mocker.AsyncMock(return_value=False)
+        mocker.patch("src.scraper.fetcher.httpx.AsyncClient", return_value=mock_client)
+
+        fetcher = RespectfulFetcher()
+        urls = ["https://csf.mycarparts.com/applications/100"]
+
+        # Act
+        results = await fetcher.async_scrape_application_pages(urls, progress_every=100)
+
+        # Assert
+        assert len(results) == 1
+        assert results[0] == html_with_parts
+
+        # Cleanup
+        fetcher.close()
+
+    async def test_async_scrape_returns_none_for_pages_without_row_app(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test pages without .row.app content return None (needs browser fallback)."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.asyncio.sleep", return_value=None)
+
+        html_no_parts = "<html><body>no parts here</body></html>"
+        mock_response = httpx.Response(
+            200, text=html_no_parts, request=httpx.Request("GET", "http://a")
+        )
+
+        async def mock_get(url: str, **kwargs: object) -> httpx.Response:
+            return mock_response
+
+        mock_client = mocker.AsyncMock()
+        mock_client.get = mock_get
+        mock_client.__aenter__ = mocker.AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = mocker.AsyncMock(return_value=False)
+        mocker.patch("src.scraper.fetcher.httpx.AsyncClient", return_value=mock_client)
+
+        fetcher = RespectfulFetcher()
+        urls = ["https://csf.mycarparts.com/applications/100"]
+
+        # Act
+        results = await fetcher.async_scrape_application_pages(urls, progress_every=100)
+
+        # Assert
+        assert len(results) == 1
+        assert results[0] is None
+
+        # Cleanup
+        fetcher.close()
+
+    async def test_async_scrape_returns_none_on_http_error(self, mocker: MockerFixture) -> None:
+        """Test HTTP errors return None (not raised), triggering browser fallback."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.asyncio.sleep", return_value=None)
+
+        async def mock_get(url: str, **kwargs: object) -> httpx.Response:
+            msg = "Connection refused"
+            raise httpx.ConnectError(msg)
+
+        mock_client = mocker.AsyncMock()
+        mock_client.get = mock_get
+        mock_client.__aenter__ = mocker.AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = mocker.AsyncMock(return_value=False)
+        mocker.patch("src.scraper.fetcher.httpx.AsyncClient", return_value=mock_client)
+
+        fetcher = RespectfulFetcher()
+        urls = [
+            "https://csf.mycarparts.com/applications/100",
+            "https://csf.mycarparts.com/applications/200",
+        ]
+
+        # Act
+        results = await fetcher.async_scrape_application_pages(urls, progress_every=100)
+
+        # Assert — all errors return None
+        assert results == [None, None]
+
+        # Cleanup
+        fetcher.close()
+
+    async def test_async_scrape_respects_concurrency_limit(self, mocker: MockerFixture) -> None:
+        """Test that semaphore limits in-flight requests to concurrency."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.asyncio.sleep", return_value=None)
+
+        peak_concurrent = 0
+        current_concurrent = 0
+        concurrency_lock = asyncio.Lock()
+
+        async def mock_get(url: str, **kwargs: object) -> httpx.Response:
+            nonlocal peak_concurrent, current_concurrent
+            async with concurrency_lock:
+                current_concurrent += 1
+                peak_concurrent = max(peak_concurrent, current_concurrent)
+            await asyncio.sleep(0)
+            async with concurrency_lock:
+                current_concurrent -= 1
+            return httpx.Response(
+                200,
+                text='<html><div class="row app">ok</div></html>',
+                request=httpx.Request("GET", url),
+            )
+
+        mock_client = mocker.AsyncMock()
+        mock_client.get = mock_get
+        mock_client.__aenter__ = mocker.AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = mocker.AsyncMock(return_value=False)
+        mocker.patch("src.scraper.fetcher.httpx.AsyncClient", return_value=mock_client)
+
+        fetcher = RespectfulFetcher()
+        urls = [f"https://csf.mycarparts.com/applications/{i}" for i in range(20)]
+
+        # Act
+        results = await fetcher.async_scrape_application_pages(
+            urls, concurrency=3, progress_every=100
+        )
+
+        # Assert
+        assert len(results) == 20
+        assert peak_concurrent <= 3
+
+        # Cleanup
+        fetcher.close()
+
+    async def test_async_scrape_logs_progress(self, mocker: MockerFixture) -> None:
+        """Test that progress logging fires at correct intervals."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.asyncio.sleep", return_value=None)
+
+        async def mock_get(url: str, **kwargs: object) -> httpx.Response:
+            return httpx.Response(
+                200,
+                text='<html><div class="row app">ok</div></html>',
+                request=httpx.Request("GET", url),
+            )
+
+        mock_client = mocker.AsyncMock()
+        mock_client.get = mock_get
+        mock_client.__aenter__ = mocker.AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = mocker.AsyncMock(return_value=False)
+        mocker.patch("src.scraper.fetcher.httpx.AsyncClient", return_value=mock_client)
+
+        mock_logger = mocker.patch("src.scraper.fetcher.logger")
+
+        fetcher = RespectfulFetcher()
+        urls = [f"https://csf.mycarparts.com/applications/{i}" for i in range(5)]
+
+        # Act
+        await fetcher.async_scrape_application_pages(urls, progress_every=2)
+
+        # Assert — progress logged at 2, 4, and 5 (final)
+        progress_calls = [
+            call
+            for call in mock_logger.info.call_args_list
+            if call.args and call.args[0] == "async_scrape_progress"
+        ]
+        completed_values = [call.kwargs["completed"] for call in progress_calls]
+        assert 2 in completed_values
+        assert 4 in completed_values
+        assert 5 in completed_values
+
+        # Cleanup
+        fetcher.close()
+
+    async def test_async_scrape_mixed_results(self, mocker: MockerFixture) -> None:
+        """Test mix of successful, no-parts, and error pages returns correct results."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.asyncio.sleep", return_value=None)
+
+        html_with_parts = '<html><div class="row app">parts</div></html>'
+        html_no_parts = "<html><body>empty</body></html>"
+
+        async def mock_get(url: str, **kwargs: object) -> httpx.Response:
+            if "100" in url:
+                return httpx.Response(200, text=html_with_parts, request=httpx.Request("GET", url))
+            if "200" in url:
+                return httpx.Response(200, text=html_no_parts, request=httpx.Request("GET", url))
+            # URL with 300 → error
+            msg = "Server error"
+            raise httpx.ConnectError(msg)
+
+        mock_client = mocker.AsyncMock()
+        mock_client.get = mock_get
+        mock_client.__aenter__ = mocker.AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = mocker.AsyncMock(return_value=False)
+        mocker.patch("src.scraper.fetcher.httpx.AsyncClient", return_value=mock_client)
+
+        fetcher = RespectfulFetcher()
+        urls = [
+            "https://csf.mycarparts.com/applications/100",  # has parts
+            "https://csf.mycarparts.com/applications/200",  # no parts
+            "https://csf.mycarparts.com/applications/300",  # error
+        ]
+
+        # Act
+        results = await fetcher.async_scrape_application_pages(urls, progress_every=100)
+
+        # Assert
+        assert results[0] == html_with_parts  # fast path success
+        assert results[1] is None  # no .row.app → fallback
+        assert results[2] is None  # error → fallback
+
+        # Cleanup
+        fetcher.close()
