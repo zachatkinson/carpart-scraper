@@ -44,14 +44,13 @@ jobs:
         run: uv run playwright install --with-deps chromium
 
       - name: Restore checkpoints cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: checkpoints/
           key: scrape-checkpoints-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
             scrape-checkpoints-${{ github.ref_name }}-
             scrape-checkpoints-
-          save-always: true
 
       - name: Scrape
         env:
@@ -76,6 +75,13 @@ jobs:
             --sync-images \
             --wp-url "$CSF_WP_URL" \
             --wp-api-key "$CSF_WP_API_KEY"
+
+      - name: Save checkpoints cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: checkpoints/
+          key: scrape-checkpoints-${{ github.ref_name }}-${{ github.run_id }}
 
       - name: Upload artifacts on failure or timeout
         if: failure() || cancelled()
