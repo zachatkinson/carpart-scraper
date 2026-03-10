@@ -20,7 +20,7 @@ from src.scraper.image_syncer import (
     RemoteAPISyncer,
     SyncResult,
 )
-from src.scraper.orchestrator import ScraperOrchestrator
+from src.scraper.orchestrator import ScraperOrchestrator, TimeBudgetExpired
 from src.scraper.state_syncer import StateSyncer
 
 logger = structlog.get_logger()
@@ -30,6 +30,7 @@ console = Console()
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 EXIT_HIGH_FAILURE_RATE = 2
+EXIT_TIME_BUDGET = 3
 FAILURE_RATE_THRESHOLD = 0.05
 
 
@@ -96,7 +97,14 @@ FAILURE_RATE_THRESHOLD = 0.05
     envvar="CSF_WP_API_KEY",
     help="WordPress API key for remote sync (env: CSF_WP_API_KEY)",
 )
-def scrape(  # noqa: PLR0913
+@click.option(
+    "--time-budget",
+    type=float,
+    default=None,
+    envvar="CSF_TIME_BUDGET",
+    help="Max minutes to run before saving checkpoint and exiting (env: CSF_TIME_BUDGET)",
+)
+def scrape(  # noqa: PLR0913, PLR0915
     make: str | None,
     year: int | None,
     output_dir: Path,
@@ -107,6 +115,7 @@ def scrape(  # noqa: PLR0913
     sync_images: bool,
     wp_url: str | None,
     wp_api_key: str | None,
+    time_budget: float | None,
 ) -> None:
     r"""Scrape automotive parts data from CSF MyCarParts.
 
@@ -165,19 +174,33 @@ def scrape(  # noqa: PLR0913
                 orchestrator.image_syncer = syncer
 
             # Run the full scraping pipeline
-            stats = orchestrator.scrape_all(
-                make_filter=make,
-                year_filter=year,
-                fetch_details=fetch_details,
-                resume=resume,
-                force_full=force_full,
-            )
+            timed_out = False
+            try:
+                stats = orchestrator.scrape_all(
+                    make_filter=make,
+                    year_filter=year,
+                    fetch_details=fetch_details,
+                    resume=resume,
+                    force_full=force_full,
+                    time_budget_minutes=time_budget,
+                )
+            except TimeBudgetExpired as exc:
+                timed_out = True
+                logger.info("time_budget_graceful_exit", message=str(exc))
+                console.print(f"[yellow]Time budget reached:[/yellow] {exc}")
+                stats = {
+                    "unique_parts": len(orchestrator.unique_parts),
+                    "applications_processed": len(orchestrator.processed_application_ids),
+                    "vehicles_tracked": sum(len(v) for v in orchestrator.vehicle_compat.values()),
+                    "failure_summary": orchestrator.failure_tracker.get_summary(),
+                    "timed_out": True,
+                }
 
             # Export parts.json + compatibility.json
             export_paths = orchestrator.export_data()
 
             # Produce merged parts_complete.json when details were fetched
-            if fetch_details:
+            if fetch_details and not timed_out:
                 complete_path = orchestrator.export_complete()
                 export_paths["complete"] = complete_path
 
@@ -194,6 +217,8 @@ def scrape(  # noqa: PLR0913
         _print_summary(stats, export_paths, sync_result)
 
         # Determine exit code
+        if timed_out:
+            sys.exit(EXIT_TIME_BUDGET)
         exit_code = _compute_exit_code(stats)
         sys.exit(exit_code)
 

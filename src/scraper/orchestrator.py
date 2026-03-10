@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -199,6 +200,57 @@ class FailureTracker:
             }
             for f in self.failures
         ]
+
+
+class TimeBudgetError(Exception):
+    """Raised when the scraper's time budget has been exhausted.
+
+    This is a graceful exit — checkpoints have been saved and the next
+    ``--resume`` run will continue where this one left off.
+    """
+
+
+# Public alias used by CLI
+TimeBudgetExpired = TimeBudgetError
+
+
+class TimeBudget:
+    """Tracks elapsed time against a fixed budget.
+
+    Args:
+        budget_minutes: Total minutes allowed, or None for unlimited.
+    """
+
+    def __init__(self, budget_minutes: float | None) -> None:
+        """Initialize time budget.
+
+        Args:
+            budget_minutes: Total minutes allowed, or None for unlimited.
+        """
+        self._start = time.monotonic()
+        self._budget_seconds: float | None = (
+            budget_minutes * 60.0 if budget_minutes is not None else None
+        )
+
+    @property
+    def remaining_seconds(self) -> float | None:
+        """Seconds remaining, or None if unlimited."""
+        if self._budget_seconds is None:
+            return None
+        elapsed = time.monotonic() - self._start
+        return max(0.0, self._budget_seconds - elapsed)
+
+    @property
+    def is_expired(self) -> bool:
+        """True when the budget has been exhausted."""
+        if self._budget_seconds is None:
+            return False
+        return (time.monotonic() - self._start) >= self._budget_seconds
+
+    @property
+    def elapsed_minutes(self) -> float:
+        """Minutes elapsed since the budget started."""
+        return (time.monotonic() - self._start) / 60.0
 
 
 class DeduplicationResult(NamedTuple):
@@ -996,6 +1048,37 @@ class ScraperOrchestrator:
         )
         return checkpoint_path
 
+    @staticmethod
+    def _raise_time_budget(
+        budget: TimeBudget,
+        phase: str,
+        applications_processed: int,
+        remaining: int | None = None,
+    ) -> None:
+        """Log and raise TimeBudgetError after checkpoint has been saved.
+
+        Args:
+            budget: The active time budget
+            phase: Current scraping phase name
+            applications_processed: Number of applications completed
+            remaining: Applications still to process (if known)
+        """
+        logger.info(
+            "time_budget_expired",
+            phase=phase,
+            elapsed_minutes=round(budget.elapsed_minutes, 1),
+            applications_processed=applications_processed,
+            remaining=remaining,
+        )
+        msg = (
+            f"Time budget exhausted after {budget.elapsed_minutes:.1f} min "
+            f"in phase '{phase}' ({applications_processed} apps processed"
+        )
+        if remaining is not None:
+            msg += f", {remaining} remaining"
+        msg += ")"
+        raise TimeBudgetError(msg)
+
     def _load_checkpoint(self, checkpoint_path: Path | str) -> dict[str, Any]:
         """Load scraping state from checkpoint file.
 
@@ -1093,6 +1176,7 @@ class ScraperOrchestrator:
         checkpoint_interval: int = 10,
         fetch_details_new_only: bool = True,
         force_full: bool = False,
+        time_budget_minutes: float | None = None,
     ) -> dict[str, Any]:
         """Execute full scraping workflow with intelligent change detection.
 
@@ -1117,10 +1201,18 @@ class ScraperOrchestrator:
             checkpoint_interval: Save checkpoint every N applications (default: 10)
             fetch_details_new_only: Only fetch details for new SKUs (default: True)
             force_full: Force full scrape, ignoring previous data (default: False)
+            time_budget_minutes: Maximum minutes to run before saving checkpoint
+                and exiting gracefully (default: None = unlimited).  Set this to
+                a value *less* than your CI job timeout so that post-scrape steps
+                (cache save, artifact upload) have time to execute.
 
         Returns:
             Dict with scraping statistics including failure tracking info
+
+        Raises:
+            TimeBudgetExpired: When the time budget is exhausted (checkpoint saved)
         """
+        budget = TimeBudget(time_budget_minutes)
         # Auto-detect incremental mode: use it if previous data exists
         if not force_full and not self.incremental:
             etags_exist = self.etag_store.has_data()
@@ -1285,6 +1377,15 @@ class ScraperOrchestrator:
                         logger.info("exporting_incrementally")
                         self.export_data()
 
+                    # Check time budget after checkpoint save
+                    if budget.is_expired:
+                        remaining = len(hierarchy) - idx
+                        self._raise_time_budget(
+                            budget, "application", applications_processed, remaining
+                        )
+
+            except TimeBudgetExpired:
+                raise
             except Exception as e:
                 applications_failed += 1
                 self.failure_tracker.record(
@@ -1323,6 +1424,10 @@ class ScraperOrchestrator:
 
         # Save final checkpoint
         self._save_checkpoint(make_filter, year_filter)
+
+        # Check time budget before starting Phase 3
+        if budget.is_expired:
+            self._raise_time_budget(budget, "before_phase_3", applications_processed)
 
         # Phase 3: Batch-fetch detail pages concurrently, then enrich sequentially
         details_fetched_count = 0

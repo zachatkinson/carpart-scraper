@@ -72,9 +72,18 @@ jobs:
             $MAKE_FLAG \
             $FORCE_FLAG \
             --resume \
+            --time-budget 350 \
             --sync-images \
             --wp-url "$CSF_WP_URL" \
-            --wp-api-key "$CSF_WP_API_KEY"
+            --wp-api-key "$CSF_WP_API_KEY" \
+          || EXIT_CODE=$?
+
+          # Exit code 3 = time budget reached (graceful, checkpoints saved)
+          if [ "${EXIT_CODE:-0}" -eq 3 ]; then
+            echo "::warning::Time budget reached — will resume on next run"
+          elif [ "${EXIT_CODE:-0}" -ne 0 ]; then
+            exit "$EXIT_CODE"
+          fi
 
       - name: Save checkpoints cache
         if: always()
