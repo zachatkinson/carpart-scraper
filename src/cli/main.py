@@ -227,6 +227,7 @@ def config(ctx: ClickContext) -> None:
 
 
 # Import and register commands
+from src.cli.commands.backfill_images import backfill_images  # noqa: E402
 from src.cli.commands.export import export  # noqa: E402
 from src.cli.commands.scrape import scrape  # noqa: E402
 from src.cli.commands.stats import stats  # noqa: E402
@@ -234,6 +235,7 @@ from src.cli.commands.sync_images import sync_images  # noqa: E402
 from src.cli.commands.test_endpoint import test_endpoint  # noqa: E402
 from src.cli.commands.validate import validate  # noqa: E402
 
+cli.add_command(backfill_images)
 cli.add_command(scrape)
 cli.add_command(test_endpoint)
 cli.add_command(stats)

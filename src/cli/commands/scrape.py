@@ -152,6 +152,8 @@ def scrape(  # noqa: PLR0913, PLR0915
         $ carpart scrape --sync-images --wp-url https://site.com --wp-api-key KEY
     """
     fetch_details = not catalog_only
+    # --force-full: re-fetch detail pages for all SKUs, not just new/changed
+    fetch_details_new_only = not force_full
     is_remote = _is_remote_wp(wp_url)
     state_syncer: StateSyncer | None = None
 
@@ -180,6 +182,7 @@ def scrape(  # noqa: PLR0913, PLR0915
                     make_filter=make,
                     year_filter=year,
                     fetch_details=fetch_details,
+                    fetch_details_new_only=fetch_details_new_only,
                     resume=resume,
                     force_full=force_full,
                     time_budget_minutes=time_budget,
