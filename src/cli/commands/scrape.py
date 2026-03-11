@@ -202,8 +202,10 @@ def scrape(  # noqa: PLR0913, PLR0915
             # Export parts.json + compatibility.json
             export_paths = orchestrator.export_data()
 
-            # Produce merged parts_complete.json when details were fetched
-            if fetch_details and not timed_out:
+            # Produce merged parts_complete.json when details were fetched.
+            # Always export, even on timeout — partial data still gets pushed to WP
+            # so parts accumulate across runs.
+            if fetch_details:
                 complete_path = orchestrator.export_complete()
                 export_paths["complete"] = complete_path
 
