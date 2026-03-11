@@ -1,0 +1,62 @@
+name: Backfill Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      time_budget:
+        description: "Max minutes to run (default: 350)"
+        required: false
+        type: number
+        default: 350
+      batch_size:
+        description: "Detail pages per batch (default: 50)"
+        required: false
+        type: number
+        default: 50
+
+concurrency:
+  group: backfill-images
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    name: Backfill Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Install Playwright Chromium
+        run: uv run playwright install --with-deps chromium
+
+      - name: Backfill Images
+        env:
+          CSF_WP_URL: ${{ secrets.CSF_WP_URL }}
+          CSF_WP_API_KEY: ${{ secrets.CSF_WP_API_KEY }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          uv run carpart backfill-images \
+            --source wp \
+            --wp-url "$CSF_WP_URL" \
+            --wp-api-key "$CSF_WP_API_KEY" \
+            --time-budget ${{ inputs.time_budget }} \
+            --batch-size ${{ inputs.batch_size }} \
+          || EXIT_CODE=$?
+
+          if [ "${EXIT_CODE:-0}" -eq 3 ]; then
+            echo "::warning::Time budget reached — run again to continue"
+          elif [ "${EXIT_CODE:-0}" -ne 0 ]; then
+            exit "$EXIT_CODE"
+          fi
