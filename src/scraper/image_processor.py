@@ -124,7 +124,7 @@ class ImageProcessor:
                 entry = self._manifest.get(avif_filename, {})
                 stored_etag = entry.get("etag") if isinstance(entry, dict) else None
 
-                is_synced = entry.get("synced", False) if isinstance(entry, dict) else False
+                is_synced = entry.get("synced") is True if isinstance(entry, dict) else False
                 if stored_etag and (avif_path.exists() or is_synced):
                     headers["If-None-Match"] = stored_etag
 
@@ -173,6 +173,8 @@ class ImageProcessor:
                     url=s3_url,
                     error=str(e),
                 )
+                # Record failure in manifest so retries can target it
+                self._set_failed_entry(avif_filename, str(e))
                 # Continue without this image rather than failing the whole part
                 continue
 
@@ -194,6 +196,22 @@ class ImageProcessor:
             "source_hash": source_hash,
             "etag": etag,
             "synced": False,
+        }
+
+    def _set_failed_entry(self, filename: str, error: str) -> None:
+        """Record a failed image download in the manifest.
+
+        Stores enough info to identify and retry the failure later.
+        A successful download on a subsequent run will overwrite this
+        entry with a normal source_hash/etag/synced entry.
+
+        Args:
+            filename: AVIF filename key (e.g. "CSF-3577_0.avif")
+            error: Error message from the failed download
+        """
+        self._manifest[filename] = {
+            "synced": "failed",
+            "error": error,
         }
 
     def mark_synced(self, filename: str) -> None:
