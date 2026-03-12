@@ -1451,6 +1451,10 @@ class ScraperOrchestrator:
         if budget.is_expired:
             self._raise_time_budget(budget, "before_phase_3", applications_processed)
 
+        # Release Playwright's event loop so asyncio.run() works in Phase 3.
+        # The browser may have been started during Phase 2 browser fallbacks.
+        self.fetcher.close_browser()
+
         # Phase 3: Batch-fetch detail pages concurrently, then enrich sequentially
         details_fetched_count = 0
         details_skipped_unchanged = 0
@@ -1501,6 +1505,8 @@ class ScraperOrchestrator:
                             if fetched_html is None:
                                 logger.info("detail_browser_fallback", sku=sku)
                                 detail_html = self.fetcher.fetch_with_browser(detail_url)
+                                # Release Playwright so the next batch's asyncio.run() works
+                                self.fetcher.close_browser()
                                 detail_browser_fallback_count += 1
                             else:
                                 detail_html = fetched_html

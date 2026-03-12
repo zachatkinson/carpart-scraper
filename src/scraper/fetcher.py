@@ -616,9 +616,12 @@ class RespectfulFetcher:
         msg = f"Browser fetch failed after {BROWSER_MAX_RETRIES} attempts: {last_error}"
         raise RuntimeError(msg) from last_error
 
-    def close(self) -> None:
-        """Close HTTP client, browser, and release all resources."""
-        # Clean up browser resources in order: context → browser → playwright
+    def close_browser(self) -> None:
+        """Close browser and Playwright, keeping the HTTP client open.
+
+        This releases the Playwright event loop so that asyncio.run()
+        can be used again afterwards (e.g. for async detail-page fetches).
+        """
         if self._browser_context is not None:
             self._browser_context.close()
             self._browser_context = None
@@ -631,6 +634,9 @@ class RespectfulFetcher:
             self._playwright.stop()
             self._playwright = None
 
+    def close(self) -> None:
+        """Close HTTP client, browser, and release all resources."""
+        self.close_browser()
         self.client.close()
         logger.debug("fetcher_closed")
 
