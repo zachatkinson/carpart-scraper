@@ -1975,7 +1975,7 @@ class TestCSFParserExtractFullDescriptionElements:
 
 
 class TestCSFParserExtractGalleryImages:
-    """Tests for _extract_gallery_images method."""
+    """Tests for extract_gallery_images method."""
 
     def test_extracts_s3_large_images(self) -> None:
         """Test extraction of S3 large catalog images."""
@@ -1993,7 +1993,7 @@ class TestCSFParserExtractGalleryImages:
         </body></html>"""
         soup = parser.parse(html)
 
-        result = parser._extract_gallery_images(soup)
+        result = parser.extract_gallery_images(soup)
 
         assert len(result) == 2
         assert result[0]["is_primary"] is True
@@ -2008,7 +2008,7 @@ class TestCSFParserExtractGalleryImages:
         </body></html>"""
         soup = parser.parse(html)
 
-        result = parser._extract_gallery_images(soup)
+        result = parser.extract_gallery_images(soup)
 
         assert result == []
 

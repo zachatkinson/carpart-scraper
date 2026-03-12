@@ -1519,9 +1519,20 @@ class ScraperOrchestrator:
                             if prev_hash == current_hash and not force_full:
                                 details_skipped_unchanged += 1
                                 logger.debug("detail_page_unchanged", sku=sku, url=detail_url)
+                                # Page content unchanged, but image bytes may have
+                                # been replaced at the same URL.  Run image processor
+                                # only — it uses source-hash comparison to detect
+                                # changed content and skips unchanged images cheaply.
+                                soup = self.html_parser.parse(detail_html)
+                                images = self.html_parser.extract_gallery_images(soup)
+                                if images:
+                                    self.image_processor.process_images(sku, images)
+                                    image_syncer = getattr(self, "image_syncer", None)
+                                    if image_syncer is not None:
+                                        image_syncer.sync_and_cleanup_for_sku(sku)
                                 continue
 
-                            # Parse and enrich
+                            # Parse and enrich (full processing for changed pages)
                             soup = self.html_parser.parse(detail_html)
                             detail_data = self.html_parser.extract_detail_page_data(soup, sku)
                             self._enrich_part_with_details(sku, detail_data)

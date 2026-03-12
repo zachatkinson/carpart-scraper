@@ -683,14 +683,14 @@ class CSFParser(HTMLParser):
         Note:
             Images are NOT extracted from listing pages to prevent duplicates.
             Full gallery images (including primary) are scraped from detail pages
-            via _extract_gallery_images() where we get all images in proper quality.
+            via extract_gallery_images() where we get all images in proper quality.
             The soup parameter is unused but required for consistent interface.
         """
         # Return empty - images extracted from detail page gallery only
         logger.debug("images_skipped", reason="extracted_from_detail_page_gallery")
         return []
 
-    def _extract_gallery_images(self, soup: BeautifulSoup) -> list[dict[str, Any]]:
+    def extract_gallery_images(self, soup: BeautifulSoup) -> list[dict[str, Any]]:
         """Extract large product images from detail page gallery.
 
         Extracts large images only from S3 bucket URLs, filtering for catalog images
@@ -703,7 +703,7 @@ class CSFParser(HTMLParser):
             List of dicts with url, alt_text, is_primary (large images only)
 
         Example:
-            >>> images = parser._extract_gallery_images(soup)
+            >>> images = parser.extract_gallery_images(soup)
             >>> images[0]
             {
                 'url': 'https://illumaware-digital-assets.s3...large_3411_1_wm.jpg',
@@ -786,7 +786,7 @@ class CSFParser(HTMLParser):
         tech_notes = self._extract_tech_notes(specifications)
         interchange_data = self._extract_interchange_data(soup)
         full_description = self._extract_full_description(soup)
-        additional_images = self._extract_gallery_images(soup)
+        additional_images = self.extract_gallery_images(soup)
 
         data: dict[str, Any] = {
             "sku": sku,
