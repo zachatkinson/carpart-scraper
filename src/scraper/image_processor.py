@@ -40,13 +40,18 @@ class ImageProcessor:
         images_dir: Base directory for image storage
         avif_dir: Directory for AVIF files (staging area)
         avif_quality: AVIF quality setting (0-100)
+        max_dimension: Maximum width or height in pixels (images are
+            downscaled proportionally if either dimension exceeds this)
         timeout: HTTP request timeout in seconds
     """
+
+    DEFAULT_MAX_DIMENSION = 1200
 
     def __init__(
         self,
         images_dir: Path | str = "images",
         avif_quality: int = 85,
+        max_dimension: int = DEFAULT_MAX_DIMENSION,
         timeout: int = 30,
     ) -> None:
         """Initialize image processor.
@@ -54,11 +59,15 @@ class ImageProcessor:
         Args:
             images_dir: Directory for storing images (default: "images")
             avif_quality: AVIF quality 0-100 (default: 85)
+            max_dimension: Max width or height in pixels (default: 1200).
+                Images exceeding this are downscaled proportionally using
+                Lanczos resampling to keep file sizes web-friendly.
             timeout: HTTP timeout in seconds (default: 30)
         """
         self.images_dir = Path(images_dir)
         self.avif_dir = self.images_dir / "avif"
         self.avif_quality = avif_quality
+        self.max_dimension = max_dimension
         self.timeout = timeout
 
         # Create directories
@@ -75,6 +84,7 @@ class ImageProcessor:
             "image_processor_initialized",
             avif_dir=str(self.avif_dir),
             quality=avif_quality,
+            max_dimension=max_dimension,
             manifest_entries=len(self._manifest),
         )
 
@@ -332,18 +342,49 @@ class ImageProcessor:
     def _encode_avif(self, raw_bytes: bytes, avif_path: Path) -> None:
         """Convert raw image bytes to AVIF and save to disk.
 
+        Downscales proportionally if either dimension exceeds
+        ``self.max_dimension``, then converts to RGB and encodes as AVIF.
+
         Args:
             raw_bytes: Source image bytes (JPEG, PNG, etc.)
             avif_path: Destination path for the AVIF file
         """
         with Image.open(BytesIO(raw_bytes)) as img:
-            rgb_img = self._convert_to_rgb(img)
+            scaled = self._downscale(img, self.max_dimension)
+            rgb_img = self._convert_to_rgb(scaled)
             rgb_img.save(
                 avif_path,
                 format="AVIF",
                 quality=self.avif_quality,
                 speed=4,
             )
+
+    @staticmethod
+    def _downscale(img: Image.Image, max_dimension: int) -> Image.Image:
+        """Downscale an image so neither dimension exceeds *max_dimension*.
+
+        Uses Lanczos resampling for high-quality downscaling.  Images
+        that are already within bounds are returned unchanged.
+
+        Args:
+            img: Source PIL Image.
+            max_dimension: Maximum allowed width or height in pixels.
+
+        Returns:
+            The (possibly resized) PIL Image.
+        """
+        width, height = img.size
+        if width <= max_dimension and height <= max_dimension:
+            return img
+
+        scale = min(max_dimension / width, max_dimension / height)
+        new_size = (round(width * scale), round(height * scale))
+        logger.debug(
+            "image_downscaled",
+            original=f"{width}x{height}",
+            resized=f"{new_size[0]}x{new_size[1]}",
+        )
+        return img.resize(new_size, Image.Resampling.LANCZOS)
 
     @staticmethod
     def _convert_to_rgb(img: Image.Image) -> Image.Image:

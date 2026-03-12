@@ -474,6 +474,87 @@ class TestSyncHelpers:
         processor.close()
 
 
+class TestImageDownscaling:
+    """Test max_dimension downscaling during AVIF encoding."""
+
+    def test_large_image_downscaled_to_max_dimension(
+        self, images_dir: Path, mock_client: Mock
+    ) -> None:
+        """Image exceeding max_dimension is downscaled proportionally."""
+        # Arrange — 2000x1000 source image, max_dimension=1200
+        large_jpeg = _make_jpeg_bytes(size=(2000, 1000))
+        mock_client.get.return_value.content = large_jpeg
+        processor = _make_processor(images_dir, mock_client)
+        processor.max_dimension = 1200
+
+        # Act
+        processor.process_images("CSF-BIG", [IMAGE_ENTRY])
+
+        # Assert — output dimensions within bounds
+        avif_path = images_dir / "avif" / "CSF-BIG_0.avif"
+        with Image.open(avif_path) as img:
+            assert img.size[0] <= 1200
+            assert img.size[1] <= 1200
+            # Aspect ratio preserved: 2000x1000 → 1200x600
+            assert img.size == (1200, 600)
+
+        processor.close()
+
+    def test_tall_image_downscaled_by_height(self, images_dir: Path, mock_client: Mock) -> None:
+        """Portrait image is downscaled based on height exceeding limit."""
+        # Arrange — 1000x2000 source, max_dimension=800
+        tall_jpeg = _make_jpeg_bytes(size=(1000, 2000))
+        mock_client.get.return_value.content = tall_jpeg
+        processor = _make_processor(images_dir, mock_client)
+        processor.max_dimension = 800
+
+        # Act
+        processor.process_images("CSF-TALL", [IMAGE_ENTRY])
+
+        # Assert — height is the constraining dimension
+        avif_path = images_dir / "avif" / "CSF-TALL_0.avif"
+        with Image.open(avif_path) as img:
+            assert img.size[0] <= 800
+            assert img.size[1] <= 800
+            assert img.size == (400, 800)
+
+        processor.close()
+
+    def test_small_image_not_upscaled(self, images_dir: Path, mock_client: Mock) -> None:
+        """Image smaller than max_dimension is not upscaled."""
+        # Arrange — 100x100 source, max_dimension=1200
+        small_jpeg = _make_jpeg_bytes(size=(100, 100))
+        mock_client.get.return_value.content = small_jpeg
+        processor = _make_processor(images_dir, mock_client)
+
+        # Act
+        processor.process_images("CSF-SMALL", [IMAGE_ENTRY])
+
+        # Assert — dimensions unchanged
+        avif_path = images_dir / "avif" / "CSF-SMALL_0.avif"
+        with Image.open(avif_path) as img:
+            assert img.size == (100, 100)
+
+        processor.close()
+
+    def test_image_exactly_at_limit_not_resized(self, images_dir: Path, mock_client: Mock) -> None:
+        """Image exactly at max_dimension is not resized."""
+        # Arrange — 1200x800 source, max_dimension=1200
+        exact_jpeg = _make_jpeg_bytes(size=(1200, 800))
+        mock_client.get.return_value.content = exact_jpeg
+        processor = _make_processor(images_dir, mock_client)
+
+        # Act
+        processor.process_images("CSF-EXACT", [IMAGE_ENTRY])
+
+        # Assert
+        avif_path = images_dir / "avif" / "CSF-EXACT_0.avif"
+        with Image.open(avif_path) as img:
+            assert img.size == (1200, 800)
+
+        processor.close()
+
+
 class TestProcessImagesEdgeCases:
     """Test edge cases in process_images."""
 
