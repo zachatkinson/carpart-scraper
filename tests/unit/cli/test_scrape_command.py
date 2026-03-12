@@ -903,7 +903,7 @@ class TestStateSyncIntegration:
         mock_state_syncer_cls.assert_called_once_with(
             wp_url="https://example.com", api_key="test-key"
         )
-        assert mock_state_instance.pull.call_count == 2
+        assert mock_state_instance.pull.call_count == 3
 
     def test_remote_mode_pushes_state_after_scrape(
         self, cli_runner: CliRunner, mock_orchestrator: MagicMock, mocker: MockerFixture
@@ -922,7 +922,7 @@ class TestStateSyncIntegration:
 
         # Assert
         assert result.exit_code == 0
-        assert mock_state_instance.push.call_count == 2
+        assert mock_state_instance.push.call_count == 3
         mock_state_instance.close.assert_called_once()
 
     def test_local_mode_skips_state_sync(
