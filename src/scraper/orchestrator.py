@@ -1455,8 +1455,8 @@ class ScraperOrchestrator:
 
                 # Fetch and process in batches to avoid S3 presigned URL
                 # expiry.  CSF's S3 URLs expire after 10 minutes; processing
-                # ~0.4 s/SKU means a batch of 500 finishes in ~3.5 min.
-                detail_batch_size = 500
+                # ~1.2 s/SKU means a batch of 250 finishes in ~5 min.
+                detail_batch_size = 250
                 for batch_start in range(0, len(sku_list), detail_batch_size):
                     batch_skus = sku_list[batch_start : batch_start + detail_batch_size]
                     batch_urls = [
