@@ -128,7 +128,6 @@ def _run_scrape(  # noqa: PLR0913
             year_filter=year,
             resume=resume,
             fetch_details=fetch_details,
-            fetch_details_new_only=True,
             force_full=force_full,
         )
 

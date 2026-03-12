@@ -339,6 +339,10 @@ class ScraperOrchestrator:
         # ETag store for content-hash-based change detection
         self.etag_store = etag_store or ETagStore(self.checkpoint_dir / "etags.json")
 
+        # Separate store for detail page content hashes so incremental runs
+        # detect updates to existing parts (spec changes, new photos, etc.)
+        self.detail_etag_store = ETagStore(self.checkpoint_dir / "detail_etags.json")
+
         # Hierarchy cache for skipping unchanged makes
         self.hierarchy_cache = hierarchy_cache or HierarchyCache(
             self.checkpoint_dir / "hierarchy_cache.json"
@@ -1174,7 +1178,6 @@ class ScraperOrchestrator:
         fetch_details: bool = True,
         resume: bool = False,
         checkpoint_interval: int = 10,
-        fetch_details_new_only: bool = True,
         force_full: bool = False,
         time_budget_minutes: float | None = None,
     ) -> dict[str, Any]:
@@ -1188,10 +1191,9 @@ class ScraperOrchestrator:
            b. Deduplicate by SKU and track vehicle compatibility (last-write-wins)
            c. Save checkpoint every N applications
         3. For each SKU:
-           a. Fetch detail page for new SKUs (if fetch_details_new_only=True)
-           b. OR fetch details for all SKUs (if fetch_details=True and
-              fetch_details_new_only=False)
-           c. Enrich part with detailed specifications
+           a. Fetch detail page for all SKUs
+           b. Skip enrichment for unchanged detail pages (content hash match)
+           c. Enrich changed/new parts with detailed specifications
 
         Args:
             make_filter: Filter by make name (e.g., "Honda")
@@ -1199,7 +1201,6 @@ class ScraperOrchestrator:
             fetch_details: Whether to fetch detail pages (default: True)
             resume: Resume from latest checkpoint if available (default: False)
             checkpoint_interval: Save checkpoint every N applications (default: 10)
-            fetch_details_new_only: Only fetch details for new SKUs (default: True)
             force_full: Force full scrape, ignoring previous data (default: False)
             time_budget_minutes: Maximum minutes to run before saving checkpoint
                 and exiting gracefully (default: None = unlimited).  Set this to
@@ -1237,7 +1238,6 @@ class ScraperOrchestrator:
             year_filter=year_filter,
             fetch_details=fetch_details,
             resume=resume,
-            fetch_details_new_only=fetch_details_new_only,
             force_full=force_full,
             incremental=self.incremental,
         )
@@ -1431,32 +1431,26 @@ class ScraperOrchestrator:
 
         # Phase 3: Batch-fetch detail pages concurrently, then enrich sequentially
         details_fetched_count = 0
+        details_skipped_unchanged = 0
         details_failed = 0
         detail_browser_fallback_count = 0
         if fetch_details:
-            # Determine which SKUs to fetch details for
-            if fetch_details_new_only:
-                skus_to_fetch = new_skus_found | changed_skus_found
-                logger.info(
-                    "workflow_phase_3_started_new_only",
-                    new_skus_to_enrich=len(new_skus_found),
-                    changed_skus_to_enrich=len(changed_skus_found),
-                    total_to_enrich=len(skus_to_fetch),
-                )
-            else:
-                skus_to_fetch = set(self.unique_parts.keys())
-                logger.info(
-                    "workflow_phase_3_started_all",
-                    total_skus_to_enrich=len(skus_to_fetch),
-                )
+            # Always fetch all SKUs — content hashing detects which ones
+            # actually changed, so unchanged detail pages are skipped cheaply.
+            skus_to_fetch = set(self.unique_parts.keys())
+            logger.info(
+                "workflow_phase_3_started",
+                total_skus=len(skus_to_fetch),
+            )
 
             if skus_to_fetch:
                 sku_list = sorted(skus_to_fetch)
 
                 # Fetch and process in batches to avoid S3 presigned URL
                 # expiry.  CSF's S3 URLs expire after 10 minutes; processing
-                # ~1.2 s/SKU means a batch of 250 finishes in ~5 min.
-                detail_batch_size = 250
+                # ~1.8 s/SKU (incl. image download + AVIF conversion) means
+                # a batch of 200 finishes in ~6 min.
+                detail_batch_size = 200
                 for batch_start in range(0, len(sku_list), detail_batch_size):
                     batch_skus = sku_list[batch_start : batch_start + detail_batch_size]
                     batch_urls = [
@@ -1489,6 +1483,19 @@ class ScraperOrchestrator:
                             else:
                                 detail_html = fetched_html
 
+                            # Content-hash change detection: skip enrichment
+                            # for detail pages that haven't changed since last run
+                            current_hash = hashlib.md5(  # noqa: S324
+                                detail_html.encode()
+                            ).hexdigest()
+                            prev_hash = self.detail_etag_store.get(detail_url)
+                            self.detail_etag_store.set(detail_url, current_hash)
+
+                            if prev_hash == current_hash and not force_full:
+                                details_skipped_unchanged += 1
+                                logger.debug("detail_page_unchanged", sku=sku, url=detail_url)
+                                continue
+
                             # Parse and enrich
                             soup = self.html_parser.parse(detail_html)
                             detail_data = self.html_parser.extract_detail_page_data(soup, sku)
@@ -1515,12 +1522,15 @@ class ScraperOrchestrator:
                             )
                         continue
 
+                # Persist detail page hashes for next run
+                self.detail_etag_store.save()
+
                 logger.info(
                     "workflow_phase_3_complete",
                     parts_enriched=details_fetched_count,
+                    details_skipped_unchanged=details_skipped_unchanged,
                     details_failed=details_failed,
                     detail_browser_fallback_count=detail_browser_fallback_count,
-                    new_only=fetch_details_new_only,
                 )
 
         # Compile statistics
@@ -1537,7 +1547,7 @@ class ScraperOrchestrator:
             "year_filter": year_filter,
             "details_fetched": fetch_details,
             "details_fetched_count": details_fetched_count,
-            "details_new_only": fetch_details_new_only,
+            "details_skipped_unchanged": details_skipped_unchanged,
             "resumed": resume,
             "applications_failed": applications_failed,
             "browser_fallback_count": browser_fallback_count,

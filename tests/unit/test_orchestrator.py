@@ -1132,6 +1132,7 @@ class TestScrapeAllPhase2:
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
         orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.detail_etag_store = ETagStore(tmp_path / "detail_etags.json")
         orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
         return orchestrator
 
@@ -1294,11 +1295,12 @@ class TestScrapeAllPhase3:
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
         orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.detail_etag_store = ETagStore(tmp_path / "detail_etags.json")
         orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
         return orchestrator
 
-    def test_fetch_details_new_only(self, mocker: MockerFixture, tmp_path: Path) -> None:
-        """Test Phase 3 batch-fetches details only for new/changed SKUs."""
+    def test_detail_page_hash_skips_unchanged(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test Phase 3 skips enrichment for unchanged detail pages via content hash."""
         # Arrange
         orchestrator = self._make_orchestrator(tmp_path)
 
@@ -1315,7 +1317,7 @@ class TestScrapeAllPhase3:
         mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
         mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
 
-        # Phase 2: async batch fetch returns HTML for application page
+        # Phase 2
         app_html = '<html><div class="row app">parts</div></html>'
         orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=[app_html])
 
@@ -1324,7 +1326,7 @@ class TestScrapeAllPhase3:
         orchestrator.html_parser.extract_parts_from_application_page.return_value = parts_data
         orchestrator.validator.validate_batch.return_value = [part]
 
-        # Phase 3: async batch fetch returns HTML for detail page
+        # Phase 3: detail HTML
         detail_html = '<html><td class="selling-part">1001</td></html>'
         orchestrator.fetcher.async_fetch_detail_pages = AsyncMock(return_value=[detail_html])
 
@@ -1332,25 +1334,25 @@ class TestScrapeAllPhase3:
         orchestrator.html_parser.extract_detail_page_data.return_value = detail_data
         mocker.patch.object(orchestrator, "_enrich_part_with_details")
 
+        # Pre-populate detail hash to simulate a previous run
+        detail_url = "https://csf.autocaredata.com/items/1001"
+        prev_hash = hashlib.md5(detail_html.encode()).hexdigest()  # noqa: S324
+        orchestrator.detail_etag_store.set(detail_url, prev_hash)
+
         # Act
-        result = orchestrator.scrape_all(fetch_details=True, fetch_details_new_only=True)
+        result = orchestrator.scrape_all(fetch_details=True)
 
-        # Assert
-        assert result["details_fetched_count"] == 1
-        assert result["details_failed"] == 0
-        orchestrator.fetcher.async_fetch_detail_pages.assert_called_once_with(
-            ["https://csf.autocaredata.com/items/1001"]
-        )
-        orchestrator._enrich_part_with_details.assert_called_once_with(  # noqa: SLF001
-            "CSF-1001", detail_data
-        )
+        # Assert — detail page unchanged, so enrichment is skipped
+        assert result["details_fetched_count"] == 0
+        assert result["details_skipped_unchanged"] == 1
+        orchestrator._enrich_part_with_details.assert_not_called()  # noqa: SLF001
 
-    def test_fetch_details_all(self, mocker: MockerFixture, tmp_path: Path) -> None:
-        """Test Phase 3 batch-fetches details for all SKUs when new_only=False."""
+    def test_detail_page_hash_enriches_changed(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test Phase 3 enriches detail pages whose content hash has changed."""
         # Arrange
         orchestrator = self._make_orchestrator(tmp_path)
 
-        # Pre-populate with existing part that is NOT new
+        # Pre-populate with existing part
         existing_part = Part(sku="CSF-5000", name="Existing", category="Radiator")
         orchestrator.unique_parts["CSF-5000"] = existing_part
 
@@ -1386,12 +1388,16 @@ class TestScrapeAllPhase3:
         orchestrator.html_parser.extract_detail_page_data.return_value = detail_data
         mocker.patch.object(orchestrator, "_enrich_part_with_details")
 
-        # Act
-        result = orchestrator.scrape_all(fetch_details=True, fetch_details_new_only=False)
+        # Pre-populate CSF-5000 with a DIFFERENT hash to simulate a changed page
+        detail_url_5000 = "https://csf.autocaredata.com/items/5000"
+        orchestrator.detail_etag_store.set(detail_url_5000, "old_stale_hash")
 
-        # Assert - Both CSF-5000 (existing) and CSF-1001 (new) should have details fetched
+        # Act — no force_full, but CSF-5000 hash changed and CSF-1001 is new
+        result = orchestrator.scrape_all(fetch_details=True)
+
+        # Assert - Both should be enriched (one new, one changed)
         assert result["details_fetched_count"] == 2
-        assert orchestrator.fetcher.async_fetch_detail_pages.call_count == 1
+        assert result["details_skipped_unchanged"] == 0
 
 
 class TestScrapeAllResume:
@@ -1423,6 +1429,7 @@ class TestScrapeAllResume:
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
         orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.detail_etag_store = ETagStore(tmp_path / "detail_etags.json")
         orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
 
         # Create a checkpoint file
@@ -1515,6 +1522,7 @@ class TestScrapeAllIncremental:
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
         orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.detail_etag_store = ETagStore(tmp_path / "detail_etags.json")
         orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
 
         mocker.patch.object(orchestrator, "_build_hierarchy", return_value=[])

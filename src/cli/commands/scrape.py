@@ -152,8 +152,6 @@ def scrape(  # noqa: PLR0913, PLR0915
         $ carpart scrape --sync-images --wp-url https://site.com --wp-api-key KEY
     """
     fetch_details = not catalog_only
-    # --force-full: re-fetch detail pages for all SKUs, not just new/changed
-    fetch_details_new_only = not force_full
     is_remote = _is_remote_wp(wp_url)
     state_syncer: StateSyncer | None = None
 
@@ -162,6 +160,7 @@ def scrape(  # noqa: PLR0913, PLR0915
         if is_remote and wp_api_key:
             state_syncer = StateSyncer(wp_url=wp_url, api_key=wp_api_key)  # type: ignore[arg-type]
             state_syncer.pull("etags", Path("checkpoints/etags.json"))
+            state_syncer.pull("detail_etags", Path("checkpoints/detail_etags.json"))
             state_syncer.pull("manifest", Path("images/manifest.json"))
 
         with ScraperOrchestrator(
@@ -182,7 +181,6 @@ def scrape(  # noqa: PLR0913, PLR0915
                     make_filter=make,
                     year_filter=year,
                     fetch_details=fetch_details,
-                    fetch_details_new_only=fetch_details_new_only,
                     resume=resume,
                     force_full=force_full,
                     time_budget_minutes=time_budget,
@@ -241,6 +239,7 @@ def scrape(  # noqa: PLR0913, PLR0915
         # even after partial runs or crashes
         if state_syncer is not None:
             state_syncer.push("etags", Path("checkpoints/etags.json"))
+            state_syncer.push("detail_etags", Path("checkpoints/detail_etags.json"))
             state_syncer.push("manifest", Path("images/manifest.json"))
             state_syncer.close()
 
