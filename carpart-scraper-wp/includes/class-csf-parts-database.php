@@ -632,8 +632,12 @@ class CSF_Parts_Database {
 		$years      = $filters['years'] ?? $filters['year'] ?? array();
 
 		// Allow per_page/page from filters (REST API passes them there).
-		$per_page = intval( $filters['per_page'] ?? $per_page );
-		$page     = intval( $filters['page'] ?? $page );
+		if ( isset( $filters['per_page'] ) ) {
+			$per_page = intval( $filters['per_page'] );
+		}
+		if ( isset( $filters['page'] ) ) {
+			$page = intval( $filters['page'] );
+		}
 
 		// Sort options with whitelist validation.
 		$allowed_orderby = array( 'name', 'sku', 'category', 'created_at', 'updated_at', 'latest' );
