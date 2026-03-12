@@ -1451,55 +1451,68 @@ class ScraperOrchestrator:
                 )
 
             if skus_to_fetch:
-                # Step A: Build URLs and async batch fetch
                 sku_list = sorted(skus_to_fetch)
-                detail_urls = [
-                    "https://csf.autocaredata.com/items/"
-                    + sku.replace("CSF-", "").replace("csf-", "")
-                    for sku in sku_list
-                ]
-                detail_html_results = asyncio.run(
-                    self.fetcher.async_fetch_detail_pages(detail_urls)
-                )
 
-                # Step B: Sequential enrichment
-                for sku, detail_url, fetched_html in zip(
-                    sku_list, detail_urls, detail_html_results, strict=True
-                ):
-                    try:
-                        # Browser fallback for pages where HTTP returned no content
-                        detail_html: str
-                        if fetched_html is None:
-                            logger.info("detail_browser_fallback", sku=sku)
-                            detail_html = self.fetcher.fetch_with_browser(detail_url)
-                            detail_browser_fallback_count += 1
-                        else:
-                            detail_html = fetched_html
+                # Fetch and process in batches to avoid S3 presigned URL
+                # expiry.  CSF's S3 URLs expire after 10 minutes; processing
+                # ~0.4 s/SKU means a batch of 500 finishes in ~3.5 min.
+                detail_batch_size = 500
+                for batch_start in range(0, len(sku_list), detail_batch_size):
+                    batch_skus = sku_list[batch_start : batch_start + detail_batch_size]
+                    batch_urls = [
+                        "https://csf.autocaredata.com/items/"
+                        + sku.replace("CSF-", "").replace("csf-", "")
+                        for sku in batch_skus
+                    ]
 
-                        # Parse and enrich
-                        soup = self.html_parser.parse(detail_html)
-                        detail_data = self.html_parser.extract_detail_page_data(soup, sku)
-                        self._enrich_part_with_details(sku, detail_data)
-                        details_fetched_count += 1
+                    logger.info(
+                        "detail_batch_fetch",
+                        batch=batch_start // detail_batch_size + 1,
+                        batch_size=len(batch_skus),
+                        total=len(sku_list),
+                    )
 
-                        # Stream-sync images for this SKU if syncer is configured
-                        image_syncer = getattr(self, "image_syncer", None)
-                        if image_syncer is not None:
-                            image_syncer.sync_and_cleanup_for_sku(sku)
-                    except Exception as e:
-                        details_failed += 1
-                        self.failure_tracker.record(
-                            phase="detail",
-                            identifier=sku,
-                            error_type=type(e).__name__,
-                            error_message=str(e),
-                        )
-                        logger.exception(
-                            "detail_fetch_failed",
-                            sku=sku,
-                            error=str(e),
-                            error_type=type(e).__name__,
-                        )
+                    batch_html_results = asyncio.run(
+                        self.fetcher.async_fetch_detail_pages(batch_urls)
+                    )
+
+                    for sku, detail_url, fetched_html in zip(
+                        batch_skus, batch_urls, batch_html_results, strict=True
+                    ):
+                        try:
+                            # Browser fallback for pages where HTTP returned no content
+                            detail_html: str
+                            if fetched_html is None:
+                                logger.info("detail_browser_fallback", sku=sku)
+                                detail_html = self.fetcher.fetch_with_browser(detail_url)
+                                detail_browser_fallback_count += 1
+                            else:
+                                detail_html = fetched_html
+
+                            # Parse and enrich
+                            soup = self.html_parser.parse(detail_html)
+                            detail_data = self.html_parser.extract_detail_page_data(soup, sku)
+                            self._enrich_part_with_details(sku, detail_data)
+                            details_fetched_count += 1
+
+                            # Stream-sync images for this SKU if syncer is configured
+                            image_syncer = getattr(self, "image_syncer", None)
+                            if image_syncer is not None:
+                                image_syncer.sync_and_cleanup_for_sku(sku)
+                        except Exception as e:
+                            details_failed += 1
+                            self.failure_tracker.record(
+                                phase="detail",
+                                identifier=sku,
+                                error_type=type(e).__name__,
+                                error_message=str(e),
+                            )
+                            logger.exception(
+                                "detail_fetch_failed",
+                                sku=sku,
+                                error=str(e),
+                                error_type=type(e).__name__,
+                            )
                         continue
 
                 logger.info(
