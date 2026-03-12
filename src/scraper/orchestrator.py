@@ -869,6 +869,28 @@ class ScraperOrchestrator:
             json.dumps(content, sort_keys=True).encode()
         ).hexdigest()
 
+    @staticmethod
+    def _normalize_detail_html(html: str) -> str:
+        """Strip volatile content from detail page HTML for stable hashing.
+
+        Detail pages contain per-request CSRF tokens and presigned S3 image
+        URLs whose query parameters (signature, timestamp) change on every
+        request. Stripping these produces a stable hash that only changes
+        when actual page content (specs, descriptions, image paths) changes.
+
+        Args:
+            html: Raw detail page HTML
+
+        Returns:
+            Normalized HTML suitable for content hashing
+        """
+        # Strip CSRF / authenticity tokens (same as fetcher._normalize_html)
+        normalized = re.sub(r'content="[A-Za-z0-9+/=]+"', 'content=""', html)
+        normalized = re.sub(r'value="[A-Za-z0-9+/=]+"', 'value=""', normalized)
+        # Strip S3 presigned URL query parameters (X-Amz-Date, Signature, etc.)
+        # Keeps the base image path for change detection (new filename = changed)
+        return re.sub(r"\?X-Amz-[^\"']+", "", normalized)
+
     def load_previous_export(self, export_path: Path | None = None) -> dict[str, str]:
         """Load previous parts.json and compute content hashes as baseline.
 
@@ -1484,9 +1506,12 @@ class ScraperOrchestrator:
                                 detail_html = fetched_html
 
                             # Content-hash change detection: skip enrichment
-                            # for detail pages that haven't changed since last run
+                            # for detail pages that haven't changed since last run.
+                            # Normalize out volatile content (CSRF tokens, presigned
+                            # S3 URL params) so hashes are stable across requests.
+                            normalized = self._normalize_detail_html(detail_html)
                             current_hash = hashlib.md5(  # noqa: S324
-                                detail_html.encode()
+                                normalized.encode()
                             ).hexdigest()
                             prev_hash = self.detail_etag_store.get(detail_url)
                             self.detail_etag_store.set(detail_url, current_hash)
