@@ -248,6 +248,19 @@ class CSF_Parts_JSON_Importer {
 			$part_data['name'] = str_replace( array( 'CSF-', '-' ), array( 'CSF', '' ), $part_data['name'] );
 		}
 
+		// Rewrite local image paths to WordPress uploads URLs.
+		if ( isset( $part_data['images'] ) && is_array( $part_data['images'] ) ) {
+			$upload_dir = wp_upload_dir();
+			$base_url   = $upload_dir['baseurl'] . '/csf-parts/';
+
+			foreach ( $part_data['images'] as &$img ) {
+				if ( isset( $img['url'] ) && is_string( $img['url'] ) && 0 === strpos( $img['url'], 'images/' ) ) {
+					$img['url'] = $base_url . $img['url'];
+				}
+			}
+			unset( $img ); // Break reference.
+		}
+
 		// Clean up compatibility data - remove " Eng." suffix from engine strings.
 		if ( isset( $part_data['compatibility'] ) && is_array( $part_data['compatibility'] ) ) {
 			foreach ( $part_data['compatibility'] as &$vehicle ) {
