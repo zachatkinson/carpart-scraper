@@ -392,7 +392,7 @@ class CSF_Parts_Auto_Import {
 	 * @return bool True if key is allowed.
 	 */
 	public function validate_state_key( string $key ): bool {
-		$allowed = array( 'etags', 'manifest' );
+		$allowed = array( 'etags', 'detail_etags', 'manifest' );
 		return in_array( $key, $allowed, true );
 	}
 
