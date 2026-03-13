@@ -1912,3 +1912,108 @@ class TestHierarchyCaching:
         assert hierarchy[0]["model"] == "Civic"
         mock_ajax.parse_year_response.assert_called_once()
         mock_ajax.parse_model_response.assert_called_once()
+
+
+class TestETagFilteringUnprocessedApps:
+    """Test that _filter_by_etags keeps unprocessed applications."""
+
+    def test_etag_unchanged_but_unprocessed_app_is_kept(self, tmp_path: Path) -> None:
+        """Apps with matching ETags but not in processed_application_ids are kept."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.processed_application_ids: set[str] = set()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+
+        mock_fetcher = Mock()
+        orchestrator.fetcher = mock_fetcher
+
+        hierarchy = [
+            {"application_id": "100", "make": "Honda", "year": 2020, "model": "Civic"},
+            {"application_id": "200", "make": "Toyota", "year": 2020, "model": "Camry"},
+        ]
+
+        # Seed ETags so the store has data (simulating a previous run)
+        orchestrator.etag_store.set("https://csf.mycarparts.com/applications/100", "hash_a")
+        orchestrator.etag_store.set("https://csf.mycarparts.com/applications/200", "hash_b")
+        orchestrator.etag_store.save()
+
+        # Both pages return same hashes (unchanged)
+        mock_fetcher.async_check_etags = AsyncMock(
+            return_value=[(False, "hash_a"), (False, "hash_b")]
+        )
+
+        # Mark only app 100 as processed — app 200 was never processed
+        orchestrator.processed_application_ids = {"100"}
+
+        # Act
+        result = orchestrator._filter_by_etags(hierarchy)  # noqa: SLF001
+
+        # Assert — app 200 is kept because it was never processed
+        assert len(result) == 1
+        assert result[0]["application_id"] == "200"
+
+    def test_etag_unchanged_and_processed_app_is_skipped(self, tmp_path: Path) -> None:
+        """Apps with matching ETags that were already processed are skipped."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.processed_application_ids: set[str] = set()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+
+        mock_fetcher = Mock()
+        orchestrator.fetcher = mock_fetcher
+
+        hierarchy = [
+            {"application_id": "100", "make": "Honda", "year": 2020, "model": "Civic"},
+            {"application_id": "200", "make": "Toyota", "year": 2020, "model": "Camry"},
+        ]
+
+        # Seed ETags
+        orchestrator.etag_store.set("https://csf.mycarparts.com/applications/100", "hash_a")
+        orchestrator.etag_store.set("https://csf.mycarparts.com/applications/200", "hash_b")
+        orchestrator.etag_store.save()
+
+        # Both unchanged
+        mock_fetcher.async_check_etags = AsyncMock(
+            return_value=[(False, "hash_a"), (False, "hash_b")]
+        )
+
+        # Both already processed
+        orchestrator.processed_application_ids = {"100", "200"}
+
+        # Act
+        result = orchestrator._filter_by_etags(hierarchy)  # noqa: SLF001
+
+        # Assert — both skipped
+        assert len(result) == 0
+
+    def test_etag_changed_app_always_kept(self, tmp_path: Path) -> None:
+        """Apps with changed ETags are always kept regardless of processing state."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.processed_application_ids: set[str] = set()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+
+        mock_fetcher = Mock()
+        orchestrator.fetcher = mock_fetcher
+
+        hierarchy = [
+            {"application_id": "100", "make": "Honda", "year": 2020, "model": "Civic"},
+        ]
+
+        # Seed ETags
+        orchestrator.etag_store.set("https://csf.mycarparts.com/applications/100", "old_hash")
+        orchestrator.etag_store.save()
+
+        # Page changed
+        mock_fetcher.async_check_etags = AsyncMock(return_value=[(True, "new_hash")])
+
+        orchestrator.processed_application_ids = {"100"}
+
+        # Act
+        result = orchestrator._filter_by_etags(hierarchy)  # noqa: SLF001
+
+        # Assert — kept because content changed
+        assert len(result) == 1

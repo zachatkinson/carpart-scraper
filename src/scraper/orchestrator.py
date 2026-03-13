@@ -964,13 +964,16 @@ class ScraperOrchestrator:
 
         Runs concurrent HTTP GET requests (capped by fetcher semaphore) for
         each application URL and computes content hashes. Pages whose hash
-        matches the previously stored value are skipped.
+        matches the previously stored value are skipped — but only if the
+        application was previously processed (exists in processed_application_ids).
+        This prevents time-budget cutoffs from permanently losing unprocessed
+        applications.
 
         Args:
             hierarchy: Full vehicle hierarchy from _build_hierarchy
 
         Returns:
-            Filtered hierarchy containing only changed/new applications
+            Filtered hierarchy containing only changed/new/unprocessed applications
         """
         has_data = self.etag_store.has_data()
 
@@ -991,6 +994,7 @@ class ScraperOrchestrator:
         # Process results sequentially
         changed: list[dict[str, Any]] = []
         skipped = 0
+        kept_unprocessed = 0
 
         for config, (is_changed, current_hash) in zip(hierarchy, results, strict=True):
             application_id = config["application_id"]
@@ -999,6 +1003,10 @@ class ScraperOrchestrator:
 
             if is_changed:
                 changed.append(config)
+            elif application_id not in self.processed_application_ids:
+                # Never processed (e.g. time-budget cutoff) — must not skip
+                changed.append(config)
+                kept_unprocessed += 1
             else:
                 skipped += 1
 
@@ -1009,6 +1017,7 @@ class ScraperOrchestrator:
             total=len(hierarchy),
             changed=len(changed),
             skipped=skipped,
+            kept_unprocessed=kept_unprocessed,
         )
 
         # First run: return all (all are "new")
