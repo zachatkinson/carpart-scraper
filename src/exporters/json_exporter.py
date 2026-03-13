@@ -453,9 +453,11 @@ class JSONExporter:
                     msg = f"Invalid export format in {filename}: missing 'parts' key"
                     raise ValueError(msg)
 
-                # Append new parts
-                new_parts_data = [self._part_to_dict(part) for part in parts]
-                existing_data["parts"].extend(new_parts_data)
+                # Merge new parts, deduplicating by SKU (last-write-wins)
+                existing_by_sku = {p["sku"]: p for p in existing_data["parts"]}
+                for part in parts:
+                    existing_by_sku[part.sku] = self._part_to_dict(part)
+                existing_data["parts"] = list(existing_by_sku.values())
 
                 # Update metadata
                 existing_data["metadata"]["export_date"] = datetime.now(UTC).isoformat()
@@ -541,9 +543,11 @@ class JSONExporter:
                     msg = f"Invalid export format in {filename}: missing 'compatibility' key"
                     raise ValueError(msg)
 
-                # Append new compatibility data
-                new_compat_data = [self._compatibility_to_dict(comp) for comp in compatibility]
-                existing_data["compatibility"].extend(new_compat_data)
+                # Merge new compatibility data, deduplicating by part_sku (last-write-wins)
+                existing_by_sku = {c["part_sku"]: c for c in existing_data["compatibility"]}
+                for comp in compatibility:
+                    existing_by_sku[comp.part_sku] = self._compatibility_to_dict(comp)
+                existing_data["compatibility"] = list(existing_by_sku.values())
 
                 # Update metadata
                 existing_data["metadata"]["export_date"] = datetime.now(UTC).isoformat()
