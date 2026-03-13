@@ -19,7 +19,7 @@ HTTP_NOT_FOUND = 404
 HTTP_SERVER_ERROR_THRESHOLD = 500
 
 # Only these keys are allowed — prevents arbitrary file writes on the server
-ALLOWED_KEYS = frozenset({"etags", "manifest"})
+ALLOWED_KEYS = frozenset({"etags", "detail_etags", "manifest"})
 
 
 class StateSyncer:

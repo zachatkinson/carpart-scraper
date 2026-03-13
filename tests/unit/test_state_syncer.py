@@ -242,6 +242,10 @@ class TestAllowedKeys:
         """'etags' is in the allowlist."""
         assert "etags" in ALLOWED_KEYS
 
+    def test_detail_etags_is_allowed(self) -> None:
+        """'detail_etags' is in the allowlist."""
+        assert "detail_etags" in ALLOWED_KEYS
+
     def test_manifest_is_allowed(self) -> None:
         """'manifest' is in the allowlist."""
         assert "manifest" in ALLOWED_KEYS
