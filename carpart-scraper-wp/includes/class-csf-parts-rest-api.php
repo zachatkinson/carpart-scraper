@@ -437,8 +437,10 @@ class CSF_Parts_REST_API {
 		$images        = ! empty( $part->images ) ? json_decode( $part->images, true ) : array();
 		$compatibility = ! empty( $part->compatibility ) ? json_decode( $part->compatibility, true ) : array();
 
-		// Display name: always use CSF{sku} format for consistency.
-		$display_name = 'CSF' . $part->sku;
+		// Display name: always use CSF{numeric} format for consistency.
+		// SKU may already include CSF- prefix (e.g., "CSF-10367"), so strip it first.
+		$sku_numeric  = preg_replace( '/^CSF-?/', '', $part->sku );
+		$display_name = 'CSF' . $sku_numeric;
 
 		// Extract unique makes from compatibility data.
 		$makes = array();

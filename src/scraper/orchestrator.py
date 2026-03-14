@@ -1576,6 +1576,10 @@ class ScraperOrchestrator:
                 # Persist detail page hashes for next run
                 self.detail_etag_store.save()
 
+                # Save checkpoint after Phase 3 so enriched data (images,
+                # descriptions) persists across CI runs.
+                self._save_checkpoint(make_filter, year_filter)
+
                 logger.info(
                     "workflow_phase_3_complete",
                     parts_enriched=details_fetched_count,
