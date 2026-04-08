@@ -503,7 +503,7 @@ class CSF_Parts_AJAX_Handler {
 		// Upsert the merged data.
 		$result = $this->database->upsert_part( $update_data );
 
-		if ( false === $result ) {
+		if ( false === $result['id'] ) {
 			wp_send_json_error( array( 'message' => 'Failed to update part in database.' ) );
 		}
 

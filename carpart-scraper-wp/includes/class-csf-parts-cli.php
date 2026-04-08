@@ -114,18 +114,20 @@ class CSF_Parts_CLI {
 		}
 
 		// Success summary.
-		$created = $results['created'] ?? 0;
-		$updated = $results['updated'] ?? 0;
-		$skipped = $results['skipped'] ?? 0;
-		$total   = $created + $updated;
+		$created   = $results['created'] ?? 0;
+		$updated   = $results['updated'] ?? 0;
+		$unchanged = $results['unchanged'] ?? 0;
+		$skipped   = $results['skipped'] ?? 0;
+		$total     = $created + $updated;
 
 		WP_CLI::success(
 			sprintf(
-				'Imported %d parts in %s seconds (%d created, %d updated, %d skipped)',
+				'Imported %d parts in %s seconds (%d created, %d updated, %d unchanged, %d skipped)',
 				$total,
 				$duration,
 				$created,
 				$updated,
+				$unchanged,
 				$skipped
 			)
 		);

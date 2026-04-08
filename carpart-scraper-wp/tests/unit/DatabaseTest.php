@@ -206,7 +206,167 @@ final class DatabaseTest extends TestCase {
 		$result = $this->database->upsert_part( $part_data );
 
 		// Assert.
-		$this->assertEquals( 1, $result );
+		$this->assertEquals( 1, $result['id'] );
+		$this->assertEquals( 'created', $result['status'] );
+	}
+
+	/**
+	 * Test: upsert_part returns unchanged when data is identical.
+	 *
+	 * Verifies that no full update is issued when the incoming data
+	 * matches the existing row, preserving the updated_at timestamp.
+	 */
+	public function test_upsert_part_returns_unchanged_when_data_identical(): void {
+		// Arrange.
+		$part_data = array(
+			'sku'            => 'CSF-5000',
+			'name'           => 'Test Radiator',
+			'price'          => 199.99,
+			'category'       => 'Radiators',
+			'manufacturer'   => 'CSF',
+			'in_stock'       => true,
+			'description'    => 'Test description',
+			'short_description' => '',
+			'position'       => '',
+			'tech_notes'     => '',
+			'compatibility'  => array(),
+			'specifications' => array(),
+			'features'       => array(),
+			'images'         => array(),
+			'interchange_numbers' => array(),
+			'scraped_at'     => '2025-01-01',
+		);
+
+		$existing = (object) array(
+			'id'                  => 42,
+			'sku'                 => 'CSF-5000',
+			'name'                => 'Test Radiator',
+			'price'               => '199.99',
+			'category'            => 'Radiators',
+			'manufacturer'        => 'CSF',
+			'in_stock'            => 1,
+			'description'         => 'Test description',
+			'short_description'   => '',
+			'position'            => '',
+			'tech_notes'          => '',
+			'compatibility'       => '[]',
+			'specifications'      => '[]',
+			'features'            => '[]',
+			'images'              => '[]',
+			'interchange_numbers' => '[]',
+			'scraped_at'          => '2025-01-01',
+		);
+
+		Functions\when( 'current_time' )->justReturn( '2025-10-28 12:00:00' );
+
+		// Mock get_part_by_sku returning existing part.
+		$this->wpdb_mock->shouldReceive( 'prepare' )
+			->once()
+			->andReturn( 'SELECT * FROM wp_csf_parts WHERE sku = "CSF-5000"' );
+
+		$this->wpdb_mock->shouldReceive( 'get_row' )
+			->once()
+			->andReturn( $existing );
+
+		// Expect only the last_synced update query, NOT a full update.
+		$this->wpdb_mock->shouldReceive( 'prepare' )
+			->once()
+			->withArgs( function ( $sql, ...$args ) {
+				return strpos( $sql, 'last_synced' ) !== false
+					&& strpos( $sql, 'updated_at = updated_at' ) !== false;
+			} )
+			->andReturn( 'UPDATE wp_csf_parts SET last_synced = ...' );
+
+		$this->wpdb_mock->shouldReceive( 'query' )
+			->once()
+			->andReturn( 1 );
+
+		// Should NOT receive a full update call.
+		$this->wpdb_mock->shouldNotReceive( 'update' );
+
+		// Act.
+		$result = $this->database->upsert_part( $part_data );
+
+		// Assert.
+		$this->assertEquals( 42, $result['id'] );
+		$this->assertEquals( 'unchanged', $result['status'] );
+	}
+
+	/**
+	 * Test: upsert_part returns updated when data differs.
+	 *
+	 * Verifies that a full update is issued when part content has changed.
+	 */
+	public function test_upsert_part_returns_updated_when_data_differs(): void {
+		// Arrange.
+		$part_data = array(
+			'sku'            => 'CSF-6000',
+			'name'           => 'Updated Radiator Name',
+			'price'          => 299.99,
+			'category'       => 'Radiators',
+			'manufacturer'   => 'CSF',
+			'in_stock'       => true,
+			'description'    => 'New description',
+			'short_description' => '',
+			'position'       => '',
+			'tech_notes'     => '',
+			'compatibility'  => array(),
+			'specifications' => array(),
+			'features'       => array(),
+			'images'         => array(),
+			'interchange_numbers' => array(),
+			'scraped_at'     => '2025-01-01',
+		);
+
+		$existing = (object) array(
+			'id'                  => 99,
+			'sku'                 => 'CSF-6000',
+			'name'                => 'Old Radiator Name',
+			'price'               => '199.99',
+			'category'            => 'Radiators',
+			'manufacturer'        => 'CSF',
+			'in_stock'            => 1,
+			'description'         => 'Old description',
+			'short_description'   => '',
+			'position'            => '',
+			'tech_notes'          => '',
+			'compatibility'       => '[]',
+			'specifications'      => '[]',
+			'features'            => '[]',
+			'images'              => '[]',
+			'interchange_numbers' => '[]',
+			'scraped_at'          => '2025-01-01',
+		);
+
+		Functions\when( 'current_time' )->justReturn( '2025-10-28 12:00:00' );
+
+		// Mock get_part_by_sku returning existing part.
+		$this->wpdb_mock->shouldReceive( 'prepare' )
+			->once()
+			->andReturn( 'SELECT * FROM wp_csf_parts WHERE sku = "CSF-6000"' );
+
+		$this->wpdb_mock->shouldReceive( 'get_row' )
+			->once()
+			->andReturn( $existing );
+
+		// Expect a full update call (data changed).
+		$this->wpdb_mock->shouldReceive( 'update' )
+			->once()
+			->with(
+				'wp_csf_parts',
+				Mockery::type( 'array' ),
+				Mockery::type( 'array' ),
+				Mockery::type( 'array' ),
+				Mockery::type( 'array' )
+			)
+			->andReturn( 1 );
+
+		// Act.
+		$result = $this->database->upsert_part( $part_data );
+
+		// Assert.
+		$this->assertEquals( 99, $result['id'] );
+		$this->assertEquals( 'updated', $result['status'] );
 	}
 
 	/**
@@ -635,7 +795,8 @@ final class DatabaseTest extends TestCase {
 		$result = $this->database->upsert_part( $part_data );
 
 		// Assert.
-		$this->assertEquals( 1, $result );
+		$this->assertEquals( 1, $result['id'] );
+		$this->assertEquals( 'created', $result['status'] );
 	}
 
 	/**

@@ -1129,6 +1129,8 @@ class TestScrapeAllPhase2:
         orchestrator.vehicle_compat = {}
         orchestrator.parts_scraped = 0
         orchestrator.processed_application_ids = set()
+        orchestrator.new_skus = set()
+        orchestrator.changed_skus = set()
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
         orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
@@ -1292,6 +1294,8 @@ class TestScrapeAllPhase3:
         orchestrator.vehicle_compat = {}
         orchestrator.parts_scraped = 0
         orchestrator.processed_application_ids = set()
+        orchestrator.new_skus = set()
+        orchestrator.changed_skus = set()
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
         orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
@@ -1426,6 +1430,8 @@ class TestScrapeAllResume:
         orchestrator.vehicle_compat = {}
         orchestrator.parts_scraped = 0
         orchestrator.processed_application_ids = set()
+        orchestrator.new_skus = set()
+        orchestrator.changed_skus = set()
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
         orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
@@ -1519,6 +1525,8 @@ class TestScrapeAllIncremental:
         orchestrator.vehicle_compat = {}
         orchestrator.parts_scraped = 0
         orchestrator.processed_application_ids = set()
+        orchestrator.new_skus = set()
+        orchestrator.changed_skus = set()
         orchestrator.failure_tracker = FailureTracker()
         orchestrator.delay_override = None
         orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
@@ -1652,6 +1660,86 @@ class TestExportData:
         orchestrator.exporter.export_compatibility_incremental.assert_called_once()
         assert paths["parts"] == tmp_path / "parts.json"
         assert paths["compatibility"] == tmp_path / "compat.json"
+
+
+class TestExportCompleteDelta:
+    """Test export_complete_delta filters to only new and changed parts."""
+
+    def test_delta_export_includes_only_new_and_changed(self, tmp_path: Path) -> None:
+        """Delta export contains only parts whose SKU is in new_skus or changed_skus."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.exporter = Mock()
+        orchestrator.exporter.export_complete.return_value = tmp_path / "parts_delta.json"
+
+        part_new = Part(sku="CSF-1001", name="New Radiator", category="Radiator")
+        part_changed = Part(sku="CSF-1002", name="Changed Condenser", category="Condenser")
+        part_unchanged = Part(sku="CSF-1003", name="Unchanged Fan", category="Fan")
+
+        orchestrator.unique_parts = {
+            "CSF-1001": part_new,
+            "CSF-1002": part_changed,
+            "CSF-1003": part_unchanged,
+        }
+        vehicle = Vehicle(make="Honda", model="Civic", year=2024)
+        orchestrator.vehicle_compat = {
+            "CSF-1001": [vehicle],
+            "CSF-1002": [vehicle],
+            "CSF-1003": [vehicle],
+        }
+        orchestrator.new_skus = {"CSF-1001"}
+        orchestrator.changed_skus = {"CSF-1002"}
+
+        # Act
+        result = orchestrator.export_complete_delta()
+
+        # Assert
+        assert result == tmp_path / "parts_delta.json"
+        call_args = orchestrator.exporter.export_complete.call_args
+        exported_parts = call_args[0][0]
+        exported_compat = call_args[0][1]
+
+        exported_skus = {p.sku for p in exported_parts}
+        assert exported_skus == {"CSF-1001", "CSF-1002"}
+        assert "CSF-1003" not in exported_skus
+        assert "CSF-1003" not in exported_compat
+
+    def test_delta_export_returns_none_when_nothing_changed(self) -> None:
+        """Delta export returns None when there are no new or changed parts."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.exporter = Mock()
+        orchestrator.unique_parts = {"CSF-1001": Part(sku="CSF-1001", name="R", category="R")}
+        orchestrator.vehicle_compat = {}
+        orchestrator.new_skus = set()
+        orchestrator.changed_skus = set()
+
+        # Act
+        result = orchestrator.export_complete_delta()
+
+        # Assert
+        assert result is None
+        orchestrator.exporter.export_complete.assert_not_called()
+
+    def test_delta_export_uses_correct_filename(self, tmp_path: Path) -> None:
+        """Delta export passes 'parts_delta.json' as the filename."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.exporter = Mock()
+        orchestrator.exporter.export_complete.return_value = tmp_path / "parts_delta.json"
+
+        part = Part(sku="CSF-1001", name="Radiator", category="Radiator")
+        orchestrator.unique_parts = {"CSF-1001": part}
+        orchestrator.vehicle_compat = {"CSF-1001": []}
+        orchestrator.new_skus = {"CSF-1001"}
+        orchestrator.changed_skus = set()
+
+        # Act
+        orchestrator.export_complete_delta()
+
+        # Assert
+        call_kwargs = orchestrator.exporter.export_complete.call_args[1]
+        assert call_kwargs["filename"] == "parts_delta.json"
 
 
 class TestHierarchyCaching:

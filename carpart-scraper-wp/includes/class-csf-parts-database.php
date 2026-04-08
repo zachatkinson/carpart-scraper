@@ -202,13 +202,13 @@ class CSF_Parts_Database {
 	 *
 	 * @since 2.0.0
 	 * @param array $data Part data.
-	 * @return int|false Part ID on success, false on failure.
+	 * @return array{id: int|false, status: string} Part ID and status ('created', 'updated', 'unchanged').
 	 */
 	public function upsert_part( array $data ) {
 		$existing = $this->get_part_by_sku( $data['sku'] );
 
-		// Prepare data for database.
-		$db_data = array(
+		// Prepare content data for database (excludes timestamps for comparison).
+		$content_data = array(
 			'sku'                 => $data['sku'],
 			'name'                => $data['name'] ?? '',
 			'description'         => $data['description'] ?? '',
@@ -225,11 +225,49 @@ class CSF_Parts_Database {
 			'images'              => isset( $data['images'] ) ? wp_json_encode( $data['images'] ) : '',
 			'interchange_numbers' => isset( $data['interchange_numbers'] ) ? wp_json_encode( $data['interchange_numbers'] ) : '',
 			'scraped_at'          => $data['scraped_at'] ?? '',
-			'last_synced'         => current_time( 'mysql' ),
 		);
 
 		if ( $existing ) {
-			// Update existing part.
+			// Compare content fields to detect actual changes.
+			$has_changes = false;
+			foreach ( $content_data as $key => $new_value ) {
+				$existing_value = $existing->$key ?? '';
+
+				// Normalize for comparison: cast both to string.
+				$existing_str = (string) $existing_value;
+				$new_str      = (string) $new_value;
+
+				// Normalize numeric comparison for price.
+				if ( 'price' === $key && null !== $new_value ) {
+					$existing_str = number_format( (float) $existing_value, 2, '.', '' );
+					$new_str      = number_format( (float) $new_value, 2, '.', '' );
+				}
+
+				if ( $existing_str !== $new_str ) {
+					$has_changes = true;
+					break;
+				}
+			}
+
+			if ( ! $has_changes ) {
+				// Nothing changed — update only last_synced without touching updated_at.
+				$this->wpdb->query(
+					$this->wpdb->prepare(
+						"UPDATE {$this->table_parts} SET last_synced = %s, updated_at = updated_at WHERE id = %d",
+						current_time( 'mysql' ),
+						$existing->id
+					)
+				);
+				return array(
+					'id'     => $existing->id,
+					'status' => 'unchanged',
+				);
+			}
+
+			// Content changed — do full update.
+			$db_data                = $content_data;
+			$db_data['last_synced'] = current_time( 'mysql' );
+
 			$result = $this->wpdb->update(
 				$this->table_parts,
 				$db_data,
@@ -256,9 +294,15 @@ class CSF_Parts_Database {
 				array( '%d' )
 			);
 
-			return false !== $result ? $existing->id : false;
+			return array(
+				'id'     => false !== $result ? $existing->id : false,
+				'status' => 'updated',
+			);
 		} else {
 			// Insert new part.
+			$db_data                = $content_data;
+			$db_data['last_synced'] = current_time( 'mysql' );
+
 			$result = $this->wpdb->insert(
 				$this->table_parts,
 				$db_data,
@@ -283,7 +327,10 @@ class CSF_Parts_Database {
 				)
 			);
 
-			return false !== $result ? $this->wpdb->insert_id : false;
+			return array(
+				'id'     => false !== $result ? $this->wpdb->insert_id : false,
+				'status' => 'created',
+			);
 		}
 	}
 

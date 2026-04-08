@@ -172,6 +172,7 @@ class StateSyncer:
                 "parts_push_success",
                 created=results.get("created", 0),
                 updated=results.get("updated", 0),
+                unchanged=results.get("unchanged", 0),
                 skipped=results.get("skipped", 0),
                 path=str(parts_file),
             )

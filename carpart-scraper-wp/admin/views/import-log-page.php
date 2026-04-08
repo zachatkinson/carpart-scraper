@@ -61,6 +61,7 @@ $cleared = isset( $_GET['cleared'] ) && '1' === $_GET['cleared'];
 					<th><?php echo esc_html( 'Parts' ); ?></th>
 					<th><?php echo esc_html( 'Created' ); ?></th>
 					<th><?php echo esc_html( 'Updated' ); ?></th>
+					<th><?php echo esc_html( 'Unchanged' ); ?></th>
 					<th><?php echo esc_html( 'Skipped' ); ?></th>
 					<th><?php echo esc_html( 'Errors' ); ?></th>
 					<th><?php echo esc_html( 'Warnings' ); ?></th>
@@ -93,6 +94,7 @@ $cleared = isset( $_GET['cleared'] ) && '1' === $_GET['cleared'];
 						<td><?php echo esc_html( number_format_i18n( $log['parts_count'] ) ); ?></td>
 						<td><?php echo esc_html( number_format_i18n( $results['created'] ?? 0 ) ); ?></td>
 						<td><?php echo esc_html( number_format_i18n( $results['updated'] ?? 0 ) ); ?></td>
+						<td><?php echo esc_html( number_format_i18n( $results['unchanged'] ?? 0 ) ); ?></td>
 						<td><?php echo esc_html( number_format_i18n( $results['skipped'] ?? 0 ) ); ?></td>
 						<td>
 							<?php if ( $error_count > 0 ) : ?>

@@ -141,9 +141,10 @@ class CSF_Parts_Auto_Import {
 		// Log success.
 		error_log(
 			sprintf(
-				'CSF Parts Auto Import Success: Created %d, Updated %d, Skipped %d',
+				'CSF Parts Auto Import Success: Created %d, Updated %d, Unchanged %d, Skipped %d',
 				$results['created'],
 				$results['updated'],
+				$results['unchanged'] ?? 0,
 				$results['skipped']
 			)
 		);
@@ -546,7 +547,7 @@ class CSF_Parts_Auto_Import {
 			$time_ago = human_time_diff( strtotime( $last_import ), current_time( 'timestamp' ) );
 
 			printf(
-				'<div class="notice notice-info"><p><strong>%s:</strong> %s (%s: %d, %s: %d, %s: %d)</p></div>',
+				'<div class="notice notice-info"><p><strong>%s:</strong> %s (%s: %d, %s: %d, %s: %d, %s: %d)</p></div>',
 				esc_html__( 'Last Auto Import', 'csf-parts' ),
 				/* translators: %s: time ago */
 				sprintf( esc_html__( '%s ago', 'csf-parts' ), $time_ago ),
@@ -554,6 +555,8 @@ class CSF_Parts_Auto_Import {
 				intval( $results['created'] ?? 0 ),
 				esc_html__( 'Updated', 'csf-parts' ),
 				intval( $results['updated'] ?? 0 ),
+				esc_html__( 'Unchanged', 'csf-parts' ),
+				intval( $results['unchanged'] ?? 0 ),
 				esc_html__( 'Skipped', 'csf-parts' ),
 				intval( $results['skipped'] ?? 0 )
 			);

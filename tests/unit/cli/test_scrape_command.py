@@ -66,6 +66,10 @@ def mock_orchestrator(mocker: MockerFixture) -> MagicMock:
         "compatibility": Path("exports/compatibility.json"),
     }
     mock_instance.export_complete.return_value = Path("exports/parts_complete.json")
+    mock_instance.export_complete_delta.return_value = Path("exports/parts_delta.json")
+    mock_instance.new_skus = set()
+    mock_instance.changed_skus = set()
+    mock_instance.unique_parts = {}
     mock_instance.image_syncer = None
     mock_instance.image_processor = MagicMock()
 

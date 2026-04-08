@@ -357,6 +357,10 @@ class ScraperOrchestrator:
         self.parts_scraped = 0
         self.processed_application_ids: set[int] = set()
 
+        # Change tracking (populated by scrape_all)
+        self.new_skus: set[str] = set()
+        self.changed_skus: set[str] = set()
+
         # Failure tracking
         self.failure_tracker = FailureTracker()
 
@@ -1443,6 +1447,10 @@ class ScraperOrchestrator:
             changed_skus=len(changed_skus_found),
         )
 
+        # Store change tracking on instance for delta exports
+        self.new_skus.update(new_skus_found)
+        self.changed_skus.update(changed_skus_found)
+
         # Log incremental summary if we loaded a previous export
         if previous_hashes:
             preserved_skus = set(previous_hashes.keys()) - new_skus_found - changed_skus_found
@@ -1731,6 +1739,36 @@ class ScraperOrchestrator:
         """
         parts_list = list(self.unique_parts.values())
         return self.exporter.export_complete(parts_list, self.vehicle_compat)
+
+    def export_complete_delta(self) -> Path | None:
+        """Export only new and changed parts with inline compatibility.
+
+        Uses change tracking from scrape_all() to produce a minimal
+        delta file for WordPress import, avoiding unnecessary updates.
+
+        Returns:
+            Path to the delta export file, or None if nothing changed
+        """
+        delta_skus = self.new_skus | self.changed_skus
+
+        if not delta_skus:
+            logger.info("delta_export_skipped", reason="no new or changed parts")
+            return None
+
+        delta_parts = [part for sku, part in self.unique_parts.items() if sku in delta_skus]
+        delta_compat = {
+            sku: vehicles for sku, vehicles in self.vehicle_compat.items() if sku in delta_skus
+        }
+
+        logger.info(
+            "delta_export_started",
+            new=len(self.new_skus),
+            changed=len(self.changed_skus),
+            total_delta=len(delta_parts),
+            total_all=len(self.unique_parts),
+        )
+
+        return self.exporter.export_complete(delta_parts, delta_compat, filename="parts_delta.json")
 
     def get_stats(self) -> dict[str, Any]:
         """Get current scraping statistics.

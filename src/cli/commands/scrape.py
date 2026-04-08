@@ -104,7 +104,7 @@ FAILURE_RATE_THRESHOLD = 0.05
     envvar="CSF_TIME_BUDGET",
     help="Max minutes to run before saving checkpoint and exiting (env: CSF_TIME_BUDGET)",
 )
-def scrape(  # noqa: PLR0913, PLR0915
+def scrape(  # noqa: PLR0912, PLR0913, PLR0915
     make: str | None,
     year: int | None,
     output_dir: Path,
@@ -207,14 +207,28 @@ def scrape(  # noqa: PLR0913, PLR0915
                 complete_path = orchestrator.export_complete()
                 export_paths["complete"] = complete_path
 
+                # Also produce delta-only export for efficient WP import
+                delta_path = orchestrator.export_complete_delta()
+                if delta_path is not None:
+                    export_paths["delta"] = delta_path
+
             # Collect cumulative sync result from streaming sync
             if orchestrator.image_syncer is not None:
                 sync_result = orchestrator.image_syncer.cumulative_result
 
             # Push parts data to WordPress for remote mode
-            if state_syncer is not None and "complete" in export_paths:
-                console.print("[bold]Importing parts to WordPress...[/bold]")
-                state_syncer.push_parts(export_paths["complete"])
+            # Prefer delta (new+changed only) over full export to avoid
+            # unnecessary updates on the WordPress side.
+            if state_syncer is not None:
+                push_path = export_paths.get("delta") or export_paths.get("complete")
+                if push_path is not None:
+                    delta_count = len(orchestrator.new_skus) + len(orchestrator.changed_skus)
+                    total_count = len(orchestrator.unique_parts)
+                    console.print(
+                        f"[bold]Importing parts to WordPress...[/bold] "
+                        f"({delta_count} new/changed of {total_count} total)"
+                    )
+                    state_syncer.push_parts(push_path)
 
         # Print summary
         _print_summary(stats, export_paths, sync_result)

@@ -27,11 +27,12 @@ class CSF_Parts_JSON_Importer {
 	 * @var array
 	 */
 	private $results = array(
-		'created'  => 0,
-		'updated'  => 0,
-		'skipped'  => 0,
-		'errors'   => array(),
-		'warnings' => array(),
+		'created'   => 0,
+		'updated'   => 0,
+		'unchanged' => 0,
+		'skipped'   => 0,
+		'errors'    => array(),
+		'warnings'  => array(),
 	);
 
 	/**
@@ -196,7 +197,7 @@ class CSF_Parts_JSON_Importer {
 		// Upsert into database (handles both insert and update).
 		$result = $this->database->upsert_part( $part_data );
 
-		if ( false === $result ) {
+		if ( false === $result['id'] ) {
 			$this->results['errors'][] = sprintf(
 				/* translators: %s: SKU */
 				'Failed to import part: %s',
@@ -205,12 +206,8 @@ class CSF_Parts_JSON_Importer {
 			return;
 		}
 
-		// Track results.
-		if ( $existing ) {
-			$this->results['updated']++;
-		} else {
-			$this->results['created']++;
-		}
+		// Track results using status from upsert.
+		$this->results[ $result['status'] ]++;
 	}
 
 	/**
