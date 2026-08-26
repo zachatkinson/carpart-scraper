@@ -253,9 +253,15 @@ class CSF_Parts_Auto_Import {
 	 * @return WP_REST_Response|WP_Error Response or error.
 	 */
 	public function handle_push_import( WP_REST_Request $request ) {
-		$json_data = $request->get_json_params();
+		// Imports decode the full payload into PHP arrays — raise the limit
+		// from WP_MEMORY_LIMIT (often 40M) to WP_MAX_MEMORY_LIMIT first.
+		wp_raise_memory_limit( 'admin' );
 
-		if ( empty( $json_data ) ) {
+		// Use the raw body instead of get_json_params() to avoid holding a
+		// decoded copy AND a re-encoded copy of the payload in memory at once.
+		$body = $request->get_body();
+
+		if ( empty( $body ) || ! $this->is_valid_json( $body ) ) {
 			return new WP_Error(
 				'invalid_data',
 				__( 'Invalid or empty JSON data.', 'csf-parts' ),
@@ -273,7 +279,7 @@ class CSF_Parts_Auto_Import {
 			}
 
 			$temp_file = $import_dir . '/push-import-' . time() . '.json';
-			file_put_contents( $temp_file, wp_json_encode( $json_data ) );
+			file_put_contents( $temp_file, $body );
 
 			// Run import.
 			$this->run_import( $temp_file );
@@ -295,6 +301,26 @@ class CSF_Parts_Auto_Import {
 				array( 'status' => 500 )
 			);
 		}
+	}
+
+	/**
+	 * Validate a JSON string without keeping the decoded value.
+	 *
+	 * Uses json_validate() (PHP 8.3+) when available — it checks syntax
+	 * without building the decoded structure, so memory stays flat even
+	 * for multi-megabyte payloads.
+	 *
+	 * @since 1.8.9
+	 * @param string $json JSON string to validate.
+	 * @return bool True if valid JSON.
+	 */
+	private function is_valid_json( string $json ): bool {
+		if ( function_exists( 'json_validate' ) ) {
+			return json_validate( $json );
+		}
+
+		json_decode( $json );
+		return JSON_ERROR_NONE === json_last_error();
 	}
 
 	/**

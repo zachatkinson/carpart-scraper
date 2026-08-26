@@ -15,10 +15,19 @@ on:
         required: false
         type: boolean
         default: false
+      push_full:
+        description: "Push the complete catalog to WordPress instead of the delta (recovery after a failed import)."
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: scrape-catalog
   cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write  # lets the keepalive step re-enable this workflow
 
 jobs:
   scrape:
@@ -68,9 +77,15 @@ jobs:
             MAKE_FLAG="--make ${{ inputs.make }}"
           fi
 
+          PUSH_FLAG=""
+          if [ "${{ inputs.push_full }}" = "true" ]; then
+            PUSH_FLAG="--push-full"
+          fi
+
           uv run carpart scrape \
             $MAKE_FLAG \
             $FORCE_FLAG \
+            $PUSH_FLAG \
             --resume \
             --time-budget 350 \
             --sync-images \
@@ -101,3 +116,33 @@ jobs:
             exports/
             checkpoints/
           retention-days: 7
+
+      # GitHub disables cron schedules after 60 days without repo activity.
+      # Re-enabling via the API resets that timer without needing commits.
+      - name: Keep schedule alive
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PUT \
+            "repos/${{ github.repository }}/actions/workflows/scrape.yml/enable" \
+            && echo "Workflow inactivity timer reset" \
+            || echo "::warning::Keepalive call failed — schedule may auto-disable after 60 days of repo inactivity"
+
+      # Dead-man's-switch: healthchecks.io (or compatible) alerts if no ping
+      # arrives on schedule, catching silent failures like a disabled cron.
+      # Skipped when the HEALTHCHECK_PING_URL secret is not configured.
+      - name: Ping healthcheck
+        if: always()
+        env:
+          HC_URL: ${{ secrets.HEALTHCHECK_PING_URL }}
+        run: |
+          if [ -z "$HC_URL" ]; then
+            echo "HEALTHCHECK_PING_URL not set — skipping ping"
+            exit 0
+          fi
+          if [ "${{ job.status }}" = "success" ]; then
+            curl -fsS -m 10 --retry 3 "$HC_URL" > /dev/null
+          else
+            curl -fsS -m 10 --retry 3 "$HC_URL/fail" > /dev/null
+          fi

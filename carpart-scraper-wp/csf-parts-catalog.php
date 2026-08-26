@@ -3,7 +3,7 @@
  * Plugin Name:       CSF Parts Catalog
  * Plugin URI:        https://github.com/zachatkinson/carpart-scraper
  * Description:       Complete automotive parts catalog system with Gutenberg blocks, async search, and JSON import management for CSF MyCarParts data.
- * Version:           1.8.8
+ * Version:           1.8.9
  * Requires at least: 6.7
  * Requires PHP:      8.2
  * Author:            Development Team
@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Plugin version.
  */
-define( 'CSF_PARTS_VERSION', '1.8.8' );
+define( 'CSF_PARTS_VERSION', '1.8.9' );
 
 /**
  * Plugin root directory.

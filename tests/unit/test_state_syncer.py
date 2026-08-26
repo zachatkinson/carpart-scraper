@@ -301,7 +301,7 @@ class TestPushParts:
         """Returns False on HTTP error."""
         # Arrange
         parts_file = tmp_path / "parts_complete.json"
-        parts_file.write_text('{"parts": []}')
+        parts_file.write_text('{"parts": [{"sku": "CSF-001"}]}')
         syncer.client.post.side_effect = httpx.HTTPError("Server error")
 
         # Act
@@ -309,3 +309,86 @@ class TestPushParts:
 
         # Assert
         assert result is False
+
+    def test_push_parts_empty_parts_skips_request(
+        self, syncer: StateSyncer, tmp_path: Path
+    ) -> None:
+        """Skips the request entirely when the export has no parts."""
+        # Arrange
+        parts_file = tmp_path / "parts_delta.json"
+        parts_file.write_text('{"parts": []}')
+
+        # Act
+        result = syncer.push_parts(parts_file)
+
+        # Assert
+        assert result is True
+        syncer.client.post.assert_not_called()
+
+    def test_push_parts_invalid_json_returns_false(
+        self, syncer: StateSyncer, tmp_path: Path
+    ) -> None:
+        """Returns False when the export file is not valid JSON."""
+        # Arrange
+        parts_file = tmp_path / "parts_complete.json"
+        parts_file.write_text("not json")
+
+        # Act
+        result = syncer.push_parts(parts_file)
+
+        # Assert
+        assert result is False
+        syncer.client.post.assert_not_called()
+
+    def test_push_parts_chunks_large_catalog(
+        self, syncer: StateSyncer, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """Splits a large catalog into multiple requests of chunk_size parts."""
+        # Arrange
+        parts = [{"sku": f"CSF-{i:05d}"} for i in range(5)]
+        parts_file = tmp_path / "parts_complete.json"
+        parts_file.write_text(json.dumps({"metadata": {"version": "1.0"}, "parts": parts}))
+
+        mock_response = mocker.Mock(spec=httpx.Response)
+        mock_response.json.return_value = {
+            "success": True,
+            "results": {"created": 2, "updated": 0, "unchanged": 0, "skipped": 0},
+        }
+        syncer.client.post.return_value = mock_response
+
+        # Act
+        result = syncer.push_parts(parts_file, chunk_size=2)
+
+        # Assert
+        assert result is True
+        assert syncer.client.post.call_count == 3
+        sent_parts = [call.kwargs["json"]["parts"] for call in syncer.client.post.call_args_list]
+        assert [len(chunk) for chunk in sent_parts] == [2, 2, 1]
+        assert [p["sku"] for chunk in sent_parts for p in chunk] == [p["sku"] for p in parts]
+        assert all(
+            call.kwargs["json"]["metadata"] == {"version": "1.0"}
+            for call in syncer.client.post.call_args_list
+        )
+
+    def test_push_parts_aborts_on_failed_chunk(
+        self, syncer: StateSyncer, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """Returns False and stops sending when a chunk fails."""
+        # Arrange
+        parts = [{"sku": f"CSF-{i:05d}"} for i in range(6)]
+        parts_file = tmp_path / "parts_complete.json"
+        parts_file.write_text(json.dumps({"parts": parts}))
+
+        mock_response = mocker.Mock(spec=httpx.Response)
+        mock_response.json.return_value = {"success": True, "results": {"created": 2}}
+        syncer.client.post.side_effect = [
+            mock_response,
+            httpx.HTTPError("Server error"),
+        ]
+
+        # Act
+        result = syncer.push_parts(parts_file, chunk_size=2)
+
+        # Assert
+        assert result is False
+        assert syncer.client.post.call_count == 2

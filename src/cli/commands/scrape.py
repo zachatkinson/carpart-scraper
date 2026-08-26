@@ -104,6 +104,13 @@ FAILURE_RATE_THRESHOLD = 0.05
     envvar="CSF_TIME_BUDGET",
     help="Max minutes to run before saving checkpoint and exiting (env: CSF_TIME_BUDGET)",
 )
+@click.option(
+    "--push-full",
+    is_flag=True,
+    default=False,
+    help="Push the complete catalog to WordPress instead of the delta "
+    "(recovery after a failed import)",
+)
 def scrape(  # noqa: PLR0912, PLR0913, PLR0915
     make: str | None,
     year: int | None,
@@ -116,6 +123,7 @@ def scrape(  # noqa: PLR0912, PLR0913, PLR0915
     wp_url: str | None,
     wp_api_key: str | None,
     time_budget: float | None,
+    push_full: bool,
 ) -> None:
     r"""Scrape automotive parts data from CSF MyCarParts.
 
@@ -176,6 +184,7 @@ def scrape(  # noqa: PLR0912, PLR0913, PLR0915
 
             # Run the full scraping pipeline
             timed_out = False
+            push_failed = False
             try:
                 stats = orchestrator.scrape_all(
                     make_filter=make,
@@ -218,22 +227,35 @@ def scrape(  # noqa: PLR0912, PLR0913, PLR0915
 
             # Push parts data to WordPress for remote mode
             # Prefer delta (new+changed only) over full export to avoid
-            # unnecessary updates on the WordPress side.
+            # unnecessary updates on the WordPress side. --push-full forces
+            # the complete catalog (recovery after a failed import).
             if state_syncer is not None:
-                push_path = export_paths.get("delta") or export_paths.get("complete")
+                if push_full:
+                    push_path = export_paths.get("complete")
+                else:
+                    push_path = export_paths.get("delta") or export_paths.get("complete")
                 if push_path is not None:
                     delta_count = len(orchestrator.new_skus) + len(orchestrator.changed_skus)
                     total_count = len(orchestrator.unique_parts)
+                    push_count = total_count if push_full else delta_count
                     console.print(
                         f"[bold]Importing parts to WordPress...[/bold] "
-                        f"({delta_count} new/changed of {total_count} total)"
+                        f"({push_count} of {total_count} total)"
                     )
-                    state_syncer.push_parts(push_path)
+                    if not state_syncer.push_parts(push_path):
+                        push_failed = True
+                        console.print(
+                            "[red]WordPress import failed.[/red] "
+                            "Recover with: carpart scrape --resume --push-full"
+                        )
 
         # Print summary
         _print_summary(stats, export_paths, sync_result)
 
-        # Determine exit code
+        # Determine exit code — a failed WP import must fail the run loudly,
+        # even after a graceful time-budget exit
+        if push_failed:
+            sys.exit(EXIT_FAILURE)
         if timed_out:
             sys.exit(EXIT_TIME_BUDGET)
         exit_code = _compute_exit_code(stats)
