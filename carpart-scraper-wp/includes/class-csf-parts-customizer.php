@@ -98,8 +98,10 @@ class CSF_Parts_Customizer {
 	 * Called during asset enqueuing to inject custom CSS variables.
 	 *
 	 * @since 2.0.0
+	 * @param string $handle Stylesheet handle to attach the inline CSS to. Must
+	 *                       be the last color stylesheet so overrides win.
 	 */
-	public function add_custom_color_overrides(): void {
+	public function add_custom_color_overrides( string $handle = 'csf-parts-colors' ): void {
 		// Get custom colors from customizer.
 		$primary_color   = get_theme_mod( 'csf_primary_color', '' );
 		$secondary_color = get_theme_mod( 'csf_secondary_color', '' );
@@ -133,6 +135,6 @@ class CSF_Parts_Customizer {
 
 		$custom_css .= '}';
 
-		wp_add_inline_style( 'csf-parts-colors', $custom_css );
+		wp_add_inline_style( $handle, $custom_css );
 	}
 }

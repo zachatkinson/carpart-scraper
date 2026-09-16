@@ -110,7 +110,7 @@
 }
 
 .csf-select:disabled {
-	background: var(--global-palette5, var(--csf-bg-alt));
+	background: var(--global-palette7, var(--csf-bg-alt));
 	cursor: not-allowed !important;
 	opacity: 0.5;
 	color: var(--global-palette3, var(--csf-text-muted));
@@ -129,14 +129,6 @@
 
 .csf-button-reset:hover {
 	opacity: 0.9;
-}
-
-/* Dark mode - keep button text white */
-@media (prefers-color-scheme: dark) {
-	.csf-button-reset,
-	.csf-btn-reset {
-		color: #FCFCFC !important;
-	}
 }
 
 /* Results Header */

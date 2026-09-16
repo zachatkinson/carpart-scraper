@@ -33,6 +33,10 @@ if ( isset( $_POST['csf_save_settings'] ) && check_admin_referer( 'csf_settings_
 	$enable_cache = isset( $_POST['csf_enable_cache'] ) ? 1 : 0;
 	update_option( 'csf_parts_enable_cache', $enable_cache );
 
+	// Appearance settings.
+	$color_scheme = isset( $_POST['csf_color_scheme'] ) ? sanitize_key( $_POST['csf_color_scheme'] ) : CSF_Parts_Constants::COLOR_SCHEME_DEFAULT;
+	update_option( CSF_Parts_Constants::OPTION_COLOR_SCHEME, CSF_Parts_Assets::sanitize_color_scheme( $color_scheme ) );
+
 	// Auto-import settings.
 	$auto_import_enabled = isset( $_POST['csf_auto_import_enabled'] ) ? 1 : 0;
 	update_option( 'csf_parts_auto_import_enabled', $auto_import_enabled );
@@ -60,6 +64,9 @@ if ( isset( $_POST['csf_save_settings'] ) && check_admin_referer( 'csf_settings_
 $cache_duration       = get_option( 'csf_parts_cache_duration', 3600 );
 $parts_per_page       = get_option( 'csf_parts_per_page', 20 );
 $enable_cache         = get_option( 'csf_parts_enable_cache', 1 );
+$color_scheme         = CSF_Parts_Assets::sanitize_color_scheme(
+	(string) get_option( CSF_Parts_Constants::OPTION_COLOR_SCHEME, CSF_Parts_Constants::COLOR_SCHEME_DEFAULT )
+);
 $auto_import_enabled  = get_option( 'csf_parts_auto_import_enabled', 0 );
 $import_source        = get_option( 'csf_parts_import_source', 'url' );
 $remote_url           = get_option( 'csf_parts_remote_url', '' );
@@ -114,6 +121,30 @@ $api_key              = get_option( 'csf_parts_api_key', '' );
 						<input type="number" id="csf_parts_per_page" name="csf_parts_per_page" value="<?php echo esc_attr( $parts_per_page ); ?>" min="10" max="100" class="regular-text" />
 						<p class="description">
 							<?php echo esc_html( 'Default number of parts to display per page in REST API and blocks (10-100). Default: 20.' ); ?>
+						</p>
+					</td>
+				</tr>
+			</tbody>
+		</table>
+
+		<h2><?php echo esc_html( 'Appearance' ); ?></h2>
+
+		<table class="form-table" role="presentation">
+			<tbody>
+				<tr>
+					<th scope="row">
+						<label for="csf_color_scheme">
+							<?php echo esc_html( 'Color Scheme' ); ?>
+						</label>
+					</th>
+					<td>
+						<select id="csf_color_scheme" name="csf_color_scheme">
+							<option value="<?php echo esc_attr( CSF_Parts_Constants::COLOR_SCHEME_AUTO ); ?>" <?php selected( $color_scheme, CSF_Parts_Constants::COLOR_SCHEME_AUTO ); ?>><?php echo esc_html( 'Automatic (follow visitor\'s device setting)' ); ?></option>
+							<option value="<?php echo esc_attr( CSF_Parts_Constants::COLOR_SCHEME_LIGHT ); ?>" <?php selected( $color_scheme, CSF_Parts_Constants::COLOR_SCHEME_LIGHT ); ?>><?php echo esc_html( 'Light only' ); ?></option>
+							<option value="<?php echo esc_attr( CSF_Parts_Constants::COLOR_SCHEME_DARK ); ?>" <?php selected( $color_scheme, CSF_Parts_Constants::COLOR_SCHEME_DARK ); ?>><?php echo esc_html( 'Dark only' ); ?></option>
+						</select>
+						<p class="description">
+							<?php echo esc_html( 'Controls the plugin\'s built-in dark palette for catalog, search, and part pages. "Automatic" switches to dark colors when the visitor\'s browser or OS prefers dark mode. Choose "Light only" to disable that switching so the plugin always uses your theme\'s light colors.' ); ?>
 						</p>
 					</td>
 				</tr>

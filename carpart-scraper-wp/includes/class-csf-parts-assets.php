@@ -62,8 +62,12 @@ class CSF_Parts_Assets {
 			'all'
 		);
 
-		// Add custom color overrides from customizer.
-		$this->customizer->add_custom_color_overrides();
+		// Dark palette: enqueued (or not) according to the Color scheme setting.
+		$color_handle = $this->enqueue_dark_color_scheme();
+
+		// Add custom color overrides from customizer. Attached to the last
+		// color stylesheet so customizer colors win in both light and dark.
+		$this->customizer->add_custom_color_overrides( $color_handle );
 
 		// Product Catalog Block CSS.
 		wp_enqueue_style(
@@ -111,6 +115,66 @@ class CSF_Parts_Assets {
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 			)
 		);
+	}
+
+	/**
+	 * Enqueue the dark color-scheme stylesheet according to the plugin setting.
+	 *
+	 * @since 1.8.11
+	 * @return string Handle of the last enqueued color stylesheet.
+	 */
+	private function enqueue_dark_color_scheme(): string {
+		$scheme = self::sanitize_color_scheme(
+			(string) get_option( CSF_Parts_Constants::OPTION_COLOR_SCHEME, CSF_Parts_Constants::COLOR_SCHEME_DEFAULT )
+		);
+		$media  = self::get_dark_stylesheet_media( $scheme );
+
+		if ( null === $media ) {
+			return 'csf-parts-colors';
+		}
+
+		wp_enqueue_style(
+			'csf-parts-colors-dark',
+			CSF_PARTS_PLUGIN_URL . 'public/css/csf-color-system-dark.css',
+			array( 'csf-parts-colors' ),
+			CSF_PARTS_VERSION,
+			$media
+		);
+
+		return 'csf-parts-colors-dark';
+	}
+
+	/**
+	 * Resolve the <link media> attribute for the dark stylesheet.
+	 *
+	 * @since 1.8.11
+	 * @param string $scheme One of CSF_Parts_Constants::COLOR_SCHEMES.
+	 * @return string|null Media query string, or null when the dark stylesheet
+	 *                     must not be loaded at all.
+	 */
+	public static function get_dark_stylesheet_media( string $scheme ): ?string {
+		switch ( $scheme ) {
+			case CSF_Parts_Constants::COLOR_SCHEME_DARK:
+				return 'all';
+			case CSF_Parts_Constants::COLOR_SCHEME_LIGHT:
+				return null;
+			case CSF_Parts_Constants::COLOR_SCHEME_AUTO:
+			default:
+				return '(prefers-color-scheme: dark)';
+		}
+	}
+
+	/**
+	 * Coerce an arbitrary value to a valid color scheme.
+	 *
+	 * @since 1.8.11
+	 * @param string $scheme Raw value (e.g. from a form or option).
+	 * @return string A member of CSF_Parts_Constants::COLOR_SCHEMES.
+	 */
+	public static function sanitize_color_scheme( string $scheme ): string {
+		return in_array( $scheme, CSF_Parts_Constants::COLOR_SCHEMES, true )
+			? $scheme
+			: CSF_Parts_Constants::COLOR_SCHEME_DEFAULT;
 	}
 
 	/**

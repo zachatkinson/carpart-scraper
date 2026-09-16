@@ -154,7 +154,7 @@
 	border: 1px solid var(--csf-border);
 	border-radius: var(--csf-radius);
 	overflow: hidden;
-	background: var(--global-palette5, var(--csf-bg-alt));
+	background: var(--global-palette7, var(--csf-bg-alt));
 	aspect-ratio: 1 / 1;
 	display: flex;
 	align-items: center;
@@ -200,7 +200,7 @@
 
 .csf-thumb.active {
 	border-color: var(--global-palette10, var(--csf-accent));
-	background: var(--global-palette5, var(--csf-bg-alt));
+	background: var(--global-palette7, var(--csf-bg-alt));
 }
 
 .csf-no-image-placeholder {
@@ -345,7 +345,7 @@
 	border-radius: 4px;
 	font-size: 14px;
 	line-height: 1.5;
-	color: var(--global-palette4, #1E1E1E);
+	color: var(--global-palette9, var(--csf-surface));
 }
 
 .engine-notice.engine-confirmed {
@@ -362,7 +362,7 @@
 	flex-shrink: 0;
 	width: 32px;
 	height: 32px;
-	color: var(--global-palette4, #1E1E1E);
+	color: var(--global-palette9, var(--csf-surface));
 }
 
 .engine-notice strong {
@@ -401,7 +401,7 @@
 .csf-product-description-section {
 	margin: 24px 0;
 	padding: 20px 24px;
-	background: var(--global-palette5, var(--csf-bg-alt));
+	background: var(--global-palette7, var(--csf-bg-alt));
 	border-radius: var(--csf-radius);
 	border: 1px solid var(--csf-border);
 }
@@ -445,7 +445,7 @@
 
 .csf-quick-specs {
 	padding: 20px;
-	background: var(--global-palette5, var(--csf-bg-alt));
+	background: var(--global-palette7, var(--csf-bg-alt));
 	border-radius: var(--csf-radius);
 	border: 1px solid var(--csf-border);
 }
@@ -541,7 +541,7 @@
 
 .csf-tab-btn:hover {
 	color: var(--global-palette3, var(--csf-text));
-	background: var(--global-palette5, var(--csf-bg-alt));
+	background: var(--global-palette7, var(--csf-bg-alt));
 }
 
 .csf-tab-btn.active {
@@ -689,7 +689,7 @@
 /* Possible Match badge - more cautious orange/amber styling */
 .fitment-match-badge.fitment-possible-match {
 	background: var(--global-palette12, var(--csf-accent));
-	color: var(--global-palette4, #1E1E1E);
+	color: var(--global-palette9, var(--csf-surface));
 }
 
 /* Badge confirmed state with animation */
@@ -712,7 +712,7 @@
 	padding: 6px 10px;
 	background: var(--global-palette12, var(--csf-accent));
 	border-radius: 4px;
-	color: var(--global-palette4, #1E1E1E);
+	color: var(--global-palette9, var(--csf-surface));
 	font-size: 13px;
 	font-weight: 600;
 	opacity: 0;
@@ -725,7 +725,7 @@
 
 .engine-confirmation svg {
 	flex-shrink: 0;
-	color: var(--global-palette4, #1E1E1E);
+	color: var(--global-palette9, var(--csf-surface));
 }
 
 .fitment-make {
@@ -892,7 +892,7 @@
 .csf-specs-grid {
 	display: grid;
 	gap: 1px;
-	background: var(--global-palette5, var(--csf-border));
+	background: var(--global-palette7, var(--csf-border));
 	border: 1px solid var(--csf-border);
 	border-radius: var(--csf-radius);
 	overflow: hidden;
@@ -912,7 +912,7 @@
 }
 
 .csf-spec-row dt {
-	background: var(--global-palette5, var(--csf-bg-alt));
+	background: var(--global-palette7, var(--csf-bg-alt));
 	font-weight: 600;
 	color: var(--global-palette3, var(--csf-text));
 }
@@ -944,7 +944,7 @@
 	align-items: flex-start;
 	gap: 12px;
 	padding: 16px;
-	background: var(--global-palette5, var(--csf-bg-alt));
+	background: var(--global-palette7, var(--csf-bg-alt));
 	border-radius: var(--csf-radius);
 	font-size: 15px;
 	line-height: 1.5;
@@ -969,7 +969,7 @@
 
 .csf-interchange-card {
 	padding: 16px;
-	background: var(--global-palette5, var(--csf-bg-alt));
+	background: var(--global-palette7, var(--csf-bg-alt));
 	border: 1px solid var(--csf-border);
 	border-radius: var(--csf-radius);
 	text-align: center;
@@ -996,7 +996,7 @@
    ========================================================================== */
 
 .site-footer {
-	background: var(--global-palette5, var(--csf-bg-alt));
+	background: var(--global-palette7, var(--csf-bg-alt));
 	border-top: 1px solid var(--csf-border);
 	padding: 40px 0;
 	margin-top: 80px;

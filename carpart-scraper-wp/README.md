@@ -69,6 +69,19 @@ Complete WordPress plugin for displaying and managing CSF MyCarParts automotive 
 3. Click "Start Import" and monitor progress
 4. Review import log for any errors
 
+### Plugin Settings
+
+Go to **CSF Parts → Settings** in wp-admin.
+
+| Section | Setting | Notes |
+|---------|---------|-------|
+| General | Enable Caching, Cache Duration, Parts Per Page | REST API response caching and default page size |
+| Appearance | Color Scheme | `Automatic` (default) switches the plugin's palette to dark when the visitor's browser or OS prefers dark mode. `Light only` disables that switching so the catalog always uses your theme's light colors. `Dark only` always applies the dark palette. |
+| Automatic Import | Enable Auto-Import, Import Source, Frequency | Scheduled JSON imports |
+| Push API | API Key | Authenticates the Python scraper's push imports |
+
+The dark palette lives in `public/css/csf-color-system-dark.css` and is enqueued with a `<link media>` attribute derived from the Color Scheme setting, so no CSS is duplicated between modes.
+
 ### Using Gutenberg Blocks
 
 #### Single Product Block

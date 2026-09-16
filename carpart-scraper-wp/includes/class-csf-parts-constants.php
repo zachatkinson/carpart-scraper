@@ -102,6 +102,24 @@ final class CSF_Parts_Constants {
 	public const IMPORT_SOURCE_DIRECTORY = 'directory';
 
 	/**
+	 * Appearance settings.
+	 *
+	 * The color scheme option controls whether the plugin's dark palette
+	 * follows the visitor's OS preference (auto), is never applied (light),
+	 * or is always applied (dark).
+	 */
+	public const OPTION_COLOR_SCHEME  = 'csf_parts_color_scheme';
+	public const COLOR_SCHEME_AUTO    = 'auto';
+	public const COLOR_SCHEME_LIGHT   = 'light';
+	public const COLOR_SCHEME_DARK    = 'dark';
+	public const COLOR_SCHEME_DEFAULT = self::COLOR_SCHEME_AUTO;
+	public const COLOR_SCHEMES        = array(
+		self::COLOR_SCHEME_AUTO,
+		self::COLOR_SCHEME_LIGHT,
+		self::COLOR_SCHEME_DARK,
+	);
+
+	/**
 	 * HTTP status codes.
 	 */
 	public const HTTP_OK                     = 200;

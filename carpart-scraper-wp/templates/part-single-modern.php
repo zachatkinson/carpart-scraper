@@ -263,7 +263,7 @@ get_header();
 							<span class="engine-label">Engine:</span>
 							<span class="engine-value"><?php echo esc_html( $engine_variants[0] ); ?></span>
 						</div>
-						<div class="engine-verify-notice" style="margin-top: 8px; padding: 8px 12px; background: var(--global-palette12, var(--csf-accent)); border-left: 3px solid var(--global-palette12, var(--csf-accent)); border-radius: 0 4px 4px 0; font-size: 13px; color: var(--global-palette4, #1E1E1E);">
+						<div class="engine-verify-notice" style="margin-top: 8px; padding: 8px 12px; background: var(--global-palette12, var(--csf-accent)); border-left: 3px solid var(--global-palette12, var(--csf-accent)); border-radius: 0 4px 4px 0; font-size: 13px; color: var(--global-palette9, var(--csf-surface));">
 							Please verify this matches your vehicle's engine before purchasing.
 						</div>
 					<?php endif; ?>
