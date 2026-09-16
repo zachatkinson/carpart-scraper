@@ -480,6 +480,8 @@ $wrapper_attributes = get_block_wrapper_attributes(
 		'data-ajax'               => $enable_ajax ? '1' : '0',
 		'data-pagination-type'    => $pagination_type,
 		'data-per-page'           => $per_page,
+		'data-order-by'           => $order_by,
+		'data-order-direction'    => $order_direction,
 		'data-columns-desktop'    => $columns['desktop'],
 		'data-default-categories' => ! empty( $default_categories ) ? esc_attr( wp_json_encode( $default_categories ) ) : '',
 	)

@@ -208,6 +208,8 @@
 		const block = form.closest('.csf-product-catalog');
 		const defaultCategories = block ? (block.dataset.defaultCategories || '') : '';
 		const perPage = block ? (block.dataset.perPage || '12') : '12';
+		const orderBy = block ? (block.dataset.orderBy || '') : '';
+		const orderDirection = block ? (block.dataset.orderDirection || '') : '';
 
 		// Build AJAX data.
 		const data = new FormData();
@@ -219,6 +221,12 @@
 		data.append('csf_search', searchQuery);
 		data.append('per_page', perPage);
 		data.append('page', requestedPage);
+		if (orderBy) {
+			data.append('orderby', orderBy);
+		}
+		if (orderDirection) {
+			data.append('order', orderDirection);
+		}
 		if (defaultCategories) {
 			data.append('default_categories', defaultCategories);
 		}

@@ -119,6 +119,8 @@
 
 		// Get block settings.
 		const perPage = parseInt(block.dataset.perPage) || 12;
+		const orderBy = block.dataset.orderBy || '';
+		const orderDirection = block.dataset.orderDirection || '';
 
 		// Make AJAX request.
 		const data = new FormData();
@@ -130,6 +132,8 @@
 		if (make) data.append('make', make);
 		if (model) data.append('model', model);
 		if (category) data.append('category', category);
+		if (orderBy) data.append('orderby', orderBy);
+		if (orderDirection) data.append('order', orderDirection);
 
 		fetch(csfPartsPagination.ajaxUrl, {
 			method: 'POST',

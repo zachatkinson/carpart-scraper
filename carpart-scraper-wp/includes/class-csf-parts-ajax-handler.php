@@ -134,6 +134,14 @@ class CSF_Parts_AJAX_Handler {
 			$filters['categories'] = array( sanitize_text_field( wp_unslash( $_POST['category'] ) ) );
 		}
 
+		// Sort options (validated against whitelist in query_parts).
+		if ( ! empty( $_POST['orderby'] ) ) {
+			$filters['orderby'] = sanitize_key( wp_unslash( $_POST['orderby'] ) );
+		}
+		if ( ! empty( $_POST['order'] ) ) {
+			$filters['order'] = sanitize_key( wp_unslash( $_POST['order'] ) );
+		}
+
 		// Query parts using shared database instance.
 		$result      = $this->database->query_parts( $filters, $per_page, $page );
 		$parts       = $result['parts'] ?? array();
@@ -280,6 +288,14 @@ class CSF_Parts_AJAX_Handler {
 		}
 		if ( ! empty( $search_query ) ) {
 			$filters['search'] = $search_query;
+		}
+
+		// Sort options (validated against whitelist in query_parts).
+		if ( ! empty( $_POST['orderby'] ) ) {
+			$filters['orderby'] = sanitize_key( wp_unslash( $_POST['orderby'] ) );
+		}
+		if ( ! empty( $_POST['order'] ) ) {
+			$filters['order'] = sanitize_key( wp_unslash( $_POST['order'] ) );
 		}
 
 		// Get pagination parameters from request.

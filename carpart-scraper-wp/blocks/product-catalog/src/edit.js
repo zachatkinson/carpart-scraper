@@ -222,10 +222,10 @@ export default function Edit({ attributes, setAttributes }) {
 							{ label: __('SKU', 'csf-parts'), value: 'sku' },
 							{ label: __('Category', 'csf-parts'), value: 'category' },
 							{ label: __('Newest First', 'csf-parts'), value: 'created_at' },
-							{ label: __('Recently Updated', 'csf-parts'), value: 'updated_at' },
+							{ label: __('Latest Fitments / Updates', 'csf-parts'), value: 'updated_at' },
 							{ label: __('Latest Activity', 'csf-parts'), value: 'latest' }
 						]}
-						help={__('Choose how parts are ordered', 'csf-parts')}
+						help={__('Choose how parts are ordered. "Latest Fitments / Updates" surfaces new parts and parts whose data (e.g. fitments) changed most recently — pair with Descending.', 'csf-parts')}
 					/>
 					<SelectControl
 						label={__('Sort Direction', 'csf-parts')}
