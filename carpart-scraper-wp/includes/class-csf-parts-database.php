@@ -437,6 +437,26 @@ class CSF_Parts_Database {
 	}
 
 	/**
+	 * Part counts per category, alphabetical.
+	 *
+	 * @since 1.14.0
+	 * @return array<string, int> category => count
+	 */
+	public function get_category_counts(): array {
+		$rows = $this->wpdb->get_results(
+			"SELECT category, COUNT(*) AS count FROM {$this->table_parts}
+			 WHERE category IS NOT NULL AND category != ''
+			 GROUP BY category ORDER BY category ASC"
+		);
+
+		$counts = array();
+		foreach ( $rows ?: array() as $row ) {
+			$counts[ (string) $row->category ] = (int) $row->count;
+		}
+		return $counts;
+	}
+
+	/**
 	 * Get all unique vehicle makes from compatibility JSON.
 	 *
 	 * @since 2.0.0

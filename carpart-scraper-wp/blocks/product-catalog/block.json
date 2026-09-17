@@ -48,7 +48,7 @@
 		},
 		"showCategoryFilter": {
 			"type": "boolean",
-			"default": false
+			"default": true
 		},
 		"showResultsCount": {
 			"type": "boolean",
@@ -203,6 +203,22 @@
 				"dark",
 				"brand"
 			]
+		},
+		"showSortControl": {
+			"type": "boolean",
+			"default": true
+		},
+		"newBadgeDays": {
+			"type": "number",
+			"default": 30
+		},
+		"showFitmentLine": {
+			"type": "boolean",
+			"default": true
+		},
+		"showMetaLine": {
+			"type": "boolean",
+			"default": true
 		}
 	},
 	"supports": {

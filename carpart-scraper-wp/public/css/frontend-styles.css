@@ -352,6 +352,43 @@
 	color: var(--csf-text-muted);
 }
 
+/* "New" badge on the image */
+.csf-part-card__new {
+	position: absolute;
+	top: var(--csf-spacing-sm);
+	left: var(--csf-spacing-sm);
+	z-index: 1;
+	padding: 3px 10px;
+	border-radius: var(--csf-radius-badge);
+	background: var(--csf-primary);
+	color: var(--csf-on-primary);
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+/* Fitment summary and meta lines */
+.csf-part-card__fitment {
+	margin: 0;
+	font-size: 0.875rem;
+	line-height: 1.45;
+	color: var(--csf-text-secondary);
+}
+
+.csf-part-card__meta {
+	margin: 0;
+	font-size: 0.8125rem;
+	line-height: 1.5;
+	color: var(--csf-text-muted);
+}
+
+.csf-part-card__meta sup,
+.csf-part-card__meta sub {
+	font-size: 0.65em;
+	line-height: 0;
+}
+
 /* Dimensions line ("31 ⅝ × 21 × 4 ⅞ in") */
 .csf-dimensions-section {
 	margin: 0;

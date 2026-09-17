@@ -26,6 +26,14 @@ $show_make_filter   = $attributes['showMakeFilter'] ?? true;
 $show_model_filter  = $attributes['showModelFilter'] ?? true;
 $show_category_filter = $attributes['showCategoryFilter'] ?? false;
 $show_results_count   = $attributes['showResultsCount'] ?? true;
+$show_sort_control    = $attributes['showSortControl'] ?? true;
+$card_options         = CSF_Parts_Part_Card::sanitize_options(
+	array(
+		'new_badge_days'    => $attributes['newBadgeDays'] ?? 30,
+		'show_fitment_line' => $attributes['showFitmentLine'] ?? true,
+		'show_meta_line'    => $attributes['showMetaLine'] ?? true,
+	)
+);
 $per_page           = $attributes['perPage'] ?? 12;
 // Get responsive columns.
 $columns = wp_parse_args(
@@ -49,6 +57,15 @@ $gap = wp_parse_args(
 
 $order_by            = $attributes['orderBy'] ?? 'updated_at';
 $order_direction     = $attributes['orderDirection'] ?? 'desc';
+
+// Visitor sort (csf_sort) overrides the block default when valid.
+$sort_key = isset( $_GET[ CSF_Parts_Catalog_Sort::PARAM ] ) ? sanitize_key( wp_unslash( $_GET[ CSF_Parts_Catalog_Sort::PARAM ] ) ) : '';
+$sort_key = CSF_Parts_Catalog_Sort::is_valid( $sort_key ) ? $sort_key : CSF_Parts_Catalog_Sort::key_for( $order_by, $order_direction );
+if ( '' !== $sort_key ) {
+	$resolved        = CSF_Parts_Catalog_Sort::resolve( $sort_key );
+	$order_by        = $resolved['orderby'];
+	$order_direction = $resolved['order'];
+}
 $button_text         = $attributes['buttonText'] ?? 'Find Parts';
 $enable_ajax         = $attributes['enableAjax'] ?? true;
 $pagination_type     = $attributes['paginationType'] ?? 'numbered';
@@ -142,7 +159,7 @@ if ( $show_filters ) {
 		$models = $database->get_vehicle_models();
 	}
 	if ( $show_category_filter ) {
-		$categories = $database->get_all_categories();
+		$categories = $database->get_category_counts(); // category => count
 	}
 }
 
@@ -198,6 +215,10 @@ if ( $show_filters ) {
 			'error'          => 'Error loading options',
 			'resultSingular' => 'Part Found',
 			'resultPlural'   => 'Parts Found',
+			'partsLabel'     => __( 'parts', 'csf-parts' ),
+			'partLabel'      => __( 'part', 'csf-parts' ),
+			'showingLabel'   => __( 'showing', 'csf-parts' ),
+			'toLabel'        => __( 'to', 'csf-parts' ),
 		)
 	);
 }
@@ -241,6 +262,7 @@ $wrapper_attributes = get_block_wrapper_attributes(
 		'data-per-page'           => $per_page,
 		'data-order-by'           => $order_by,
 		'data-order-direction'    => $order_direction,
+		'data-card-options'       => wp_json_encode( $card_options ),
 		'data-columns-desktop'    => $columns['desktop'],
 		'data-default-categories' => ! empty( $default_categories ) ? esc_attr( wp_json_encode( $default_categories ) ) : '',
 	)
@@ -248,26 +270,28 @@ $wrapper_attributes = get_block_wrapper_attributes(
 ?>
 <div <?php echo $wrapper_attributes; ?>>
 	<?php if ( $show_filters ) : ?>
-		<form class="csf-catalog-filters csf-filter-form" method="get" action="">
-			<!-- Search Box -->
-			<div class="csf-search-box">
-				<label for="<?php echo esc_attr( $block_id ); ?>-search" class="csf-search-box__label">
-					<?php esc_html_e( 'Search by Part Number or OEM', 'csf-parts' ); ?>
-				</label>
-				<input
-					type="text"
-					name="csf_search"
-					id="<?php echo esc_attr( $block_id ); ?>-search"
-					class="csf-search-box__input"
-					placeholder="<?php esc_attr_e( 'Enter SKU, OEM, or Partslink number...', 'csf-parts' ); ?>"
-					value="<?php echo esc_attr( isset( $_GET['csf_search'] ) ? sanitize_text_field( wp_unslash( $_GET['csf_search'] ) ) : '' ); ?>"
-				/>
-				<p class="csf-search-box__help-text">
-					<?php esc_html_e( 'Search for parts by CSF part number, OEM number, or Partslink number. Results update automatically as you type.', 'csf-parts' ); ?>
-				</p>
-			</div>
-
+		<form class="csf-catalog-filters csf-filter-form csf-filter-card" id="<?php echo esc_attr( $block_id ); ?>-form" method="get" action="">
 			<div class="csf-filter-controls">
+				<!-- Search Box -->
+				<div class="csf-filter-group csf-filter-group--search csf-search-box">
+					<label for="<?php echo esc_attr( $block_id ); ?>-search" class="csf-filter-group__label">
+						<?php esc_html_e( 'Part number', 'csf-parts' ); ?>
+						<span class="csf-filter-group__hint"><?php esc_html_e( 'CSF, OEM or Partslink', 'csf-parts' ); ?></span>
+					</label>
+					<div class="csf-search-box__field">
+						<input
+							type="search"
+							name="csf_search"
+							id="<?php echo esc_attr( $block_id ); ?>-search"
+							class="csf-search-box__input"
+							placeholder="<?php esc_attr_e( 'Type a number, results update as you go', 'csf-parts' ); ?>"
+							autocomplete="off"
+							value="<?php echo esc_attr( isset( $_GET['csf_search'] ) ? sanitize_text_field( wp_unslash( $_GET['csf_search'] ) ) : '' ); ?>"
+						/>
+						<svg class="csf-search-box__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+					</div>
+				</div>
+
 				<?php if ( $show_year_filter && ! empty( $years ) ) : ?>
 					<?php
 					// Use helper function for consistent dropdown rendering.
@@ -316,49 +340,55 @@ $wrapper_attributes = get_block_wrapper_attributes(
 					?>
 				<?php endif; ?>
 
-				<?php if ( $show_category_filter && ! empty( $categories ) ) : ?>
-					<?php
-					// Use helper function for consistent dropdown rendering.
-					echo csf_render_select(
-						array(
-							'id'          => $block_id . '-category',
-							'name'        => 'csf_category',
-							'options'     => array_combine( $categories, $categories ),
-							'selected'    => $selected_category,
-							'label'       => __( 'Category', 'csf-parts' ),
-							'placeholder' => __( 'Select Category', 'csf-parts' ),
-						)
-					);
-					?>
-				<?php endif; ?>
-
 				<div class="csf-filter-submit">
-					<button
-						type="button"
-						class="csf-btn csf-btn-reset"
-					>
-						<?php esc_html_e( 'Reset Filters', 'csf-parts' ); ?>
-					</button>
+					<button type="button" class="csf-btn-link csf-btn-reset"><?php esc_html_e( 'Clear', 'csf-parts' ); ?></button>
 				</div>
 			</div>
+
+			<?php if ( $show_category_filter && ! empty( $categories ) ) : ?>
+				<?php $chip_base = remove_query_arg( array( 'csf_category', 'csf_page' ) ); ?>
+				<div class="csf-part-types">
+					<span class="csf-part-types__label"><?php esc_html_e( 'Part type', 'csf-parts' ); ?></span>
+					<div class="csf-part-types__chips" role="group" aria-label="<?php esc_attr_e( 'Part type', 'csf-parts' ); ?>">
+						<a href="<?php echo esc_url( $chip_base ); ?>" class="csf-chip<?php echo '' === $selected_category ? ' is-active' : ''; ?>" data-category="" <?php echo '' === $selected_category ? 'aria-current="true"' : ''; ?>>
+							<?php esc_html_e( 'All', 'csf-parts' ); ?> <span class="csf-chip__count"><?php echo esc_html( number_format_i18n( array_sum( $categories ) ) ); ?></span>
+						</a>
+						<?php foreach ( $categories as $category_name => $category_count ) : ?>
+							<a href="<?php echo esc_url( add_query_arg( 'csf_category', rawurlencode( $category_name ), $chip_base ) ); ?>" class="csf-chip<?php echo $selected_category === $category_name ? ' is-active' : ''; ?>" data-category="<?php echo esc_attr( $category_name ); ?>" <?php echo $selected_category === $category_name ? 'aria-current="true"' : ''; ?>>
+								<?php echo esc_html( $category_name ); ?> <span class="csf-chip__count"><?php echo esc_html( number_format_i18n( $category_count ) ); ?></span>
+							</a>
+						<?php endforeach; ?>
+					</div>
+					<input type="hidden" name="csf_category" value="<?php echo esc_attr( $selected_category ); ?>" />
+				</div>
+			<?php endif; ?>
 		</form>
 	<?php endif; ?>
 
 	<div class="csf-catalog-results">
 		<?php if ( ! empty( $parts ) ) : ?>
-			<?php if ( $show_results_count ) : ?>
+			<?php if ( $show_results_count || ( $show_sort_control && $show_filters ) ) : ?>
+				<?php
+				$showing_from = ( $current_page - 1 ) * $per_page + 1;
+				$showing_to   = min( $total_parts, $current_page * $per_page );
+				?>
 				<div class="csf-results-header">
-					<h3 class="csf-results-header__title">
-						<?php
-						echo esc_html(
-							sprintf(
-								/* translators: %d: number of parts */
-								_n( '%d Part Found', '%d Parts Found', $total_parts, 'csf-parts' ),
-								$total_parts
-							)
-						);
-						?>
-					</h3>
+					<?php if ( $show_results_count ) : ?>
+						<p class="csf-results-header__title" data-from="<?php echo esc_attr( (string) $showing_from ); ?>" data-to="<?php echo esc_attr( (string) $showing_to ); ?>">
+							<strong><?php echo esc_html( number_format_i18n( $total_parts ) . ' ' . _n( 'part', 'parts', $total_parts, 'csf-parts' ) ); ?></strong>
+							<span class="csf-results-header__range">· <?php echo esc_html( sprintf( /* translators: 1: first index, 2: last index */ __( 'showing %1$s to %2$s', 'csf-parts' ), number_format_i18n( $showing_from ), number_format_i18n( $showing_to ) ) ); ?></span>
+						</p>
+					<?php endif; ?>
+					<?php if ( $show_sort_control && $show_filters ) : ?>
+						<label class="csf-sort">
+							<span class="csf-sort__label"><?php esc_html_e( 'Sort', 'csf-parts' ); ?></span>
+							<select name="<?php echo esc_attr( CSF_Parts_Catalog_Sort::PARAM ); ?>" class="csf-select csf-sort__select" form="<?php echo esc_attr( $block_id ); ?>-form">
+								<?php foreach ( CSF_Parts_Catalog_Sort::options() as $key => $option ) : ?>
+									<option value="<?php echo esc_attr( $key ); ?>" data-orderby="<?php echo esc_attr( $option['orderby'] ); ?>" data-order="<?php echo esc_attr( $option['order'] ); ?>" <?php selected( $sort_key, $key ); ?>><?php echo esc_html( $option['label'] ); ?></option>
+								<?php endforeach; ?>
+							</select>
+						</label>
+					<?php endif; ?>
 				</div>
 			<?php endif; ?>
 
@@ -368,7 +398,7 @@ $wrapper_attributes = get_block_wrapper_attributes(
 					// Generate part URL.
 					$part_url = $get_part_url( $part->category, $part->sku );
 
-					echo CSF_Parts_Part_Card::render( $part, $part_url ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer.
+					echo CSF_Parts_Part_Card::render( $part, $part_url, $card_options ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer.
 					?>
 				<?php endforeach; ?>
 			</div>

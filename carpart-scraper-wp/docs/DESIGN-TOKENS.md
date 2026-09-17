@@ -65,7 +65,7 @@ that role.
 | Scale | Default | Roles using it |
 |-------|---------|----------------|
 | `--csf-radius-sm` | 4px | `--csf-radius-control`: buttons, inputs, selects, small notices |
-| `--csf-radius-md` | 8px | corner badges (`.csf-part-card__badge`), Part Finder submit button |
+| `--csf-radius-md` | 8px | outlined pagination buttons, Part Finder submit button |
 | `--csf-radius-lg` | 16px | `--csf-radius-card`: cards, panels, gallery, sections |
 | `--csf-radius-pill` | 9999px | `--csf-radius-badge`: year, category, status pills |
 

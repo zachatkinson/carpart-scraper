@@ -124,6 +124,30 @@
 				});
 			}
 
+			// Part-type chips: set the hidden category field and refresh in place.
+			const categoryInput = filterForm.querySelector('input[name="csf_category"]');
+			filterForm.querySelectorAll('.csf-chip').forEach(function(chip) {
+				chip.addEventListener('click', function(e) {
+					e.preventDefault();
+					if (categoryInput) {
+						categoryInput.value = chip.dataset.category || '';
+					}
+					filterForm.querySelectorAll('.csf-chip').forEach(function(c) {
+						c.classList.toggle('is-active', c === chip);
+						if (c === chip) { c.setAttribute('aria-current', 'true'); } else { c.removeAttribute('aria-current'); }
+					});
+					triggerFilterUpdate(filterForm, loadingOverlay);
+				});
+			});
+
+			// Visitor sort control.
+			const sortControl = block.querySelector('.csf-sort__select');
+			if (sortControl) {
+				sortControl.addEventListener('change', function() {
+					triggerFilterUpdate(filterForm, loadingOverlay);
+				});
+			}
+
 			// Reset button handler.
 			const resetButton = filterForm.querySelector('.csf-btn-reset');
 			if (resetButton) {
@@ -203,13 +227,25 @@
 		const make = formData.get('csf_make') || '';
 		const model = formData.get('csf_model') || '';
 		const searchQuery = formData.get('csf_search') || '';
+		const category = formData.get('csf_category') || '';
 
 		// Get block attributes.
 		const block = form.closest('.csf-product-catalog');
 		const defaultCategories = block ? (block.dataset.defaultCategories || '') : '';
 		const perPage = block ? (block.dataset.perPage || '12') : '12';
-		const orderBy = block ? (block.dataset.orderBy || '') : '';
-		const orderDirection = block ? (block.dataset.orderDirection || '') : '';
+		const cardOptions = block ? (block.dataset.cardOptions || '') : '';
+		let orderBy = block ? (block.dataset.orderBy || '') : '';
+		let orderDirection = block ? (block.dataset.orderDirection || '') : '';
+		let sortKey = '';
+
+		// Visitor sort control overrides the block default.
+		const sortSelect = block ? block.querySelector('.csf-sort__select') : null;
+		if (sortSelect && sortSelect.selectedOptions.length) {
+			const opt = sortSelect.selectedOptions[0];
+			orderBy = opt.dataset.orderby || orderBy;
+			orderDirection = opt.dataset.order || orderDirection;
+			sortKey = sortSelect.value;
+		}
 
 		// Build AJAX data.
 		const data = new FormData();
@@ -219,7 +255,11 @@
 		data.append('csf_make', make);
 		data.append('csf_model', model);
 		data.append('csf_search', searchQuery);
+		data.append('csf_category', category);
 		data.append('per_page', perPage);
+		if (cardOptions) {
+			data.append('card_options', cardOptions);
+		}
 		data.append('page', requestedPage);
 		if (orderBy) {
 			data.append('orderby', orderBy);
@@ -285,7 +325,9 @@
 					csf_year: year,
 					csf_make: make,
 					csf_model: model,
-					csf_search: searchQuery
+					csf_search: searchQuery,
+					csf_category: category,
+					csf_sort: sortKey
 				};
 				if (currentPage > 1) {
 					urlParams.csf_page = String(currentPage);
@@ -295,7 +337,19 @@
 				// Update results count if present.
 				var resultsHeader = catalog.querySelector('.csf-results-header__title');
 				if (resultsHeader && response.data.count !== undefined) {
-					resultsHeader.textContent = response.data.count + ' ' + (response.data.count === 1 ? csfPartsFilters.resultSingular : csfPartsFilters.resultPlural);
+					var total = response.data.count;
+					var per = parseInt(response.data.per_page, 10) || parseInt(perPage, 10) || 12;
+					var from = total === 0 ? 0 : (currentPage - 1) * per + 1;
+					var to = Math.min(total, currentPage * per);
+					var strong = document.createElement('strong');
+					strong.textContent = total.toLocaleString() + ' ' + (total === 1 ? csfPartsFilters.partLabel : csfPartsFilters.partsLabel);
+					var range = document.createElement('span');
+					range.className = 'csf-results-header__range';
+					range.textContent = '· ' + csfPartsFilters.showingLabel + ' ' + from.toLocaleString() + ' ' + csfPartsFilters.toLabel + ' ' + to.toLocaleString();
+					resultsHeader.textContent = '';
+					resultsHeader.appendChild(strong);
+					resultsHeader.appendChild(document.createTextNode(' '));
+					resultsHeader.appendChild(range);
 				}
 			} else {
 				console.error('CSF Filters: Failed to fetch results:', response);

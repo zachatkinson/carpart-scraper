@@ -96,7 +96,7 @@ final class PartCardTest extends TestCase {
 		$dims = CSF_Parts_Part_Card::dimensions( $full );
 
 		// Assert
-		$this->assertSame( '28 ½" × 20" × 2 ¼"', $dims );
+		$this->assertSame( '28 ½ × 20 × 2 ¼ in', $dims );
 		$this->assertNull( CSF_Parts_Part_Card::dimensions( $partial ) );
 	}
 
@@ -117,5 +117,81 @@ final class PartCardTest extends TestCase {
 		// Assert
 		$this->assertSame( 4, substr_count( $html, '<span class="csf-part-card__make-badge">' ) );
 		$this->assertStringContainsString( 'csf-part-card__make-badge--more">+2<', $html );
+	}
+
+	/**
+	 * Fitment summary: year range, vehicles grouped by make, single engine appended.
+	 */
+	public function test_fitment_summary_builds_range_vehicles_and_engine(): void {
+		// Arrange
+		$rows = json_encode( array(
+			array( 'year' => 2024, 'make' => 'Toyota', 'model' => 'Tacoma', 'engine' => '2.4L L4 turbo' ),
+			array( 'year' => 2026, 'make' => 'Toyota', 'model' => 'Tacoma', 'engine' => '2.4L L4 turbo' ),
+			array( 'year' => 2025, 'make' => 'Toyota', 'model' => 'Tacoma', 'engine' => '2.4L L4 turbo' ),
+		) );
+		$mixed = json_encode( array(
+			array( 'year' => 2004, 'make' => 'Chevrolet', 'model' => 'Colorado', 'engine' => '2.9L' ),
+			array( 'year' => 2006, 'make' => 'Gmc', 'model' => 'Canyon', 'engine' => '3.7L' ),
+		) );
+
+		// Act & Assert
+		$this->assertSame( '2024 to 2026 Toyota Tacoma, 2.4L L4 turbo', CSF_Parts_Part_Card::fitment_summary( $rows ) );
+		$this->assertSame( '2004 to 2006 Chevrolet Colorado, Gmc Canyon', CSF_Parts_Part_Card::fitment_summary( $mixed ) );
+		$this->assertSame( '', CSF_Parts_Part_Card::fitment_summary( '' ) );
+	}
+
+	/**
+	 * Meta line joins dimensions and the OEM number, tolerating either being absent.
+	 */
+	public function test_meta_line_prefers_oem_reference(): void {
+		// Arrange
+		$part = $this->part( array(
+			'specifications'      => json_encode( array( 'Box Length (in)' => '31', 'Box Width (in)' => '21', 'Box Height (in)' => '4' ) ),
+			'interchange_numbers' => json_encode( array(
+				array( 'reference_type' => 'Partslink', 'reference_number' => 'TO3010367' ),
+				array( 'reference_type' => 'OEM', 'reference_number' => '16400-AK030' ),
+			) ),
+		) );
+		$no_dims = $this->part( array( 'interchange_numbers' => json_encode( array( array( 'reference_type' => 'DPI', 'reference_number' => '3014' ) ) ) ) );
+
+		// Act & Assert
+		$this->assertSame( '31 × 21 × 4 in · OE 16400-AK030', CSF_Parts_Part_Card::meta_line( $part ) );
+		$this->assertSame( 'OE 3014', CSF_Parts_Part_Card::meta_line( $no_dims ) );
+		$this->assertSame( '', CSF_Parts_Part_Card::meta_line( $this->part() ) );
+	}
+
+	/**
+	 * The New badge respects the window and can be switched off.
+	 */
+	public function test_is_new_honours_window(): void {
+		// Arrange
+		$recent = gmdate( 'Y-m-d H:i:s', time() - 5 * DAY_IN_SECONDS );
+		$old    = gmdate( 'Y-m-d H:i:s', time() - 90 * DAY_IN_SECONDS );
+
+		// Act & Assert
+		$this->assertTrue( CSF_Parts_Part_Card::is_new( $recent, 30 ) );
+		$this->assertFalse( CSF_Parts_Part_Card::is_new( $old, 30 ) );
+		$this->assertFalse( CSF_Parts_Part_Card::is_new( $recent, 0 ) );
+	}
+
+	/**
+	 * Render options control the badge and summary lines.
+	 */
+	public function test_render_honours_options(): void {
+		// Arrange
+		$part = $this->part( array(
+			'created_at'    => gmdate( 'Y-m-d H:i:s' ),
+			'compatibility' => json_encode( array( array( 'year' => 2020, 'make' => 'Honda', 'model' => 'Civic' ) ) ),
+		) );
+
+		// Act
+		$default = CSF_Parts_Part_Card::render( $part, '/p' );
+		$quiet   = CSF_Parts_Part_Card::render( $part, '/p', array( 'new_badge_days' => 0, 'show_fitment_line' => false ) );
+
+		// Assert
+		$this->assertStringContainsString( 'csf-part-card__new', $default );
+		$this->assertStringContainsString( '2020 Honda Civic', $default );
+		$this->assertStringNotContainsString( 'csf-part-card__new', $quiet );
+		$this->assertStringNotContainsString( 'csf-part-card__fitment', $quiet );
 	}
 }

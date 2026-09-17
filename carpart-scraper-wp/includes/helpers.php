@@ -111,8 +111,8 @@ function csf_hex_to_rgb( string $hex ): string {
  *     csf_format_sku_display( 'CSF-10881' ) // Returns: "CSF10881"
  */
 function csf_format_sku_display( string $sku ): string {
-	// Remove hyphens from SKU for clean display (CSF-3680 -> CSF3680).
-	return str_replace( '-', '', strtoupper( $sku ) );
+	// "CSF-3680" -> "CSF 3680": brand, a space, the number (matches the design).
+	return trim( preg_replace( '/^CSF[\s-]*/i', 'CSF ', strtoupper( trim( $sku ) ) ) ?? $sku );
 }
 
 /**

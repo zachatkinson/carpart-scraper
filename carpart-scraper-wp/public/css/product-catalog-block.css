@@ -9,21 +9,37 @@
 	padding-right: 0 !important;
 }
 
-/* Search Box */
-.csf-search-box {
-	margin-bottom: 24px;
+/* Filter card */
+.csf-filter-card {
+	background: var(--csf-surface);
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius-card);
+	padding: var(--csf-spacing-lg);
+	margin-bottom: var(--csf-spacing-xl);
+	display: flex;
+	flex-direction: column;
+	gap: var(--csf-spacing-md);
 }
 
-.csf-search-box__label {
-	display: block;
-	margin-bottom: 4px;
-	font-weight: 600;
-	color: var(--csf-text);
+.csf-filter-group__hint {
+	margin-left: 6px;
+	font-weight: 400;
+	font-size: 12px;
+	color: var(--csf-text-muted);
+}
+
+/* Search Box */
+.csf-search-box {
+	flex: 2 1 260px;
+}
+
+.csf-search-box__field {
+	position: relative;
 }
 
 .csf-search-box__input {
 	width: 100%;
-	padding: 8px;
+	padding: 8px 34px 8px 12px;
 	border: 1px solid var(--csf-border);
 	border-radius: var(--csf-radius-control);
 	background: var(--csf-surface);
@@ -35,8 +51,12 @@
 	-webkit-appearance: none;
 	-moz-appearance: none;
 	box-sizing: border-box;
-	height: 38px;
+	height: 44px;
 	vertical-align: middle;
+}
+
+.csf-search-box__input::placeholder {
+	color: var(--csf-text-muted);
 }
 
 .csf-search-box__input:hover {
@@ -49,10 +69,13 @@
 	box-shadow: 0 0 0 3px var(--csf-focus-ring) !important;
 }
 
-.csf-search-box__help-text {
-	margin: 8px 0 0;
-	font-size: 13px;
-	color: var(--csf-text-secondary);
+.csf-search-box__icon {
+	position: absolute;
+	right: 12px;
+	top: 50%;
+	transform: translateY(-50%);
+	color: var(--csf-text-muted);
+	pointer-events: none;
 }
 
 /* Filter Controls */
@@ -61,7 +84,6 @@
 	gap: 12px;
 	flex-wrap: wrap;
 	align-items: end;
-	margin-bottom: 24px;
 }
 
 .csf-filter-group {
@@ -71,8 +93,9 @@
 
 .csf-filter-group__label {
 	display: block;
-	margin-bottom: 4px;
-	font-weight: 600;
+	margin-bottom: 6px;
+	font-size: 13px;
+	font-weight: 700;
 	color: var(--csf-text);
 }
 
@@ -90,7 +113,7 @@
 	-webkit-appearance: none;
 	-moz-appearance: none;
 	box-sizing: border-box;
-	height: 38px;
+	height: 44px;
 	vertical-align: middle;
 	background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8" viewBox="0 0 12 8"><path fill="%23999" d="M1.41 0L6 4.59L10.59 0L12 1.41l-6 6l-6-6z"/></svg>');
 	background-repeat: no-repeat;
@@ -147,13 +170,117 @@
 
 /* Results Header */
 .csf-results-header {
-	margin-bottom: 16px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--csf-spacing-md);
+	flex-wrap: wrap;
+	margin-bottom: var(--csf-spacing-md);
 }
 
 .csf-results-header__title {
 	margin: 0;
-	font-size: 18px;
+	font-size: 15px;
+	color: var(--csf-text-muted);
+}
+
+.csf-results-header__title strong {
 	color: var(--csf-text);
+	font-weight: 700;
+}
+
+.csf-sort {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 14px;
+	color: var(--csf-text-muted);
+}
+
+.csf-product-catalog .csf-sort__select {
+	width: auto;
+	min-width: 150px;
+	height: 40px;
+	background-color: var(--csf-surface);
+}
+
+/* Clear link */
+.csf-filter-submit {
+	display: flex;
+	align-items: center;
+	height: 44px;
+}
+
+.csf-btn-link {
+	background: none;
+	border: none;
+	padding: 0 4px;
+	font: inherit;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--csf-text-muted);
+	cursor: pointer;
+}
+
+.csf-btn-link:hover {
+	color: var(--csf-primary);
+}
+
+/* Part-type chips */
+.csf-part-types {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--csf-spacing-md);
+	flex-wrap: wrap;
+}
+
+.csf-part-types__label {
+	flex: 0 0 auto;
+	padding-top: 9px;
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--csf-text);
+}
+
+.csf-part-types__chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.csf-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 14px;
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius-badge);
+	background: var(--csf-surface);
+	color: var(--csf-text);
+	font-size: 13px;
+	font-weight: 700;
+	text-decoration: none;
+	line-height: 1.3;
+	transition: var(--csf-transition);
+}
+
+.csf-chip:hover {
+	border-color: var(--csf-border-hover);
+	color: var(--csf-text);
+}
+
+.csf-chip.is-active {
+	border-color: var(--csf-primary);
+	color: var(--csf-primary);
+}
+
+.csf-chip__count {
+	font-weight: 400;
+	color: var(--csf-text-muted);
+}
+
+.csf-chip.is-active .csf-chip__count {
+	color: var(--csf-primary);
 }
 
 /* Empty State */

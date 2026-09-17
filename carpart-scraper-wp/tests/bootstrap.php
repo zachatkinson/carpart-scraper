@@ -24,6 +24,13 @@ if ( file_exists( $plugin_dir . 'csf-parts-catalog.php' ) ) {
 	define( 'CSF_PARTS_PLUGIN_DIR', __DIR__ . '/../../../../' );
 }
 
+if ( ! defined( 'DAY_IN_SECONDS' ) ) {
+	define( 'DAY_IN_SECONDS', 86400 );
+}
+if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
+	define( 'HOUR_IN_SECONDS', 3600 );
+}
+
 // Define WordPress constants needed by plugin
 if ( ! defined( 'ABSPATH' ) ) {
 	define( 'ABSPATH', '/var/www/html/' );

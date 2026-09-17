@@ -258,8 +258,22 @@ class CSF_Parts_AJAX_Handler {
 			}
 		}
 
+		// A category chosen by the visitor narrows within (or replaces) the editor defaults.
+		$selected_category = isset( $_POST['csf_category'] ) ? sanitize_text_field( wp_unslash( $_POST['csf_category'] ) ) : '';
+
+		// Card rendering options (badge window, summary lines) come from the block.
+		$card_options = array();
+		if ( ! empty( $_POST['card_options'] ) ) {
+			$decoded_options = json_decode( sanitize_text_field( wp_unslash( $_POST['card_options'] ) ), true );
+			if ( is_array( $decoded_options ) ) {
+				$card_options = $decoded_options;
+			}
+		}
+
 		$filters = array();
-		if ( ! empty( $default_categories ) ) {
+		if ( '' !== $selected_category ) {
+			$filters['categories'] = array( $selected_category );
+		} elseif ( ! empty( $default_categories ) ) {
 			$filters['categories'] = $default_categories;
 		}
 		if ( ! empty( $selected_year ) ) {
@@ -322,7 +336,7 @@ class CSF_Parts_AJAX_Handler {
 			<?php
 		} else {
 			foreach ( $parts as $part ) {
-				echo CSF_Parts_Part_Card::render( $part, $get_part_url( $part->category, $part->sku ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer.
+				echo CSF_Parts_Part_Card::render( $part, $get_part_url( $part->category, $part->sku ), $card_options ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer.
 			}
 		}
 		$html = ob_get_clean();

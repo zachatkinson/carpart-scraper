@@ -47,7 +47,11 @@ export default function Edit({ attributes, setAttributes }) {
 		hideOnTablet,
 		hideOnDesktop,
 		scrollAnimation,
-		colorScheme
+		colorScheme,
+		showSortControl,
+		newBadgeDays,
+		showFitmentLine,
+		showMetaLine
 	} = attributes;
 
 	// Device switcher state
@@ -146,9 +150,16 @@ export default function Edit({ attributes, setAttributes }) {
 								onChange={(value) => setAttributes({ showModelFilter: value })}
 							/>
 							<ToggleControl
-								label={__('Show Category Filter', 'csf-parts')}
+								label={__('Show Part Type Chips', 'csf-parts')}
 								checked={showCategoryFilter}
 								onChange={(value) => setAttributes({ showCategoryFilter: value })}
+								help={__('Category chips with counts under the filters', 'csf-parts')}
+							/>
+							<ToggleControl
+								label={__('Show Sort Control', 'csf-parts')}
+								checked={showSortControl}
+								onChange={(value) => setAttributes({ showSortControl: value })}
+								help={__('Visitor-facing "Sort" dropdown in the results header. Sort By below sets the default.', 'csf-parts')}
 							/>
 						</>
 					)}
@@ -270,6 +281,28 @@ export default function Edit({ attributes, setAttributes }) {
 							{ label: __('No Pagination', 'csf-parts'), value: 'none' }
 						]}
 						help={__('Choose how users navigate through results', 'csf-parts')}
+					/>
+				</PanelBody>
+
+				<PanelBody title={__('Card Content', 'csf-parts')} initialOpen={false}>
+					<RangeControl
+						label={__('"New" badge window (days)', 'csf-parts')}
+						value={newBadgeDays}
+						onChange={(value) => setAttributes({ newBadgeDays: value })}
+						min={0}
+						max={365}
+						help={__('Parts added within this many days get a New badge. 0 turns it off.', 'csf-parts')}
+					/>
+					<ToggleControl
+						label={__('Fitment summary line', 'csf-parts')}
+						checked={showFitmentLine}
+						onChange={(value) => setAttributes({ showFitmentLine: value })}
+						help={__('e.g. "2024 to 2026 Toyota Tacoma, 2.4L L4 turbo"', 'csf-parts')}
+					/>
+					<ToggleControl
+						label={__('Dimensions and OE number line', 'csf-parts')}
+						checked={showMetaLine}
+						onChange={(value) => setAttributes({ showMetaLine: value })}
 					/>
 				</PanelBody>
 
