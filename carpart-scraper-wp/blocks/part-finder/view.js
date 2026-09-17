@@ -2,7 +2,9 @@
  * Part Finder block - front-end behaviour.
  *
  * Progressive enhancement over a plain GET form:
- *  - Year → Make → Model cascade using the catalog's existing AJAX endpoints.
+ *  - Year, Make and Model narrow each other in whichever order the visitor
+ *    picks them (Year → Makes, Make → Models and Years, Model → Years).
+ *  - A selection is kept whenever it is still valid after narrowing.
  *  - Empty fields are disabled on submit so the destination URL stays clean.
  */
 (function () {
@@ -10,11 +12,15 @@
 
 	var cfg = window.csfPartFinder || {};
 
-	function setOptions(select, values, placeholder) {
-		var html = '<option value="">' + placeholder + '</option>';
+	function escapeHtml(v) {
+		return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+	}
+
+	function setOptions(select, values, placeholder, keep) {
+		var html = '<option value="">' + escapeHtml(placeholder) + '</option>';
 		values.forEach(function (value) {
 			var v = String(value);
-			html += '<option value="' + v.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">' + v.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</option>';
+			html += '<option value="' + escapeHtml(v) + '"' + (v === keep ? ' selected' : '') + '>' + escapeHtml(v) + '</option>';
 		});
 		select.innerHTML = html;
 	}
@@ -27,54 +33,87 @@
 		return fetch(cfg.ajaxUrl, { method: 'POST', body: data, credentials: 'same-origin' }).then(function (r) { return r.json(); });
 	}
 
-	function loading(select, on) {
-		select.disabled = true;
-		if (on) { select.innerHTML = '<option value="">' + (cfg.loading || 'Loading…') + '</option>'; }
+	function values(res, key) {
+		return res && res.success && res.data && Array.isArray(res.data[key]) ? res.data[key].map(String) : [];
 	}
 
 	function init(form) {
 		var year = form.querySelector('[data-role="year"]');
 		var make = form.querySelector('[data-role="make"]');
 		var model = form.querySelector('[data-role="model"]');
-		var allMakes = make ? Array.prototype.map.call(make.options, function (o) { return o.value; }).filter(Boolean) : [];
+		var optionValues = function (select) {
+			return select ? Array.prototype.map.call(select.options, function (o) { return o.value; }).filter(Boolean) : [];
+		};
+		var allYears = optionValues(year);
+		var allMakes = optionValues(make);
+		var labels = { year: cfg.selectYear || 'Year', make: cfg.selectMake || 'Make', model: cfg.selectModel || 'Model' };
 
-		function resetModel() {
-			if (!model) { return; }
-			setOptions(model, [], cfg.selectModel || 'Model');
-			model.disabled = true;
+		function fill(select, list, role, current) {
+			if (!select) { return; }
+			// `current` is the value before any "Loading…" placeholder replaced the options.
+			var keep = list.indexOf(current) >= 0 ? current : '';
+			setOptions(select, list, list.length ? labels[role] : (cfg.none || 'None available'), keep);
+			select.disabled = list.length === 0;
 		}
 
-		if (year && make) {
+		function loading(select) {
+			if (!select) { return; }
+			select.disabled = true;
+			select.innerHTML = '<option value="">' + escapeHtml(cfg.loading || 'Loading…') + '</option>';
+		}
+
+		function failed(select) {
+			if (!select) { return; }
+			setOptions(select, [], cfg.error || 'Could not load options', '');
+			select.disabled = true;
+		}
+
+		// Years that fit the current make/model, or every year when no make is chosen.
+		function refreshYears() {
+			if (!year) { return Promise.resolve(); }
+			var current = year.value;
+			if (!make || !make.value) { fill(year, allYears, 'year', current); return Promise.resolve(); }
+			return request('csf_get_years_by_make', { make: make.value, model: model && model.value ? model.value : '' })
+				.then(function (res) { fill(year, values(res, 'years'), 'year', current); })
+				.catch(function () { fill(year, allYears, 'year', current); });
+		}
+
+		// Makes that fit the current year, or every make when no year is chosen.
+		function refreshMakes() {
+			if (!make) { return Promise.resolve(); }
+			var current = make.value;
+			if (!year || !year.value) { fill(make, allMakes, 'make', current); return Promise.resolve(); }
+			loading(make);
+			return request('csf_get_makes_by_year', { year: year.value })
+				.then(function (res) { fill(make, values(res, 'makes'), 'make', current); })
+				.catch(function () { failed(make); });
+		}
+
+		// Models for the current make (narrowed by year when one is chosen).
+		function refreshModels() {
+			if (!model) { return Promise.resolve(); }
+			var current = model.value;
+			if (!make || !make.value) { fill(model, [], 'model', ''); model.disabled = true; return Promise.resolve(); }
+			loading(model);
+			return request('csf_get_models_by_year_make', { year: year && year.value ? year.value : 0, make: make.value })
+				.then(function (res) { fill(model, values(res, 'models'), 'model', current); })
+				.catch(function () { failed(model); });
+		}
+
+		if (year) {
 			year.addEventListener('change', function () {
-				resetModel();
-				if (!year.value) {
-					setOptions(make, allMakes, cfg.selectMake || 'Make');
-					make.disabled = false;
-					return;
-				}
-				loading(make, true);
-				request('csf_get_makes_by_year', { year: year.value }).then(function (res) {
-					var makes = res && res.success && res.data && res.data.makes ? res.data.makes : [];
-					setOptions(make, makes, makes.length ? (cfg.selectMake || 'Make') : (cfg.none || 'None available'));
-					make.disabled = makes.length === 0;
-				}).catch(function () {
-					setOptions(make, [], cfg.error || 'Could not load options');
-				});
+				refreshMakes().then(refreshModels);
 			});
 		}
 
-		if (make && model) {
+		if (make) {
 			make.addEventListener('change', function () {
-				if (!make.value) { resetModel(); return; }
-				loading(model, true);
-				request('csf_get_models_by_year_make', { year: year && year.value ? year.value : 0, make: make.value }).then(function (res) {
-					var models = res && res.success && res.data && res.data.models ? res.data.models : [];
-					setOptions(model, models, models.length ? (cfg.selectModel || 'Model') : (cfg.none || 'None available'));
-					model.disabled = models.length === 0;
-				}).catch(function () {
-					setOptions(model, [], cfg.error || 'Could not load options');
-				});
+				refreshModels().then(refreshYears);
 			});
+		}
+
+		if (model) {
+			model.addEventListener('change', refreshYears);
 		}
 
 		form.addEventListener('submit', function () {

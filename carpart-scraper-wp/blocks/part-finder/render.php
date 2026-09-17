@@ -33,6 +33,7 @@ wp_localize_script(
 	array(
 		'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
 		'nonce'       => wp_create_nonce( 'csf_parts_filter' ),
+		'selectYear'  => __( 'Year', 'csf-parts' ),
 		'selectMake'  => __( 'Make', 'csf-parts' ),
 		'selectModel' => __( 'Model', 'csf-parts' ),
 		'loading'     => __( 'Loading…', 'csf-parts' ),

@@ -498,6 +498,47 @@ class CSF_Parts_Database {
 	}
 
 	/**
+	 * Get unique vehicle years for a make, optionally narrowed by model.
+	 *
+	 * Mirror of get_vehicle_makes_by_year() so the Year → Make → Model cascade
+	 * also works in the other direction.
+	 *
+	 * @since 1.12.0
+	 * @param string $make  Vehicle make (required).
+	 * @param string $model Vehicle model (optional filter).
+	 * @return int[] Years, newest first.
+	 */
+	public function get_vehicle_years_by_make( string $make, string $model = '' ): array {
+		if ( '' === $make ) {
+			return array();
+		}
+
+		$model_clause = '' !== $model ? " AND JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.model')) = %s" : '';
+		$args         = '' !== $model ? array( $make, $model ) : array( $make );
+
+		$query = $this->wpdb->prepare(
+			"SELECT DISTINCT CAST(JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.year')) AS UNSIGNED) as year
+			FROM {$this->table_parts} p,
+			     JSON_TABLE(
+			         p.compatibility,
+			         '$[*]' COLUMNS (
+			             value JSON PATH '$'
+			         )
+			     ) v
+			WHERE p.compatibility IS NOT NULL
+			  AND JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.make')) = %s
+			  {$model_clause}
+			  AND JSON_EXTRACT(v.value, '$.year') IS NOT NULL
+			ORDER BY year DESC",
+			...$args
+		);
+
+		$results = $this->wpdb->get_col( $query );
+
+		return array_map( 'intval', $results ?: array() );
+	}
+
+	/**
 	 * Get unique vehicle models for a given make.
 	 *
 	 * @since 2.0.0

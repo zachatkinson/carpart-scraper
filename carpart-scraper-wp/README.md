@@ -97,7 +97,7 @@ The dark palette lives in `public/css/csf-color-system-dark.css` and is enqueued
 
 #### Part Finder Block
 
-A search card for hero sections: part-number box plus Year / Make / Model dropdowns. "Show parts" sends the visitor to the Parts page (auto-detected as the page holding the Product Catalog block, or set a URL) with the chosen filters in the query string (`csf_search`, `csf_year`, `csf_make`, `csf_model`). Works without JavaScript; with it, the dropdowns cascade and empty fields are dropped from the URL. Colours, spacing, border and shadow are in the Styles tab; the footnote's `{count}` shows the live number of parts.
+A search card for hero sections: part-number box plus Year / Make / Model dropdowns. "Show parts" sends the visitor to the Parts page (auto-detected as the page holding the Product Catalog block, or set a URL) with the chosen filters in the query string (`csf_search`, `csf_year`, `csf_make`, `csf_model`). Works without JavaScript; with it, Year, Make and Model narrow each other in whichever order they are picked, and empty fields are dropped from the URL. Colours, spacing, border and shadow are in the Styles tab; the footnote's `{count}` shows the live number of parts.
 
 #### Product Catalog Block
 

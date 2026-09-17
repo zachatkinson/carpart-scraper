@@ -40,6 +40,8 @@ class CSF_Parts_AJAX_Handler {
 		add_action( 'wp_ajax_csf_get_makes_by_year', array( $this, 'get_makes_by_year' ) );
 		add_action( 'wp_ajax_nopriv_csf_get_makes_by_year', array( $this, 'get_makes_by_year' ) );
 		add_action( 'wp_ajax_csf_get_models_by_year_make', array( $this, 'get_models_by_year_make' ) );
+		add_action( 'wp_ajax_csf_get_years_by_make', array( $this, 'get_years_by_make' ) );
+		add_action( 'wp_ajax_nopriv_csf_get_years_by_make', array( $this, 'get_years_by_make' ) );
 		add_action( 'wp_ajax_nopriv_csf_get_models_by_year_make', array( $this, 'get_models_by_year_make' ) );
 		add_action( 'wp_ajax_csf_filter_products', array( $this, 'filter_products' ) );
 		add_action( 'wp_ajax_nopriv_csf_filter_products', array( $this, 'filter_products' ) );
@@ -208,6 +210,26 @@ class CSF_Parts_AJAX_Handler {
 		$models = $this->database->get_vehicle_models( $make, $year > 0 ? $year : null );
 
 		wp_send_json_success( array( 'models' => $models ) );
+	}
+
+	/**
+	 * Get vehicle years for a make (optionally a model) via AJAX.
+	 *
+	 * Lets the Part Finder narrow the Year list when Make/Model are chosen first.
+	 *
+	 * @since 1.12.0
+	 */
+	public function get_years_by_make(): void {
+		check_ajax_referer( 'csf_parts_filter', 'nonce' );
+
+		$make  = isset( $_POST['make'] ) ? sanitize_text_field( wp_unslash( $_POST['make'] ) ) : '';
+		$model = isset( $_POST['model'] ) ? sanitize_text_field( wp_unslash( $_POST['model'] ) ) : '';
+
+		if ( '' === $make ) {
+			wp_send_json_error( array( 'message' => 'Invalid make parameter' ) );
+		}
+
+		wp_send_json_success( array( 'years' => $this->database->get_vehicle_years_by_make( $make, $model ) ) );
 	}
 
 	/**
