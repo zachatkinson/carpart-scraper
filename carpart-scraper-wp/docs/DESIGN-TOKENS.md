@@ -118,8 +118,8 @@ is re-saved with the Dimensions panel.
 The single part page is composed of `csf-parts/part-*` blocks. The URL
 handler builds a view (`CSF_Parts_Part_Page::build_view()`), stores it in
 `CSF_Parts_Part_Context`, and renders the layout (`CSF_Parts_Part_Layout`):
-the built-in block markup, or the content of a page chosen in Settings →
-Part Page. Each block reads the context (a sample part in the editor), has
+the plugin-owned layout post (post type `csf_layout`, private, edited via
+CSF Parts → Part Page Layout), seeded from the built-in block markup. Each block reads the context (a sample part in the editor), has
 core colour/spacing/typography supports, and content attributes whose empty
 value means "use the plugin setting". `templates/part-single-modern.php` is
 now a wrapper (header, breadcrumb container, layout, footer) that themes can

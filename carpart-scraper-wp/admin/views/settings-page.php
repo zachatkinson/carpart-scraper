@@ -21,13 +21,12 @@ if ( isset( $_POST['csf_generate_api_key'] ) && check_admin_referer( 'csf_settin
 	echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( 'New API key generated successfully.' ) . '</p></div>';
 }
 
-// Create a part page layout page from the default block layout.
-if ( isset( $_POST['csf_create_layout_page'] ) && check_admin_referer( 'csf_settings_nonce' ) ) {
-	$new_layout_page = CSF_Parts_Part_Layout::create_layout_page();
-	if ( $new_layout_page > 0 ) {
-		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( 'Layout page created and selected. Edit it to rearrange the part page.' ) . ' <a href="' . esc_url( get_edit_post_link( $new_layout_page ) ) . '">' . esc_html( 'Open in the editor' ) . '</a></p></div>';
+// Reset the part page layout to the built-in arrangement.
+if ( isset( $_POST['csf_reset_layout'] ) && check_admin_referer( 'csf_settings_nonce' ) ) {
+	if ( CSF_Parts_Part_Layout::reset() ) {
+		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( 'Part page layout reset to the built-in arrangement.' ) . '</p></div>';
 	} else {
-		echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( 'Could not create the layout page.' ) . '</p></div>';
+		echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( 'Could not reset the layout.' ) . '</p></div>';
 	}
 }
 
@@ -54,7 +53,6 @@ if ( isset( $_POST['csf_save_settings'] ) && check_admin_referer( 'csf_settings_
 	update_option( CSF_Parts_Constants::OPTION_PART_PAGE_NOTE, isset( $_POST['csf_part_page_note'] ) ? sanitize_textarea_field( wp_unslash( $_POST['csf_part_page_note'] ) ) : '' );
 	$fitment_layout = isset( $_POST['csf_fitment_layout'] ) ? sanitize_key( wp_unslash( $_POST['csf_fitment_layout'] ) ) : CSF_Parts_Constants::FITMENT_LAYOUT_TABLE;
 	update_option( CSF_Parts_Constants::OPTION_FITMENT_LAYOUT, in_array( $fitment_layout, CSF_Parts_Constants::FITMENT_LAYOUTS, true ) ? $fitment_layout : CSF_Parts_Constants::FITMENT_LAYOUT_TABLE );
-	update_option( CSF_Parts_Constants::OPTION_PART_LAYOUT_PAGE, isset( $_POST['csf_part_layout_page'] ) ? absint( $_POST['csf_part_layout_page'] ) : 0 );
 	update_option( CSF_Parts_Constants::OPTION_RELATED_COUNT, min( CSF_Parts_Constants::RELATED_COUNT_MAX, max( 0, isset( $_POST['csf_related_count'] ) ? (int) $_POST['csf_related_count'] : CSF_Parts_Constants::RELATED_COUNT_DEFAULT ) ) );
 
 	// Auto-import settings.
@@ -89,7 +87,7 @@ $tech_service_url     = (string) get_option( CSF_Parts_Constants::OPTION_TECH_SE
 $part_page_note       = (string) get_option( CSF_Parts_Constants::OPTION_PART_PAGE_NOTE, CSF_Parts_Constants::PART_PAGE_NOTE_DEFAULT );
 $fitment_layout       = (string) get_option( CSF_Parts_Constants::OPTION_FITMENT_LAYOUT, CSF_Parts_Constants::FITMENT_LAYOUT_TABLE );
 $related_count        = (int) get_option( CSF_Parts_Constants::OPTION_RELATED_COUNT, CSF_Parts_Constants::RELATED_COUNT_DEFAULT );
-$part_layout_page     = (int) get_option( CSF_Parts_Constants::OPTION_PART_LAYOUT_PAGE, 0 );
+$layout_post_id       = CSF_Parts_Part_Layout::layout_post_id();
 $color_scheme         = CSF_Parts_Assets::sanitize_color_scheme(
 	(string) get_option( CSF_Parts_Constants::OPTION_COLOR_SCHEME, CSF_Parts_Constants::COLOR_SCHEME_DEFAULT )
 );
@@ -179,25 +177,13 @@ $api_key              = get_option( 'csf_parts_api_key', '' );
 					</td>
 				</tr>
 				<tr>
-					<th scope="row"><label for="csf_part_layout_page"><?php echo esc_html( 'Layout page' ); ?></label></th>
+					<th scope="row"><?php echo esc_html( 'Layout' ); ?></th>
 					<td>
-						<?php
-						wp_dropdown_pages(
-							array(
-								'name'              => 'csf_part_layout_page',
-								'id'                => 'csf_part_layout_page',
-								'selected'          => $part_layout_page,
-								'show_option_none'  => 'Built-in layout',
-								'option_none_value' => '0',
-								'post_status'       => array( 'publish', 'draft', 'private' ),
-							)
-						);
-						?>
-						<button type="submit" name="csf_create_layout_page" class="button"><?php echo esc_html( 'Create layout page from built-in layout' ); ?></button>
-						<p class="description"><?php echo esc_html( 'The part page is composed of CSF Part blocks. Pick a page whose content is used as the layout, or create one from the built-in layout and rearrange it in the editor. The page itself does not need to be published.' ); ?></p>
-						<?php if ( $part_layout_page > 0 && get_post( $part_layout_page ) ) : ?>
-							<p class="description"><a href="<?php echo esc_url( get_edit_post_link( $part_layout_page ) ); ?>"><?php echo esc_html( 'Edit the layout page' ); ?></a></p>
+						<?php if ( $layout_post_id > 0 ) : ?>
+							<a class="button button-secondary" href="<?php echo esc_url( get_edit_post_link( $layout_post_id ) ); ?>"><?php echo esc_html( 'Edit part page layout' ); ?></a>
 						<?php endif; ?>
+						<button type="submit" name="csf_reset_layout" class="button" onclick="return confirm('<?php echo esc_attr( 'Replace the layout with the built-in arrangement?' ); ?>');"><?php echo esc_html( 'Reset to built-in layout' ); ?></button>
+						<p class="description"><?php echo esc_html( 'The part page is composed of CSF Part blocks. The layout is stored inside the plugin (also under CSF Parts → Part Page Layout) and edited with the block editor; previews use a sample part.' ); ?></p>
 					</td>
 				</tr>
 				<tr>

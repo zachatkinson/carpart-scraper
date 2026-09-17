@@ -66,19 +66,135 @@ HTML;
 	}
 
 	/**
-	 * The layout markup in effect: the configured layout page's content, else the default.
+	 * Register the private layout post type and the admin entry point.
+	 *
+	 * The layout is a plugin-owned post: never public, never in the Pages
+	 * list, but editable with the block editor via CSF Parts → Part Page Layout.
+	 */
+	public static function init(): void {
+		add_action( 'init', array( self::class, 'register_post_type' ) );
+		add_action( 'admin_menu', array( self::class, 'register_menu' ), 20 );
+	}
+
+	/**
+	 * Register the layout post type.
+	 */
+	public static function register_post_type(): void {
+		register_post_type(
+			CSF_Parts_Constants::LAYOUT_POST_TYPE,
+			array(
+				'labels'              => array(
+					'name'          => 'CSF Layouts',
+					'singular_name' => 'CSF Layout',
+					'edit_item'     => 'Edit Part Page Layout',
+				),
+				'public'              => false,
+				'publicly_queryable'  => false,
+				'exclude_from_search' => true,
+				'show_ui'             => true,
+				'show_in_menu'        => false,
+				'show_in_nav_menus'   => false,
+				'show_in_rest'        => true,
+				'rewrite'             => false,
+				'query_var'           => false,
+				'supports'            => array( 'editor' ),
+				'capability_type'     => 'page',
+				'map_meta_cap'        => true,
+			)
+		);
+	}
+
+	/**
+	 * CSF Parts → Part Page Layout opens the layout in the block editor.
+	 */
+	public static function register_menu(): void {
+		$post_id = self::layout_post_id();
+		if ( $post_id <= 0 ) {
+			return;
+		}
+		add_submenu_page(
+			'csf-parts',
+			'Part Page Layout',
+			'Part Page Layout',
+			'manage_options',
+			'post.php?post=' . $post_id . '&action=edit'
+		);
+	}
+
+	/**
+	 * ID of the part page layout post, created from the built-in layout when missing.
+	 *
+	 * A layout page chosen with the 1.16.0 setting is migrated once.
+	 *
+	 * @return int 0 when it cannot be created.
+	 */
+	public static function layout_post_id(): int {
+		$found = get_posts(
+			array(
+				'post_type'      => CSF_Parts_Constants::LAYOUT_POST_TYPE,
+				'post_status'    => 'any',
+				'posts_per_page' => 1,
+				'meta_key'       => '_csf_layout_key', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'meta_value'     => CSF_Parts_Constants::LAYOUT_KEY_PART_PAGE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'fields'         => 'ids',
+			)
+		);
+		if ( ! empty( $found ) ) {
+			return (int) $found[0];
+		}
+
+		$content     = self::default_markup();
+		$legacy_page = (int) get_option( CSF_Parts_Constants::OPTION_PART_LAYOUT_PAGE, 0 );
+		if ( $legacy_page > 0 ) {
+			$page = get_post( $legacy_page );
+			if ( $page && 'trash' !== $page->post_status && '' !== trim( (string) $page->post_content ) ) {
+				$content = (string) $page->post_content;
+			}
+			delete_option( CSF_Parts_Constants::OPTION_PART_LAYOUT_PAGE );
+		}
+
+		$post_id = wp_insert_post(
+			array(
+				'post_type'    => CSF_Parts_Constants::LAYOUT_POST_TYPE,
+				'post_status'  => 'publish',
+				'post_title'   => 'Part page layout',
+				'post_content' => $content,
+				'meta_input'   => array( '_csf_layout_key' => CSF_Parts_Constants::LAYOUT_KEY_PART_PAGE ),
+			),
+			true
+		);
+
+		return is_wp_error( $post_id ) ? 0 : (int) $post_id;
+	}
+
+	/**
+	 * The layout markup in effect: the layout post's content, else the built-in default.
 	 *
 	 * @return string
 	 */
 	public static function markup(): string {
-		$page_id = (int) get_option( CSF_Parts_Constants::OPTION_PART_LAYOUT_PAGE, 0 );
-		if ( $page_id > 0 ) {
-			$page = get_post( $page_id );
-			if ( $page && 'trash' !== $page->post_status && '' !== trim( (string) $page->post_content ) ) {
-				return (string) $page->post_content;
+		$post_id = self::layout_post_id();
+		if ( $post_id > 0 ) {
+			$post = get_post( $post_id );
+			if ( $post && '' !== trim( (string) $post->post_content ) ) {
+				return (string) $post->post_content;
 			}
 		}
 		return self::default_markup();
+	}
+
+	/**
+	 * Put the built-in layout back.
+	 *
+	 * @return bool
+	 */
+	public static function reset(): bool {
+		$post_id = self::layout_post_id();
+		if ( $post_id <= 0 ) {
+			return false;
+		}
+		$result = wp_update_post( array( 'ID' => $post_id, 'post_content' => self::default_markup() ), true );
+		return ! is_wp_error( $result );
 	}
 
 	/**
@@ -92,27 +208,5 @@ HTML;
 		$html = do_blocks( self::markup() );
 		CSF_Parts_Part_Context::clear();
 		return $html;
-	}
-
-	/**
-	 * Create a draft page holding the default layout and select it.
-	 *
-	 * @return int New page ID, or 0 on failure.
-	 */
-	public static function create_layout_page(): int {
-		$page_id = wp_insert_post(
-			array(
-				'post_type'    => 'page',
-				'post_status'  => 'draft',
-				'post_title'   => 'Part page layout',
-				'post_content' => self::default_markup(),
-			),
-			true
-		);
-		if ( is_wp_error( $page_id ) || ! $page_id ) {
-			return 0;
-		}
-		update_option( CSF_Parts_Constants::OPTION_PART_LAYOUT_PAGE, (int) $page_id );
-		return (int) $page_id;
 	}
 }

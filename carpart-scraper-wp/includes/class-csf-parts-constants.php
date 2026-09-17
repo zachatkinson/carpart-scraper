@@ -133,7 +133,9 @@ final class CSF_Parts_Constants {
 	public const OPTION_PART_PAGE_NOTE   = 'csf_parts_part_page_note';
 	public const OPTION_FITMENT_LAYOUT   = 'csf_parts_fitment_layout';
 	public const OPTION_RELATED_COUNT    = 'csf_parts_related_count';
-	public const OPTION_PART_LAYOUT_PAGE = 'csf_parts_part_layout_page';
+	public const OPTION_PART_LAYOUT_PAGE = 'csf_parts_part_layout_page'; // Legacy (1.16.0): migrated into the layout post type.
+	public const LAYOUT_POST_TYPE        = 'csf_layout';
+	public const LAYOUT_KEY_PART_PAGE    = 'part-page';
 	public const FITMENT_LAYOUT_TABLE    = 'table';
 	public const FITMENT_LAYOUT_CARDS    = 'cards';
 	public const FITMENT_LAYOUTS         = array( self::FITMENT_LAYOUT_TABLE, self::FITMENT_LAYOUT_CARDS );

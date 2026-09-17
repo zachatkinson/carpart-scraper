@@ -131,6 +131,9 @@ class CSF_Parts_Plugin {
 		$this->components['assets'] = new CSF_Parts_Assets( $this->components['customizer'], $this->components['design'] );
 		$this->components['assets']->init();
 
+		// Part page layout (private post type + admin entry point).
+		CSF_Parts_Part_Layout::init();
+
 		// Block management (separated from main class).
 		$this->components['block_manager'] = new CSF_Parts_Block_Manager();
 		$this->components['block_manager']->init();
