@@ -94,6 +94,7 @@ class CSF_Parts_Plugin {
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-part-card.php';
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-part-finder.php';
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-catalog-sort.php';
+		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-part-page.php';
 
 		// Load admin classes.
 		if ( is_admin() ) {

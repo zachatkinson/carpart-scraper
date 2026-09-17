@@ -113,6 +113,16 @@ The pre-1.10 `blockPadding` / `blockMargin` attributes are still read when a
 block has no core spacing set, so existing content keeps its layout until it
 is re-saved with the Dimensions panel.
 
+## Part page
+
+The single part page is a PHP template (`templates/part-single-modern.php`)
+rendered by the URL handler, not a block, so its options live in Settings →
+Part Page rather than the block Styles tab. `CSF_Parts_Part_Page` derives
+the eyebrow, the descriptive title ("Radiator for 2024 to 2026 Toyota
+Tacoma"), fitment table rows, grouped specifications (key / dimensions /
+construction / more) and CTA URLs; the template only escapes and prints.
+Themes can override the template via `csf-parts/part-single-modern.php`.
+
 ## Adding a token
 
 1. Define it in `csf-color-system.css` (and a dark value if it is a colour).

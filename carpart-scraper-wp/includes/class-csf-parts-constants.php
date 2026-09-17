@@ -126,6 +126,21 @@ final class CSF_Parts_Constants {
 	public const DESIGN_PRESET_DEFAULT = 'kadence';
 
 	/**
+	 * Part page settings.
+	 */
+	public const OPTION_DISTRIBUTOR_URL  = 'csf_parts_distributor_url';
+	public const OPTION_TECH_SERVICE_URL = 'csf_parts_tech_service_url';
+	public const OPTION_PART_PAGE_NOTE   = 'csf_parts_part_page_note';
+	public const OPTION_FITMENT_LAYOUT   = 'csf_parts_fitment_layout';
+	public const OPTION_RELATED_COUNT    = 'csf_parts_related_count';
+	public const FITMENT_LAYOUT_TABLE    = 'table';
+	public const FITMENT_LAYOUT_CARDS    = 'cards';
+	public const FITMENT_LAYOUTS         = array( self::FITMENT_LAYOUT_TABLE, self::FITMENT_LAYOUT_CARDS );
+	public const RELATED_COUNT_DEFAULT   = 4;
+	public const RELATED_COUNT_MAX       = 8;
+	public const PART_PAGE_NOTE_DEFAULT  = 'Reference catalog. Pricing and stock come from the distributor nearest you. The technical service link opens the contact form with this part number filled in.';
+
+	/**
 	 * HTTP status codes.
 	 */
 	public const HTTP_OK                     = 200;

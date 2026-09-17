@@ -37,6 +37,15 @@ if ( isset( $_POST['csf_save_settings'] ) && check_admin_referer( 'csf_settings_
 	$color_scheme = isset( $_POST['csf_color_scheme'] ) ? sanitize_key( $_POST['csf_color_scheme'] ) : CSF_Parts_Constants::COLOR_SCHEME_DEFAULT;
 	update_option( CSF_Parts_Constants::OPTION_COLOR_SCHEME, CSF_Parts_Assets::sanitize_color_scheme( $color_scheme ) );
 
+	// Part page settings.
+	// URL templates keep their {sku} placeholders; the filled URL is escaped at output.
+	update_option( CSF_Parts_Constants::OPTION_DISTRIBUTOR_URL, isset( $_POST['csf_distributor_url'] ) ? sanitize_text_field( wp_unslash( $_POST['csf_distributor_url'] ) ) : '' );
+	update_option( CSF_Parts_Constants::OPTION_TECH_SERVICE_URL, isset( $_POST['csf_tech_service_url'] ) ? sanitize_text_field( wp_unslash( $_POST['csf_tech_service_url'] ) ) : '' );
+	update_option( CSF_Parts_Constants::OPTION_PART_PAGE_NOTE, isset( $_POST['csf_part_page_note'] ) ? sanitize_textarea_field( wp_unslash( $_POST['csf_part_page_note'] ) ) : '' );
+	$fitment_layout = isset( $_POST['csf_fitment_layout'] ) ? sanitize_key( wp_unslash( $_POST['csf_fitment_layout'] ) ) : CSF_Parts_Constants::FITMENT_LAYOUT_TABLE;
+	update_option( CSF_Parts_Constants::OPTION_FITMENT_LAYOUT, in_array( $fitment_layout, CSF_Parts_Constants::FITMENT_LAYOUTS, true ) ? $fitment_layout : CSF_Parts_Constants::FITMENT_LAYOUT_TABLE );
+	update_option( CSF_Parts_Constants::OPTION_RELATED_COUNT, min( CSF_Parts_Constants::RELATED_COUNT_MAX, max( 0, isset( $_POST['csf_related_count'] ) ? (int) $_POST['csf_related_count'] : CSF_Parts_Constants::RELATED_COUNT_DEFAULT ) ) );
+
 	// Auto-import settings.
 	$auto_import_enabled = isset( $_POST['csf_auto_import_enabled'] ) ? 1 : 0;
 	update_option( 'csf_parts_auto_import_enabled', $auto_import_enabled );
@@ -64,6 +73,11 @@ if ( isset( $_POST['csf_save_settings'] ) && check_admin_referer( 'csf_settings_
 $cache_duration       = get_option( 'csf_parts_cache_duration', 3600 );
 $parts_per_page       = get_option( 'csf_parts_per_page', 20 );
 $enable_cache         = get_option( 'csf_parts_enable_cache', 1 );
+$distributor_url      = (string) get_option( CSF_Parts_Constants::OPTION_DISTRIBUTOR_URL, '' );
+$tech_service_url     = (string) get_option( CSF_Parts_Constants::OPTION_TECH_SERVICE_URL, '' );
+$part_page_note       = (string) get_option( CSF_Parts_Constants::OPTION_PART_PAGE_NOTE, CSF_Parts_Constants::PART_PAGE_NOTE_DEFAULT );
+$fitment_layout       = (string) get_option( CSF_Parts_Constants::OPTION_FITMENT_LAYOUT, CSF_Parts_Constants::FITMENT_LAYOUT_TABLE );
+$related_count        = (int) get_option( CSF_Parts_Constants::OPTION_RELATED_COUNT, CSF_Parts_Constants::RELATED_COUNT_DEFAULT );
 $color_scheme         = CSF_Parts_Assets::sanitize_color_scheme(
 	(string) get_option( CSF_Parts_Constants::OPTION_COLOR_SCHEME, CSF_Parts_Constants::COLOR_SCHEME_DEFAULT )
 );
@@ -122,6 +136,50 @@ $api_key              = get_option( 'csf_parts_api_key', '' );
 						<p class="description">
 							<?php echo esc_html( 'Default number of parts to display per page in REST API and blocks (10-100). Default: 20.' ); ?>
 						</p>
+					</td>
+				</tr>
+			</tbody>
+		</table>
+
+		<h2><?php echo esc_html( 'Part Page' ); ?></h2>
+
+		<table class="form-table" role="presentation">
+			<tbody>
+				<tr>
+					<th scope="row"><label for="csf_distributor_url"><?php echo esc_html( '"Find a distributor" URL' ); ?></label></th>
+					<td>
+						<input type="text" id="csf_distributor_url" name="csf_distributor_url" value="<?php echo esc_attr( $distributor_url ); ?>" class="large-text" placeholder="https://example.com/find-a-dealer/" />
+						<p class="description"><?php echo esc_html( 'Primary button on part pages. Leave empty to hide it. {sku} and {sku_display} are replaced with the part number.' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="csf_tech_service_url"><?php echo esc_html( '"Ask technical service" URL' ); ?></label></th>
+					<td>
+						<input type="text" id="csf_tech_service_url" name="csf_tech_service_url" value="<?php echo esc_attr( $tech_service_url ); ?>" class="large-text" placeholder="https://example.com/contact/?part={sku}" />
+						<p class="description"><?php echo esc_html( 'Secondary button. Use {sku} to prefill the contact form. Leave empty to hide it.' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="csf_part_page_note"><?php echo esc_html( 'Note under the buttons' ); ?></label></th>
+					<td>
+						<textarea id="csf_part_page_note" name="csf_part_page_note" rows="2" class="large-text"><?php echo esc_textarea( $part_page_note ); ?></textarea>
+						<p class="description"><?php echo esc_html( 'Small print shown beneath the buttons. Leave empty to hide it.' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="csf_fitment_layout"><?php echo esc_html( 'Fitment layout' ); ?></label></th>
+					<td>
+						<select id="csf_fitment_layout" name="csf_fitment_layout">
+							<option value="<?php echo esc_attr( CSF_Parts_Constants::FITMENT_LAYOUT_TABLE ); ?>" <?php selected( $fitment_layout, CSF_Parts_Constants::FITMENT_LAYOUT_TABLE ); ?>><?php echo esc_html( 'Table (make, model, years, engine, notes)' ); ?></option>
+							<option value="<?php echo esc_attr( CSF_Parts_Constants::FITMENT_LAYOUT_CARDS ); ?>" <?php selected( $fitment_layout, CSF_Parts_Constants::FITMENT_LAYOUT_CARDS ); ?>><?php echo esc_html( 'Expandable cards (previous layout)' ); ?></option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="csf_related_count"><?php echo esc_html( 'Related parts' ); ?></label></th>
+					<td>
+						<input type="number" id="csf_related_count" name="csf_related_count" value="<?php echo esc_attr( (string) $related_count ); ?>" min="0" max="<?php echo esc_attr( (string) CSF_Parts_Constants::RELATED_COUNT_MAX ); ?>" class="small-text" />
+						<p class="description"><?php echo esc_html( 'How many "Other parts for this vehicle" cards to show. 0 hides the section.' ); ?></p>
 					</td>
 				</tr>
 			</tbody>

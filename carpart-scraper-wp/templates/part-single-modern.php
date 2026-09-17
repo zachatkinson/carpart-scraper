@@ -112,6 +112,7 @@ get_header();
 	<!-- Product Grid: Two-Column Layout -->
 	<div class="csf-product-grid">
 
+
 		<!-- Left Column: Image Gallery -->
 		<div class="csf-product-gallery">
 			<?php if ( ! empty( $images ) ) : ?>
@@ -179,19 +180,36 @@ get_header();
 		<!-- Right Column: Product Info -->
 		<div class="csf-product-info">
 
-			<!-- Discontinued Badge (if applicable) -->
-			<?php if ( ! empty( $part->discontinued ) && 1 === (int) $part->discontinued ) : ?>
-				<div class="csf-category-badge">
-					<span class="csf-badge csf-discontinued-badge">DISCONTINUED</span>
+			<p class="csf-product-eyebrow">
+				<a href="<?php echo esc_url( home_url( '/parts/?csf_category=' . rawurlencode( $part->category ) ) ); ?>" class="csf-product-eyebrow__link"><?php echo esc_html( $eyebrow ); ?></a>
+				<?php if ( ! empty( $part->discontinued ) && 1 === (int) $part->discontinued ) : ?>
+					<span class="csf-badge csf-discontinued-badge csf-discontinued-badge--inline">DISCONTINUED</span>
+				<?php endif; ?>
+			</p>
+
+			<h1 class="csf-product-title"><?php echo esc_html( $heading ); ?></h1>
+
+			<?php
+			$intro = ! empty( $part->short_description ) ? $part->short_description : ( $part->description ?? '' );
+			if ( ! empty( $intro ) ) :
+				?>
+				<div class="csf-product-intro"><?php echo wp_kses_post( wpautop( $intro ) ); ?></div>
+			<?php endif; ?>
+
+			<?php if ( '' !== $distributor_url || '' !== $tech_service_url ) : ?>
+				<div class="csf-product-actions">
+					<?php if ( '' !== $distributor_url ) : ?>
+						<a class="csf-btn csf-product-actions__primary" href="<?php echo esc_url( $distributor_url ); ?>"><?php esc_html_e( 'Find a distributor', 'csf-parts' ); ?></a>
+					<?php endif; ?>
+					<?php if ( '' !== $tech_service_url ) : ?>
+						<a class="csf-btn csf-btn--outline csf-product-actions__secondary" href="<?php echo esc_url( $tech_service_url ); ?>"><?php esc_html_e( 'Ask technical service', 'csf-parts' ); ?></a>
+					<?php endif; ?>
 				</div>
 			<?php endif; ?>
 
-			<!-- Product Title -->
-			<h1 class="csf-product-title">
-				<?php echo esc_html( str_replace( '-', '', $part->sku ) ); ?>
-			</h1>
-
-			<!-- Manufacturer -->
+			<?php if ( '' !== trim( $part_page_note ) ) : ?>
+				<p class="csf-reference-note"><?php echo esc_html( $part_page_note ); ?></p>
+			<?php endif; ?>
 
 			<!-- Your Vehicle Box (if applicable) -->
 			<?php if ( $is_vehicle_specific ) : ?>
@@ -270,546 +288,166 @@ get_header();
 				</div>
 			<?php endif; ?>
 
-			<!-- Quick Specs Highlights -->
-			<?php if ( ! empty( $specifications ) ) : ?>
+			<!-- Key specifications -->
+			<?php if ( ! empty( $spec_groups['key'] ) ) : ?>
 				<div class="csf-quick-specs">
-					<h3>Key Specifications</h3>
+					<h3><?php esc_html_e( 'Key specifications', 'csf-parts' ); ?></h3>
 					<ul>
-						<?php
-						// First, display Part Type (category)
-						$part_type_value = null;
-						foreach ( $specifications as $key => $value ) {
-							if ( preg_match( '/^(CSF-?)?\d+$/', $key ) ) {
-								$part_type_value = $value;
-								break;
-							}
-						}
-						if ( $part_type_value ) :
-						?>
+						<?php foreach ( $spec_groups['key'] as $spec_label => $spec_value ) : ?>
 							<li>
-								<span class="spec-label">Part Type:</span>
-								<span class="spec-value"><?php echo esc_html( $part_type_value ); ?></span>
-							</li>
-						<?php endif; ?>
-
-						<?php
-						// Define key spec fields with possible field name variations and display labels.
-						// Each entry: 'Display Label' => ['field_name_1', 'field_name_2', ...]
-						$key_spec_definitions = array(
-							'Construction'    => array( 'Construction' ),
-							'Core Length'     => array( 'Core Length (in)', 'Core Length' ),
-							'Core Thickness'  => array( 'Core Thickness (in)', 'Core Thickness' ),
-							'Core Width'      => array( 'Core Width (in)', 'Core Width' ),
-							'Flow'            => array( 'Flow', 'Flow Type', 'Flow Direction', 'Cross-flow/Down-flow' ),
-							'Number of Rows'  => array( 'Number of Rows', '# of Rows', 'Rows', 'Row Count', 'No. Of Rows' ),
-							'Tank Material'   => array( 'Tank Material' ),
-						);
-
-						// Fields that should be capitalized (not formatted as dimensions).
-						$capitalize_fields = array( 'Construction', 'Tank Material', 'Flow', 'Number of Rows' );
-
-						// Find matching specs and collect them.
-						$found_specs = array();
-						foreach ( $key_spec_definitions as $label => $possible_fields ) {
-							foreach ( $possible_fields as $field_name ) {
-								if ( isset( $specifications[ $field_name ] ) && ! empty( $specifications[ $field_name ] ) ) {
-									$found_specs[ $label ] = array(
-										'value'      => $specifications[ $field_name ],
-										'capitalize' => in_array( $label, $capitalize_fields, true ),
-									);
-									break; // Stop at first match.
-								}
-							}
-						}
-
-						// Handle Inlet/Outlet specially — combine Length × Width when both exist.
-						foreach ( array( 'Inlet', 'Outlet' ) as $port_label ) {
-							// Prefer descriptive text values first.
-							$text_fields = array( "{$port_label} Size", "{$port_label} Tube", $port_label );
-							$found_text  = false;
-							foreach ( $text_fields as $field_name ) {
-								if ( isset( $specifications[ $field_name ] ) && ! empty( $specifications[ $field_name ] ) ) {
-									$found_specs[ $port_label ] = array(
-										'value'      => $specifications[ $field_name ],
-										'capitalize' => true,
-									);
-									$found_text = true;
-									break;
-								}
-							}
-
-							// If no text value, combine Length × Width dimensions.
-							if ( ! $found_text ) {
-								$length = $specifications[ "{$port_label} Length (in)" ] ?? '';
-								$width  = $specifications[ "{$port_label} Width (in)" ] ?? '';
-								if ( ! empty( $length ) && ! empty( $width ) ) {
-									$found_specs[ $port_label ] = array(
-										'value'      => trim( $length ) . '" × ' . trim( $width ) . '"',
-										'capitalize' => false,
-									);
-								} elseif ( ! empty( $length ) ) {
-									$found_specs[ $port_label ] = array(
-										'value'      => $length,
-										'capitalize' => false,
-									);
-								} elseif ( ! empty( $width ) ) {
-									$found_specs[ $port_label ] = array(
-										'value'      => $width,
-										'capitalize' => false,
-									);
-								}
-							}
-						}
-
-						// Sort alphabetically by label
-						ksort( $found_specs );
-
-						// Display specs (limit to 8 for visual balance)
-						$count = 0;
-						foreach ( $found_specs as $label => $spec_data ) :
-							if ( $count >= 8 ) break;
-							$count++;
-						?>
-							<li>
-								<span class="spec-label"><?php echo esc_html( $label ); ?>:</span>
-								<span class="spec-value"><?php
-									$spec_val = $spec_data['value'];
-									if ( $spec_data['capitalize'] ) {
-										$spec_val = ucwords( strtolower( $spec_val ) );
-									}
-									echo wp_kses( csf_format_dimension_fractions( $spec_val ), array( 'sup' => array(), 'sub' => array() ) );
-								?></span>
+								<span class="spec-label"><?php echo esc_html( $spec_label ); ?></span>
+								<span class="spec-value"><?php echo wp_kses( csf_format_dimension_fractions( $spec_value ), array( 'sup' => array(), 'sub' => array() ) ); ?></span>
 							</li>
 						<?php endforeach; ?>
 					</ul>
 				</div>
 			<?php endif; ?>
 
-			<!-- Interchange Numbers -->
+			<!-- Replaces (interchange numbers) -->
 			<?php if ( ! empty( $interchange_numbers ) ) : ?>
 				<?php
-				// Sort interchange numbers alphabetically by reference_type, then by reference_number.
 				usort(
 					$interchange_numbers,
-					function( $a, $b ) {
+					static function ( $a, $b ) {
 						$type_compare = strcmp( $a['reference_type'] ?? '', $b['reference_type'] ?? '' );
-						if ( 0 !== $type_compare ) {
-							return $type_compare;
-						}
-						return strcmp( $a['reference_number'] ?? '', $b['reference_number'] ?? '' );
+						return 0 !== $type_compare ? $type_compare : strcmp( $a['reference_number'] ?? '', $b['reference_number'] ?? '' );
 					}
 				);
 				?>
-				<h3 class="csf-interchange-heading">Interchange Numbers</h3>
-				<p class="csf-interchange-description">This part replaces the following OEM and aftermarket part numbers:</p>
-				<div class="csf-interchange-grid">
-					<?php foreach ( $interchange_numbers as $reference ) : ?>
-						<div class="csf-interchange-card">
-							<div class="interchange-type"><?php echo esc_html( $reference['reference_type'] ?? 'OEM' ); ?></div>
-							<div class="interchange-number"><?php echo esc_html( $reference['reference_number'] ?? '' ); ?></div>
-						</div>
-					<?php endforeach; ?>
-				</div>
-			<?php endif; ?>
-
-			<!-- CTA Section (Reference Catalog) -->
-			<div class="csf-cta-section">
-				<p class="csf-reference-note">
-					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<circle cx="12" cy="12" r="10"></circle>
-						<line x1="12" y1="16" x2="12" y2="12"></line>
-						<line x1="12" y1="8" x2="12.01" y2="8"></line>
-					</svg>
-					This is a reference catalog. Contact your local dealer for pricing and availability.
-				</p>
-			</div>
-
-		</div>
-	</div>
-
-	<!-- Product Description (full-width) -->
-	<?php if ( ! empty( $part->description ) ) : ?>
-		<div class="csf-product-description-section">
-			<div class="csf-product-description">
-				<?php echo wp_kses_post( $part->description ); ?>
-			</div>
-		</div>
-	<?php endif; ?>
-
-	<!-- Tabbed Content Section -->
-	<div class="csf-tabs-section">
-		<div class="csf-tabs-nav">
-			<?php if ( ! empty( $compatibility ) ) : ?>
-				<button class="csf-tab-btn active" data-tab="compatibility">Vehicle Fitment</button>
-			<?php endif; ?>
-			<?php if ( ! empty( $specifications ) ) : ?>
-				<button class="csf-tab-btn <?php echo empty( $compatibility ) ? 'active' : ''; ?>" data-tab="specifications">Full Specifications</button>
-			<?php endif; ?>
-			<?php if ( ! empty( $features ) ) : ?>
-				<button class="csf-tab-btn" data-tab="features">Features & Benefits</button>
-			<?php endif; ?>
-		</div>
-
-		<div class="csf-tabs-content">
-
-						<!-- Compatibility Tab -->
-			<?php if ( ! empty( $compatibility ) ) : ?>
-				<div class="csf-tab-panel active" id="tab-compatibility">
-					<h2>Vehicle Fitment</h2>
-					<p class="tab-description">This part is compatible with the following vehicles:</p>
-					<div class="csf-fitment-grid">
-					<?php
-					// Group by make/model and keep complete engine+aspiration+qualifiers as variants
-					$by_make_model = array();
-					foreach ( $compatibility as $vehicle ) {
-						$key = $vehicle['make'] . '|' . $vehicle['model'];
-
-						if ( ! isset( $by_make_model[ $key ] ) ) {
-							$by_make_model[ $key ] = array(
-								'make'     => $vehicle['make'],
-								'model'    => $vehicle['model'],
-								'variants' => array(),
-							);
-						}
-
-						// Create unique key for this engine+aspiration+qualifiers combination
-						$engine = isset( $vehicle['engine'] ) && ! empty( $vehicle['engine'] ) ? $vehicle['engine'] : '';
-						$aspiration = isset( $vehicle['aspiration'] ) && ! empty( $vehicle['aspiration'] ) && 'None' !== $vehicle['aspiration'] ? $vehicle['aspiration'] : '';
-						$qualifiers = isset( $vehicle['qualifiers'] ) && is_array( $vehicle['qualifiers'] ) ? $vehicle['qualifiers'] : array();
-
-						// Create variant key from all three components
-						$variant_key = $engine . '||' . $aspiration . '||' . implode( '|', $qualifiers );
-
-						if ( ! isset( $by_make_model[ $key ]['variants'][ $variant_key ] ) ) {
-							$by_make_model[ $key ]['variants'][ $variant_key ] = array(
-								'engine'      => $engine,
-								'aspiration'  => $aspiration,
-								'qualifiers'  => $qualifiers,
-								'years'       => array(),
-							);
-						}
-
-						$by_make_model[ $key ]['variants'][ $variant_key ]['years'][] = $vehicle['year'];
-					}
-
-					// Group variants by year set
-					$final_groups = array();
-					foreach ( $by_make_model as $key => $mm_data ) {
-						$by_year_set = array();
-
-						foreach ( $mm_data['variants'] as $variant_data ) {
-							// Deduplicate years before sorting
-							$variant_data['years'] = array_unique( $variant_data['years'] );
-							sort( $variant_data['years'] );
-							$year_set_key = implode( ',', $variant_data['years'] );
-
-							if ( ! isset( $by_year_set[ $year_set_key ] ) ) {
-								$by_year_set[ $year_set_key ] = array(
-									'make'     => $mm_data['make'],
-									'model'    => $mm_data['model'],
-									'years'    => $variant_data['years'],
-									'variants' => array(),
-								);
-							}
-
-							// Keep each engine+aspiration+qualifiers as a complete variant
-							$by_year_set[ $year_set_key ]['variants'][] = array(
-								'engine'      => $variant_data['engine'],
-								'aspiration'  => $variant_data['aspiration'],
-								'qualifiers'  => $variant_data['qualifiers'],
-							);
-						}
-
-						foreach ( $by_year_set as $group ) {
-							$final_groups[] = $group;
-						}
-					}
-
-				// Sort: user's vehicle first, then alphabetically by make > model > year
-				if ( ! empty( $searched_make ) && ! empty( $searched_model ) ) {
-					usort(
-						$final_groups,
-						function( $a, $b ) use ( $searched_make, $searched_model, $searched_year ) {
-							// Check if 'a' matches user's vehicle
-							$a_make_match  = strcasecmp( $a['make'], $searched_make ) === 0;
-							$a_model_match = strcasecmp( $a['model'], $searched_model ) === 0;
-							$a_year_match  = empty( $searched_year ) || in_array( strval( $searched_year ), array_map( 'strval', $a['years'] ), true );
-							$a_is_match    = $a_make_match && $a_model_match && $a_year_match;
-
-							// Check if 'b' matches user's vehicle
-							$b_make_match  = strcasecmp( $b['make'], $searched_make ) === 0;
-							$b_model_match = strcasecmp( $b['model'], $searched_model ) === 0;
-							$b_year_match  = empty( $searched_year ) || in_array( strval( $searched_year ), array_map( 'strval', $b['years'] ), true );
-							$b_is_match    = $b_make_match && $b_model_match && $b_year_match;
-
-							// Matching vehicles go first
-							if ( $a_is_match && ! $b_is_match ) {
-								return -1; // a comes before b
-							}
-							if ( ! $a_is_match && $b_is_match ) {
-								return 1; // b comes before a
-							}
-
-							// For non-matching (or both matching), sort alphabetically by make > model > year
-							$make_compare = strcasecmp( $a['make'], $b['make'] );
-							if ( 0 !== $make_compare ) {
-								return $make_compare;
-							}
-
-							$model_compare = strcasecmp( $a['model'], $b['model'] );
-							if ( 0 !== $model_compare ) {
-								return $model_compare;
-							}
-
-							// Sort by earliest year (ascending)
-							$a_min_year = ! empty( $a['years'] ) ? min( $a['years'] ) : 0;
-							$b_min_year = ! empty( $b['years'] ) ? min( $b['years'] ) : 0;
-							return $a_min_year - $b_min_year;
-						}
-					);
-				} else {
-					// No user vehicle - just sort alphabetically by make > model > year
-					usort(
-						$final_groups,
-						function( $a, $b ) {
-							$make_compare = strcasecmp( $a['make'], $b['make'] );
-							if ( 0 !== $make_compare ) {
-								return $make_compare;
-							}
-
-							$model_compare = strcasecmp( $a['model'], $b['model'] );
-							if ( 0 !== $model_compare ) {
-								return $model_compare;
-							}
-
-							// Sort by earliest year (ascending)
-							$a_min_year = ! empty( $a['years'] ) ? min( $a['years'] ) : 0;
-							$b_min_year = ! empty( $b['years'] ) ? min( $b['years'] ) : 0;
-							return $a_min_year - $b_min_year;
-						}
-					);
-				}
-
-					// Display fitment cards
-					foreach ( $final_groups as $group ) :
-						sort( $group['years'] );
-						$year_ranges = array();
-						$start       = $group['years'][0];
-						$end         = $group['years'][0];
-
-						// Build year ranges
-						for ( $i = 1; $i < count( $group['years'] ); $i++ ) {
-							if ( $group['years'][ $i ] == $end + 1 ) {
-								$end = $group['years'][ $i ];
-							} else {
-								// Smart formatting: 3 or less = comma list, 4+ = en-dash range
-								$range_size = $end - $start + 1;
-								if ( $range_size <= 3 ) {
-									$year_ranges[] = implode( ', ', range( $start, $end ) );
-								} else {
-									$year_ranges[] = $start . '–' . $end;
-								}
-								$start = $group['years'][ $i ];
-								$end   = $group['years'][ $i ];
-							}
-						}
-						// Handle final range
-						$range_size = $end - $start + 1;
-						if ( $range_size <= 3 ) {
-							$year_ranges[] = implode( ', ', range( $start, $end ) );
-						} else {
-							$year_ranges[] = $start . '–' . $end;
-						}
-
-						// Check if this vehicle matches the searched parameters
-					$is_match          = false;
-					$is_possible_match = false;
-						if ( ! empty( $searched_make ) && ! empty( $searched_model ) ) {
-							$make_match  = strcasecmp( $group['make'], $searched_make ) === 0;
-							$model_match = strcasecmp( $group['model'], $searched_model ) === 0;
-							$year_match  = empty( $searched_year ) || in_array( strval( $searched_year ), array_map( 'strval', $group['years'] ), true );
-						$ymm_match   = $make_match && $model_match && $year_match;
-
-						// Count non-empty engine variants
-						$variant_count = 0;
-						if ( ! empty( $group['variants'] ) ) {
-							foreach ( $group['variants'] as $variant ) {
-								if ( ! empty( $variant['engine'] ) ) {
-									$variant_count++;
-								}
-							}
-						}
-
-						// Confirmed match: YMM matches AND (no engine data OR only one engine option)
-						// Possible match: YMM matches AND multiple engine options exist
-						if ( $ymm_match ) {
-							if ( $variant_count <= 1 ) {
-								// No engine data (universal fit) or single engine (unambiguous)
-								$is_match = true;
-							} else {
-								// Multiple engines - user must verify their specific engine
-								$is_possible_match = true;
-							}
-						}
-						}
-
-					$highlight_class = ( $is_match || $is_possible_match ) ? ' csf-fitment-highlighted' : '';
-					// Prepare variants data for JS (extract just engines for backward compatibility)
-					$engines_for_js = array();
-					if ( ! empty( $group['variants'] ) ) {
-						foreach ( $group['variants'] as $variant ) {
-							if ( ! empty( $variant['engine'] ) ) {
-								$engines_for_js[] = $variant['engine'];
-							}
-						}
-					}
-					$engines_json = wp_json_encode( $engines_for_js );
-						?>
-						<div class="csf-fitment-card<?php echo esc_attr( $highlight_class ); ?>"
-							data-make="<?php echo esc_attr( strtolower( $group['make'] ) ); ?>"
-							data-model="<?php echo esc_attr( strtolower( $group['model'] ) ); ?>"
-							data-engines="<?php echo esc_attr( $engines_json ); ?>">
-
-							<?php if ( $is_match ) : ?>
-								<div class="fitment-match-badge">Your Vehicle</div>
-							<?php elseif ( $is_possible_match ) : ?>
-								<div class="fitment-match-badge fitment-possible-match">Possible Match</div>
-							<?php endif; ?>
-
-							<button class="fitment-card-header"
-								aria-expanded="false"
-								aria-controls="fitment-details-<?php echo esc_attr( md5( $group['make'] . $group['model'] . implode( ',', $group['years'] ) ) ); ?>">
-								<div class="fitment-header-content">
-									<div class="fitment-make-model">
-										<span class="fitment-make"><?php echo esc_html( $group['make'] ); ?></span>
-										<span class="fitment-model"><?php echo esc_html( $group['model'] ); ?></span>
-									</div>
-									<div class="fitment-years"><?php echo esc_html( implode( ', ', $year_ranges ) ); ?></div>
-									<?php if ( ! empty( $group['variants'] ) ) : ?>
-										<div class="fitment-variant-count">
-											<?php echo esc_html( count( $group['variants'] ) ); ?>
-											<?php echo count( $group['variants'] ) === 1 ? 'configuration' : 'configurations'; ?>
-										</div>
-									<?php endif; ?>
-								</div>
-								<svg class="fitment-expand-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-									<polyline points="6 9 12 15 18 9"></polyline>
-								</svg>
-							</button>
-
-							<?php if ( ! empty( $group['variants'] ) ) : ?>
-								<div class="fitment-details"
-									id="fitment-details-<?php echo esc_attr( md5( $group['make'] . $group['model'] . implode( ',', $group['years'] ) ) ); ?>"
-									aria-hidden="true">
-									<table class="fitment-table">
-										<thead>
-											<tr>
-												<th scope="col">Engine</th>
-												<th scope="col">Configuration</th>
-											</tr>
-										</thead>
-										<tbody>
-											<?php foreach ( $group['variants'] as $variant ) : ?>
-												<tr>
-													<td class="fitment-engine">
-														<?php echo esc_html( ! empty( $variant['engine'] ) ? $variant['engine'] : '—' ); ?>
-													</td>
-													<td class="fitment-config">
-														<?php if ( ! empty( $variant['aspiration'] ) ) : ?>
-															<div class="config-item config-aspiration">
-																<?php echo esc_html( $variant['aspiration'] ); ?>
-															</div>
-														<?php endif; ?>
-														<?php if ( ! empty( $variant['qualifiers'] ) ) : ?>
-															<?php foreach ( $variant['qualifiers'] as $qualifier ) : ?>
-																<div class="config-item config-qualifier">
-																	<?php echo esc_html( $qualifier ); ?>
-																</div>
-															<?php endforeach; ?>
-														<?php endif; ?>
-														<?php if ( empty( $variant['aspiration'] ) && empty( $variant['qualifiers'] ) ) : ?>
-															<div class="config-item config-standard">Standard</div>
-														<?php endif; ?>
-													</td>
-												</tr>
-											<?php endforeach; ?>
-										</tbody>
-									</table>
-								</div>
-							<?php endif; ?>
-						</div>
-					<?php endforeach; ?>
-					</div>
-				</div>
-			<?php endif; ?>
-
-
-			<!-- Specifications Tab -->
-			<?php if ( ! empty( $specifications ) ) : ?>
-				<div class="csf-tab-panel <?php echo empty( $compatibility ) ? 'active' : ''; ?>" id="tab-specifications">
-					<h2>Full Specifications</h2>
-					<div class="csf-specs-grid">
-						<?php foreach ( $specifications as $key => $value ) : ?>
-							<?php
-							// Special handling: if key looks like a part number (digits or CSF-####), it's the part type
-							$label = $key;
-							if ( preg_match( '/^(CSF-?)?\d+$/', $key ) ) {
-								$label = 'Part Type';
-							} else {
-								$label = ucwords( str_replace( '_', ' ', $key ) );
-							}
-							?>
-							<div class="csf-spec-row">
-								<dt class="spec-label"><?php echo esc_html( $label ); ?></dt>
-								<dd class="spec-value"><?php echo wp_kses( csf_format_dimension_fractions( $value ), array( 'sup' => array(), 'sub' => array() ) ); ?></dd>
+				<div class="csf-replaces">
+					<span class="csf-replaces__label"><?php esc_html_e( 'Replaces', 'csf-parts' ); ?></span>
+					<div class="csf-interchange-grid">
+						<?php foreach ( $interchange_numbers as $reference ) : ?>
+							<div class="csf-interchange-card">
+								<span class="interchange-type"><?php echo esc_html( $reference['reference_type'] ?? 'OEM' ); ?></span>
+								<span class="interchange-number"><?php echo esc_html( $reference['reference_number'] ?? '' ); ?></span>
 							</div>
 						<?php endforeach; ?>
 					</div>
 				</div>
 			<?php endif; ?>
 
-			<!-- Features Tab -->
-			<?php if ( ! empty( $features ) ) : ?>
-				<div class="csf-tab-panel" id="tab-features">
-					<h2>Features & Benefits</h2>
-					<ul class="csf-features-list">
-						<?php foreach ( $features as $feature ) : ?>
-							<li>
-								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<polyline points="20 6 9 17 4 12"></polyline>
-								</svg>
-								<?php echo esc_html( $feature ); ?>
-							</li>
-						<?php endforeach; ?>
-					</ul>
-				</div>
-			<?php endif; ?>
-
 		</div>
 	</div>
 
+	<!-- Fits these vehicles -->
+	<?php if ( ! empty( $compatibility ) ) : ?>
+		<section class="csf-section csf-fitment">
+			<div class="csf-section__header">
+				<h2 class="csf-section__title"><?php esc_html_e( 'Fits these vehicles', 'csf-parts' ); ?></h2>
+				<p class="csf-section__meta"><?php echo esc_html( CSF_Parts_Part_Page::fitment_counts( $fitment_rows ) ); ?></p>
+			</div>
+			<?php if ( CSF_Parts_Constants::FITMENT_LAYOUT_CARDS === $fitment_layout ) : ?>
+				<?php include CSF_PARTS_PLUGIN_DIR . 'templates/parts/fitment-cards.php'; ?>
+			<?php else : ?>
+				<div class="csf-fitment-table-wrap">
+					<table class="csf-fitment-table">
+						<thead>
+							<tr>
+								<th scope="col"><?php esc_html_e( 'Make', 'csf-parts' ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Model', 'csf-parts' ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Years', 'csf-parts' ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Engine', 'csf-parts' ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Notes', 'csf-parts' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $fitment_rows as $row ) : ?>
+								<?php $row_is_yours = CSF_Parts_Part_Page::row_matches( $row, (string) $searched_year, (string) $searched_make, (string) $searched_model ); ?>
+								<tr class="csf-fitment-row<?php echo $row_is_yours ? ' is-yours' : ''; ?>" data-make="<?php echo esc_attr( strtolower( $row['make'] ) ); ?>" data-model="<?php echo esc_attr( strtolower( $row['model'] ) ); ?>" data-engine="<?php echo esc_attr( $row['engine'] ); ?>">
+									<td class="csf-fitment-row__make"><?php echo esc_html( $row['make'] ); ?></td>
+									<td><?php echo esc_html( $row['model'] ); ?></td>
+									<td><?php echo esc_html( $row['years_text'] ); ?></td>
+									<td><?php echo esc_html( '' !== $row['engine'] ? $row['engine'] : '—' ); ?></td>
+									<td class="csf-fitment-row__notes">
+										<?php if ( $row_is_yours ) : ?>
+											<span class="csf-fitment-yours"><?php esc_html_e( 'Your vehicle', 'csf-parts' ); ?></span>
+										<?php endif; ?>
+										<?php echo esc_html( '' !== $row['notes'] ? $row['notes'] : __( 'All trims', 'csf-parts' ) ); ?>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+			<?php endif; ?>
+		</section>
+	<?php endif; ?>
+
+	<!-- Dimensions & construction -->
+	<?php if ( ! empty( $spec_groups['dimensions'] ) || ! empty( $spec_groups['construction'] ) ) : ?>
+		<section class="csf-section csf-spec-cards">
+			<?php foreach ( array( 'dimensions' => __( 'Dimensions', 'csf-parts' ), 'construction' => __( 'Construction', 'csf-parts' ) ) as $group_key => $group_label ) : ?>
+				<?php if ( ! empty( $spec_groups[ $group_key ] ) ) : ?>
+					<div class="csf-spec-card">
+						<h3 class="csf-spec-card__title"><?php echo esc_html( $group_label ); ?></h3>
+						<dl class="csf-spec-card__list">
+							<?php foreach ( $spec_groups[ $group_key ] as $spec_label => $spec_value ) : ?>
+								<div class="csf-spec-card__row">
+									<dt><?php echo esc_html( $spec_label ); ?></dt>
+									<dd><?php echo wp_kses( csf_format_dimension_fractions( $spec_value ), array( 'sup' => array(), 'sub' => array() ) ); ?></dd>
+								</div>
+							<?php endforeach; ?>
+						</dl>
+					</div>
+				<?php endif; ?>
+			<?php endforeach; ?>
+		</section>
+	<?php endif; ?>
+
+	<!-- Remaining specifications -->
+	<?php if ( ! empty( $spec_groups['more'] ) ) : ?>
+		<section class="csf-section">
+			<div class="csf-section__header">
+				<h2 class="csf-section__title"><?php esc_html_e( 'More specifications', 'csf-parts' ); ?></h2>
+			</div>
+			<div class="csf-specs-grid">
+				<?php foreach ( $spec_groups['more'] as $spec_label => $spec_value ) : ?>
+					<div class="csf-spec-row">
+						<dt class="spec-label"><?php echo esc_html( $spec_label ); ?></dt>
+						<dd class="spec-value"><?php echo wp_kses( csf_format_dimension_fractions( $spec_value ), array( 'sup' => array(), 'sub' => array() ) ); ?></dd>
+					</div>
+				<?php endforeach; ?>
+			</div>
+		</section>
+	<?php endif; ?>
+
+	<!-- Features -->
+	<?php if ( ! empty( $features ) ) : ?>
+		<section class="csf-section">
+			<div class="csf-section__header">
+				<h2 class="csf-section__title"><?php esc_html_e( 'Features & benefits', 'csf-parts' ); ?></h2>
+			</div>
+			<ul class="csf-features-list">
+				<?php foreach ( $features as $feature ) : ?>
+					<li>
+						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+						<?php echo esc_html( $feature ); ?>
+					</li>
+				<?php endforeach; ?>
+			</ul>
+		</section>
+	<?php endif; ?>
+
+	<!-- Other parts for this vehicle -->
+	<?php if ( ! empty( $related_parts['parts'] ) ) : ?>
+		<section class="csf-section csf-related">
+			<div class="csf-section__header">
+				<h2 class="csf-section__title"><?php echo esc_html( sprintf( /* translators: %s: vehicle */ __( 'Other parts for this %s', 'csf-parts' ), $related_parts['vehicle'] ) ); ?></h2>
+				<a class="csf-section__link" href="<?php echo esc_url( $related_parts['url'] ); ?>"><?php echo esc_html( sprintf( /* translators: %s: vehicle */ __( 'All %s parts →', 'csf-parts' ), $related_parts['vehicle'] ) ); ?></a>
+			</div>
+			<div class="csf-related__grid csf-grid-items">
+				<?php foreach ( $related_parts['parts'] as $related ) : ?>
+					<?php echo CSF_Parts_Part_Card::render( $related, csf_get_part_url( (string) $related->sku ), array( 'show_fitment_line' => true ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer. ?>
+				<?php endforeach; ?>
+			</div>
+		</section>
+	<?php endif; ?>
+
 </div>
 
-<!-- Tab Switching Script -->
+<!-- Gallery, engine selection and fitment scripts -->
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-	const tabButtons = document.querySelectorAll('.csf-tab-btn');
-	const tabPanels = document.querySelectorAll('.csf-tab-panel');
-
-	tabButtons.forEach(button => {
-		button.addEventListener('click', function() {
-			const targetTab = this.dataset.tab;
-
-			// Remove active class from all
-			tabButtons.forEach(btn => btn.classList.remove('active'));
-			tabPanels.forEach(panel => panel.classList.remove('active'));
-
-			// Add active class to clicked
-			this.classList.add('active');
-			document.getElementById('tab-' + targetTab).classList.add('active');
-		});
-	});
-});
 
 // Image gallery switching
 function csfSwitchImage(imageUrl, thumbElement) {

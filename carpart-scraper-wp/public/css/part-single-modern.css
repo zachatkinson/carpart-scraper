@@ -1089,3 +1089,267 @@
 	font-size: 14px;
 	color: var(--csf-text-muted);
 }
+
+/* ==========================================================================
+   1.15 layout: header, actions, replaces, sections, fitment table, spec cards, related
+   ========================================================================== */
+
+.csf-product-eyebrow {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 0;
+}
+
+.csf-product-eyebrow__link {
+	color: var(--csf-primary);
+	text-decoration: none;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.csf-product-eyebrow__link:hover {
+	color: var(--csf-primary-hover);
+	text-decoration: underline;
+}
+
+.csf-product-intro {
+	font-size: 16px;
+	line-height: 1.55;
+	color: var(--csf-text-secondary);
+}
+
+.csf-product-intro p {
+	margin: 0 0 10px;
+}
+
+.csf-product-intro p:last-child {
+	margin-bottom: 0;
+}
+
+.csf-product-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+
+.csf-part-modern .csf-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 46px;
+	padding: 0 22px;
+	font-size: 15px;
+	border-radius: var(--csf-radius-md);
+}
+
+.csf-btn--outline,
+.csf-btn--outline:hover {
+	background: var(--csf-surface);
+	color: var(--csf-text);
+	border: 1px solid var(--csf-border-hover);
+}
+
+.csf-btn--outline:hover {
+	border-color: var(--csf-text-muted);
+}
+
+.csf-part-modern .csf-reference-note {
+	margin: -8px 0 0;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--csf-text-muted);
+}
+
+/* Replaces card */
+.csf-replaces {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px 12px;
+	padding: 16px 20px;
+	background: var(--csf-surface);
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius-card);
+}
+
+.csf-replaces__label {
+	font-size: 14px;
+	font-weight: 700;
+	color: var(--csf-text);
+}
+
+/* Sections */
+.csf-section {
+	margin-top: 40px;
+}
+
+.csf-section__header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 16px;
+	flex-wrap: wrap;
+	margin-bottom: 16px;
+}
+
+.csf-section__title {
+	margin: 0;
+	font-family: var(--csf-font-heading);
+	font-size: 26px;
+	font-weight: 700;
+	color: var(--csf-text);
+}
+
+.csf-section__meta {
+	margin: 0;
+	font-size: 13px;
+	color: var(--csf-text-muted);
+}
+
+.csf-section__link {
+	font-size: 14px;
+	font-weight: 700;
+	color: var(--csf-primary);
+	text-decoration: none;
+}
+
+.csf-section__link:hover {
+	text-decoration: underline;
+}
+
+/* Fitment table */
+.csf-fitment-table-wrap {
+	overflow-x: auto;
+	background: var(--csf-surface);
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius-card);
+	padding: 4px 20px;
+}
+
+.csf-fitment-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 15px;
+}
+
+.csf-fitment-table th {
+	padding: 14px 12px 10px;
+	text-align: left;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--csf-text-muted);
+	border-bottom: 2px solid var(--csf-text);
+}
+
+.csf-fitment-table td {
+	padding: 14px 12px;
+	border-bottom: 1px solid var(--csf-border);
+	color: var(--csf-text);
+	vertical-align: top;
+}
+
+.csf-fitment-table tr:last-child td {
+	border-bottom: none;
+}
+
+.csf-fitment-row__make {
+	font-weight: 700;
+}
+
+.csf-fitment-row__notes {
+	color: var(--csf-text-muted);
+}
+
+.csf-fitment-row.is-yours td {
+	background: color-mix(in srgb, var(--csf-primary) 6%, var(--csf-surface));
+}
+
+.csf-fitment-yours {
+	display: inline-block;
+	margin-right: 8px;
+	padding: 2px 10px;
+	border-radius: var(--csf-radius-badge);
+	background: var(--csf-primary);
+	color: var(--csf-on-primary);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+/* Dimensions / Construction cards */
+.csf-spec-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+	gap: 24px;
+}
+
+.csf-spec-card {
+	padding: 20px 24px;
+	background: var(--csf-surface);
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius-card);
+}
+
+.csf-spec-card__title {
+	margin: 0 0 8px;
+	font-size: 14px;
+	font-weight: 700;
+	color: var(--csf-text);
+}
+
+.csf-spec-card__list {
+	margin: 0;
+}
+
+.csf-spec-card__row {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 16px;
+	padding: 10px 0;
+	border-bottom: 1px solid var(--csf-border);
+	font-size: 15px;
+}
+
+.csf-spec-card__row:last-child {
+	border-bottom: none;
+}
+
+.csf-spec-card__row dt {
+	margin: 0;
+	color: var(--csf-text-muted);
+}
+
+.csf-spec-card__row dd {
+	margin: 0;
+	font-weight: 700;
+	color: var(--csf-text);
+	text-align: right;
+}
+
+/* Related parts */
+.csf-related__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: 24px;
+}
+
+.csf-related .csf-part-card {
+	box-shadow: none;
+}
+
+@media (max-width: 768px) {
+	.csf-section__title {
+		font-size: 22px;
+	}
+
+	.csf-fitment-table-wrap {
+		padding: 0 12px;
+	}
+}
