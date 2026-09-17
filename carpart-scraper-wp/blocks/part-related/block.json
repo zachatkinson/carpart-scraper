@@ -15,6 +15,10 @@
 	"attributes": {
 		"count": {
 			"type": "number"
+		},
+		"title": {
+			"type": "string",
+			"default": ""
 		}
 	},
 	"supports": {

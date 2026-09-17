@@ -104,4 +104,26 @@ final class PartPageTest extends TestCase {
 		$this->assertSame( 'https://x.test/contact/?part=CSF-4037&d=CSF%204037', CSF_Parts_Part_Page::cta_url( 'https://x.test/contact/?part={sku}&d={sku_display}', 'CSF-4037' ) );
 		$this->assertSame( '', CSF_Parts_Part_Page::cta_url( '  ', 'CSF-4037' ) );
 	}
+
+	/**
+	 * Related-parts heading depends on the visitor's vehicle and how many vehicles the part fits.
+	 */
+	public function test_related_context_chooses_vehicle_single_or_multi(): void {
+		// Arrange
+		$single = array( array( 'year' => 2024, 'make' => 'Toyota', 'model' => 'Tacoma' ), array( 'year' => 2025, 'make' => 'Toyota', 'model' => 'Tacoma' ) );
+		$multi  = array( array( 'year' => 2004, 'make' => 'Chevrolet', 'model' => 'Colorado' ), array( 'year' => 2004, 'make' => 'Gmc', 'model' => 'Canyon' ) );
+
+		// Act
+		$vehicle = CSF_Parts_Part_Page::related_context( $multi, '2005', 'chevrolet', 'colorado' ); // lowercase URL slugs
+		$one     = CSF_Parts_Part_Page::related_context( $single, '', '', '' );
+		$many    = CSF_Parts_Part_Page::related_context( $multi, '', '', '' );
+		$none    = CSF_Parts_Part_Page::related_context( array(), '', '', '' );
+
+		// Assert
+		$this->assertSame( array( 'vehicle', 'Other parts for this 2005 Chevrolet Colorado', array( 'csf_make' => 'Chevrolet', 'csf_model' => 'Colorado', 'csf_year' => '2005' ) ), array( $vehicle['mode'], $vehicle['heading'], $vehicle['params'] ) );
+		$this->assertSame( array( 'single', 'Other parts for the Toyota Tacoma', 'All Toyota Tacoma parts →' ), array( $one['mode'], $one['heading'], $one['link_label'] ) );
+		$this->assertSame( array( 'multi', 'Related parts', 'Other parts that fit the same 2 vehicles', 'Browse the catalog →' ), array( $many['mode'], $many['heading'], $many['meta'], $many['link_label'] ) );
+		$this->assertSame( array( 'Chevrolet', 'Gmc' ), $many['makes'] );
+		$this->assertSame( 'none', $none['mode'] );
+	}
 }

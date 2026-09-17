@@ -89,7 +89,90 @@ final class CSF_Parts_Part_Page {
 	}
 
 	/**
-	 * Other parts for the same vehicle (the visitor's, else the part's first fitment).
+	 * What "related parts" means for this page, from the fitment data and the visitor's vehicle.
+	 *
+	 * - vehicle: the visitor came from a specific vehicle → "Other parts for this 2005 Chevrolet Colorado".
+	 * - single:  the part fits exactly one make/model → "Other parts for the Chevrolet Colorado".
+	 * - multi:   the part fits several → "Related parts" that fit the same vehicles.
+	 * - none:    no fitment data → nothing to relate.
+	 *
+	 * @param array<int, array<string, mixed>> $compatibility Decoded compatibility rows.
+	 * @param string                           $year          Visitor's year or ''.
+	 * @param string                           $make          Visitor's make or ''.
+	 * @param string                           $model         Visitor's model or ''.
+	 * @return array{mode: string, makes: string[], models: string[], years: string[], heading: string, meta: string, link_label: string, params: array<string, string>}
+	 */
+	public static function related_context( array $compatibility, string $year, string $make, string $model ): array {
+		$none = array( 'mode' => 'none', 'makes' => array(), 'models' => array(), 'years' => array(), 'heading' => '', 'meta' => '', 'link_label' => '', 'params' => array() );
+
+		if ( '' !== $make && '' !== $model ) {
+			// URL slugs are lowercase; use the casing the fitment data actually stores
+			// (the JSON comparison in the query is case-sensitive).
+			foreach ( $compatibility as $row ) {
+				if ( is_array( $row ) && 0 === strcasecmp( (string) ( $row['make'] ?? '' ), $make ) && 0 === strcasecmp( (string) ( $row['model'] ?? '' ), $model ) ) {
+					$make  = (string) $row['make'];
+					$model = (string) $row['model'];
+					break;
+				}
+			}
+			$vehicle = trim( $year . ' ' . $make . ' ' . $model );
+			$params  = array( 'csf_make' => $make, 'csf_model' => $model );
+			if ( '' !== $year ) {
+				$params['csf_year'] = $year;
+			}
+			return array(
+				'mode'       => 'vehicle',
+				'makes'      => array( $make ),
+				'models'     => array( $model ),
+				'years'      => '' !== $year ? array( $year ) : array(),
+				'heading'    => sprintf( 'Other parts for this %s', $vehicle ),
+				'meta'       => '',
+				'link_label' => sprintf( 'All %s parts →', $vehicle ),
+				'params'     => $params,
+			);
+		}
+
+		$pairs = array();
+		foreach ( $compatibility as $row ) {
+			if ( is_array( $row ) && ! empty( $row['make'] ) && ! empty( $row['model'] ) ) {
+				$pairs[ strtolower( $row['make'] . '|' . $row['model'] ) ] = array( (string) $row['make'], (string) $row['model'] );
+			}
+		}
+		if ( empty( $pairs ) ) {
+			return $none;
+		}
+
+		$makes  = array_values( array_unique( array_column( $pairs, 0 ) ) );
+		$models = array_values( array_unique( array_column( $pairs, 1 ) ) );
+
+		if ( 1 === count( $pairs ) ) {
+			$vehicle = $makes[0] . ' ' . $models[0];
+			return array(
+				'mode'       => 'single',
+				'makes'      => $makes,
+				'models'     => $models,
+				'years'      => array(),
+				'heading'    => sprintf( 'Other parts for the %s', $vehicle ),
+				'meta'       => '',
+				'link_label' => sprintf( 'All %s parts →', $vehicle ),
+				'params'     => array( 'csf_make' => $makes[0], 'csf_model' => $models[0] ),
+			);
+		}
+
+		return array(
+			'mode'       => 'multi',
+			'makes'      => $makes,
+			'models'     => $models,
+			'years'      => array(),
+			'heading'    => 'Related parts',
+			'meta'       => sprintf( 'Other parts that fit the same %d vehicles', count( $pairs ) ),
+			'link_label' => 1 === count( $makes ) ? sprintf( 'All %s parts →', $makes[0] ) : 'Browse the catalog →',
+			'params'     => 1 === count( $makes ) ? array( 'csf_make' => $makes[0] ) : array(),
+		);
+	}
+
+	/**
+	 * Other parts for the vehicle(s) this part fits.
 	 *
 	 * @param object                            $part          Current part.
 	 * @param array<int, array<string, mixed>>  $compatibility Decoded compatibility rows.
@@ -97,37 +180,29 @@ final class CSF_Parts_Part_Page {
 	 * @param string                            $make          Visitor's make or ''.
 	 * @param string                            $model         Visitor's model or ''.
 	 * @param CSF_Parts_Database                $database      Database.
-	 * @return array{vehicle: string, url: string, parts: object[]}
+	 * @return array{heading: string, meta: string, link_label: string, url: string, parts: object[]}
 	 */
 	public static function related_parts( object $part, array $compatibility, string $year, string $make, string $model, CSF_Parts_Database $database ): array {
-		$empty = array( 'vehicle' => '', 'url' => '', 'parts' => array() );
-		$count = min( CSF_Parts_Constants::RELATED_COUNT_MAX, max( 0, (int) get_option( CSF_Parts_Constants::OPTION_RELATED_COUNT, CSF_Parts_Constants::RELATED_COUNT_DEFAULT ) ) );
-		if ( 0 === $count ) {
+		$empty   = array( 'heading' => '', 'meta' => '', 'link_label' => '', 'url' => '', 'parts' => array() );
+		$count   = min( CSF_Parts_Constants::RELATED_COUNT_MAX, max( 0, (int) get_option( CSF_Parts_Constants::OPTION_RELATED_COUNT, CSF_Parts_Constants::RELATED_COUNT_DEFAULT ) ) );
+		$context = self::related_context( $compatibility, $year, $make, $model );
+		if ( 0 === $count || 'none' === $context['mode'] ) {
 			return $empty;
 		}
-		if ( '' === $make || '' === $model ) {
-			$first = $compatibility[0] ?? null;
-			if ( ! is_array( $first ) || empty( $first['make'] ) || empty( $first['model'] ) ) {
-				return $empty;
-			}
-			$make  = (string) $first['make'];
-			$model = (string) $first['model'];
-			$year  = '';
-		}
-		$filters = array( 'makes' => array( $make ), 'models' => array( $model ) );
-		if ( '' !== $year ) {
-			$filters['years'] = array( $year );
+
+		$filters = array( 'makes' => $context['makes'], 'models' => $context['models'] );
+		if ( ! empty( $context['years'] ) ) {
+			$filters['years'] = $context['years'];
 		}
 		$result = $database->query_parts( $filters, $count + 1, 1 );
 		$parts  = array_values( array_filter( $result['parts'] ?? array(), static fn( $p ) => $p->sku !== $part->sku ) );
-		$params = array( 'csf_make' => $make, 'csf_model' => $model );
-		if ( '' !== $year ) {
-			$params['csf_year'] = $year;
-		}
+
 		return array(
-			'vehicle' => trim( $year . ' ' . $make . ' ' . $model ),
-			'url'     => add_query_arg( array_map( 'rawurlencode', $params ), csf_find_catalog_page_url() ),
-			'parts'   => array_slice( $parts, 0, $count ),
+			'heading'    => $context['heading'],
+			'meta'       => $context['meta'],
+			'link_label' => $context['link_label'],
+			'url'        => empty( $context['params'] ) ? csf_find_catalog_page_url() : add_query_arg( array_map( 'rawurlencode', $context['params'] ), csf_find_catalog_page_url() ),
+			'parts'      => array_slice( $parts, 0, $count ),
 		);
 	}
 

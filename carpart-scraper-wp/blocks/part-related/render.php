@@ -29,8 +29,15 @@ $block_attrs = $attributes ?? array();
 	<?php if ( ! empty( $related_list ) ) : ?>
 		<section class="csf-section csf-related">
 			<div class="csf-section__header">
-				<h2 class="csf-section__title"><?php echo esc_html( sprintf( /* translators: %s: vehicle */ __( 'Other parts for this %s', 'csf-parts' ), $related_parts['vehicle'] ) ); ?></h2>
-				<a class="csf-section__link" href="<?php echo esc_url( $related_parts['url'] ); ?>"><?php echo esc_html( sprintf( /* translators: %s: vehicle */ __( 'All %s parts →', 'csf-parts' ), $related_parts['vehicle'] ) ); ?></a>
+				<div>
+					<h2 class="csf-section__title"><?php echo esc_html( '' !== trim( (string) ( $block_attrs['title'] ?? '' ) ) ? $block_attrs['title'] : $related_parts['heading'] ); ?></h2>
+					<?php if ( '' !== $related_parts['meta'] ) : ?>
+						<p class="csf-section__meta"><?php echo esc_html( $related_parts['meta'] ); ?></p>
+					<?php endif; ?>
+				</div>
+				<?php if ( '' !== $related_parts['url'] ) : ?>
+					<a class="csf-section__link" href="<?php echo esc_url( $related_parts['url'] ); ?>"><?php echo esc_html( $related_parts['link_label'] ); ?></a>
+				<?php endif; ?>
 			</div>
 			<div class="csf-related__grid csf-grid-items">
 				<?php foreach ( $related_list as $related ) : ?>

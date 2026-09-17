@@ -43,7 +43,10 @@ const CONTROLS = {
 		[ 'showMore', __( 'Remaining specifications', 'csf-parts' ), 'toggle' ],
 	],
 	'csf-parts/part-features': [ [ 'title', __( 'Title', 'csf-parts' ), 'text', { placeholder: __( 'Features & benefits', 'csf-parts' ) } ] ],
-	'csf-parts/part-related': [ [ 'count', __( 'Number of parts', 'csf-parts' ), 'range', { min: 0, max: 8, allowReset: true, help: __( 'Reset to use Settings → Part Page.', 'csf-parts' ) } ] ],
+	'csf-parts/part-related': [
+		[ 'title', __( 'Title', 'csf-parts' ), 'text', { placeholder: __( 'Automatic: "Other parts for this …" or "Related parts"', 'csf-parts' ) } ],
+		[ 'count', __( 'Number of parts', 'csf-parts' ), 'range', { min: 0, max: 8, allowReset: true, help: __( 'Reset to use Settings → Part Page.', 'csf-parts' ) } ],
+	],
 };
 
 function Control( { def, attributes, setAttributes } ) {
