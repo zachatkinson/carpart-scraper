@@ -118,10 +118,11 @@
 	opacity: 0.55;
 }
 
-.csf-part-finder__submit {
+.csf-part-finder .csf-part-finder__submit {
 	width: 100%;
 	height: 46px;
 	margin-top: var(--csf-spacing-xs);
+	border-radius: var(--csf-radius-md);
 	font-size: 15px;
 }
 

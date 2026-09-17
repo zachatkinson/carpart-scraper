@@ -65,7 +65,7 @@ that role.
 | Scale | Default | Roles using it |
 |-------|---------|----------------|
 | `--csf-radius-sm` | 4px | `--csf-radius-control`: buttons, inputs, selects, small notices |
-| `--csf-radius-md` | 8px | corner badges (`.csf-part-card__badge`) |
+| `--csf-radius-md` | 8px | corner badges (`.csf-part-card__badge`), Part Finder submit button |
 | `--csf-radius-lg` | 16px | `--csf-radius-card`: cards, panels, gallery, sections |
 | `--csf-radius-pill` | 9999px | `--csf-radius-badge`: year, category, status pills |
 
@@ -79,7 +79,7 @@ rules.
 Defined in `includes/class-csf-parts-design.php`. `kadence` applies nothing
 (the base stylesheet already inherits the theme). `csf-red` matches the About
 and Contact pages: CSF red `#CF2E2E`, navy `#2D3748` for secondary and inverse
-panels, `#F7FAFC` page, `#FCFCFC` cards, 16px cards, 3px buttons.
+panels, `#F7FAFC` page, `#FCFCFC` cards, 16px cards, 3px controls, 10px medium radius (Part Finder button).
 
 Overrides for brand tokens (`primary`, `secondary`, `accent`, the `on-*` trio)
 and the radius scale apply in both light and dark mode. Other overrides apply
