@@ -21,7 +21,8 @@
 	gap: var(--csf-spacing-sm);
 }
 
-.csf-part-finder__eyebrow {
+/* Doubled selectors beat theme rules like .entry-content h2 / p margins. */
+.csf-part-finder .csf-part-finder__eyebrow {
 	margin: 0;
 	font-size: 12px;
 	font-weight: 700;
@@ -30,7 +31,7 @@
 	color: var(--csf-primary);
 }
 
-.csf-part-finder__heading {
+.csf-part-finder .csf-part-finder__heading {
 	margin: 0 0 var(--csf-spacing-xs);
 	font-family: var(--csf-font-heading);
 	font-size: 1.5rem;
@@ -124,7 +125,7 @@
 	font-size: 15px;
 }
 
-.csf-part-finder__footnote {
+.csf-part-finder .csf-part-finder__footnote {
 	margin: var(--csf-spacing-xs) 0 0;
 	font-size: 13px;
 	line-height: 1.5;
