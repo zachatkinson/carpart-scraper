@@ -6,7 +6,12 @@
 	"category": "widgets",
 	"icon": "cart",
 	"description": "Display a single automotive part with details",
-	"keywords": ["part", "product", "automotive", "csf"],
+	"keywords": [
+		"part",
+		"product",
+		"automotive",
+		"csf"
+	],
 	"version": "1.0.0",
 	"attributes": {
 		"partId": {
@@ -32,11 +37,30 @@
 	},
 	"supports": {
 		"html": false,
-		"align": ["wide", "full"],
+		"align": [
+			"wide",
+			"full"
+		],
 		"color": {
 			"background": true,
-			"text": true
-		}
+			"text": true,
+			"link": true
+		},
+		"spacing": {
+			"padding": true,
+			"margin": true
+		},
+		"typography": {
+			"fontSize": true,
+			"lineHeight": true
+		},
+		"__experimentalBorder": {
+			"color": true,
+			"radius": true,
+			"style": true,
+			"width": true
+		},
+		"shadow": true
 	},
 	"editorScript": "file:../build/single-product/index.js",
 	"render": "file:./render.php"

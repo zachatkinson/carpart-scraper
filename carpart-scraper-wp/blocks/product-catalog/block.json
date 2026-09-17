@@ -6,7 +6,13 @@
 	"category": "csf-parts",
 	"icon": "cart",
 	"description": "Display automotive parts with optional filtering by vehicle, category, and more. Configure defaults for curated showcases or enable filters for user search.",
-	"keywords": ["parts", "catalog", "vehicle", "search", "filter"],
+	"keywords": [
+		"parts",
+		"catalog",
+		"vehicle",
+		"search",
+		"filter"
+	],
 	"attributes": {
 		"defaultYears": {
 			"type": "array",
@@ -79,34 +85,54 @@
 		"paginationType": {
 			"type": "string",
 			"default": "numbered",
-			"enum": ["numbered", "endless", "loadmore", "none"]
+			"enum": [
+				"numbered",
+				"endless",
+				"loadmore",
+				"none"
+			]
 		},
 		"imageAspectRatio": {
 			"type": "string",
 			"default": "1/1",
-			"enum": ["auto", "1/1", "4/3", "3/2", "16/9"]
+			"enum": [
+				"auto",
+				"1/1",
+				"4/3",
+				"3/2",
+				"16/9"
+			]
 		},
 		"hoverEffect": {
 			"type": "string",
 			"default": "lift",
-			"enum": ["none", "lift", "zoom", "shadow"]
+			"enum": [
+				"none",
+				"lift",
+				"zoom",
+				"shadow"
+			]
 		},
 		"borderRadius": {
-			"type": "number",
-			"default": 4
+			"type": "number"
 		},
 		"borderWidth": {
-			"type": "number",
-			"default": 1
+			"type": "number"
 		},
 		"borderColor": {
 			"type": "string",
-			"default": "#dddddd"
+			"default": ""
 		},
 		"cardShadow": {
 			"type": "string",
 			"default": "sm",
-			"enum": ["none", "sm", "md", "lg", "xl"]
+			"enum": [
+				"none",
+				"sm",
+				"md",
+				"lg",
+				"xl"
+			]
 		},
 		"blockPadding": {
 			"type": "object",
@@ -141,27 +167,63 @@
 		"scrollAnimation": {
 			"type": "string",
 			"default": "none",
-			"enum": ["none", "fade", "slideUp", "slideLeft"]
+			"enum": [
+				"none",
+				"fade",
+				"slideUp",
+				"slideLeft"
+			]
 		},
 		"orderBy": {
 			"type": "string",
 			"default": "name",
-			"enum": ["name", "sku", "category", "created_at", "updated_at", "latest"]
+			"enum": [
+				"name",
+				"sku",
+				"category",
+				"created_at",
+				"updated_at",
+				"latest"
+			]
 		},
 		"orderDirection": {
 			"type": "string",
 			"default": "asc",
-			"enum": ["asc", "desc"]
+			"enum": [
+				"asc",
+				"desc"
+			]
 		},
 		"colorScheme": {
 			"type": "string",
 			"default": "default",
-			"enum": ["default", "light", "dark", "brand"]
+			"enum": [
+				"default",
+				"light",
+				"dark",
+				"brand"
+			]
 		}
 	},
 	"supports": {
 		"html": false,
-		"align": ["wide", "full"]
+		"align": [
+			"wide",
+			"full"
+		],
+		"color": {
+			"background": true,
+			"text": true,
+			"link": true
+		},
+		"spacing": {
+			"padding": true,
+			"margin": true
+		},
+		"typography": {
+			"fontSize": true,
+			"lineHeight": true
+		}
 	},
 	"editorScript": "file:../build/product-catalog/index.js",
 	"viewScript": "file:./view.js",

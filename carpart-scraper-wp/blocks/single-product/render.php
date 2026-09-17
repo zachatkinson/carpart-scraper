@@ -45,7 +45,7 @@ if ( ! empty( $images ) ) {
 
 // Render block.
 ?>
-<div class="csf-single-product">
+<div <?php echo get_block_wrapper_attributes( array( 'class' => 'csf-single-product' ) ); ?>>
 	<?php if ( $primary_image ) : ?>
 		<div class="csf-product-image">
 			<?php

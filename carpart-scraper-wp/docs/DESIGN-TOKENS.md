@@ -85,6 +85,34 @@ Overrides for brand tokens (`primary`, `secondary`, `accent`, the `on-*` trio)
 and the radius scale apply in both light and dark mode. Other overrides apply
 to light mode only; dark keeps the preset or stylesheet value.
 
+## Block-level options
+
+Both blocks use WordPress core block supports for the wrapper: background,
+text and link colour, padding and margin, font size and line height (the
+Single Product block also gets border and shadow). Core renders those through
+`get_block_wrapper_attributes()`, so they need no plugin code and preview in
+the editor for free.
+
+Card styling in the Product Catalog block stays plugin-specific because it
+targets the inner cards, not the wrapper. `CSF_Parts_Block_Styles` maps the
+attributes to custom properties on the wrapper (`--csf-card-radius`,
+`--csf-card-border-width`, `--csf-card-border-color`, `--csf-card-shadow`)
+and the stylesheet reads them with the design token as fallback:
+
+```css
+border-radius: var(--csf-card-radius, var(--csf-radius-card));
+```
+
+An attribute left unset therefore inherits the Design page, which inherits
+the theme. Hover effects, scroll animations, card colour schemes and
+responsive visibility are wrapper classes (`csf-hover-*`, `csf-anim-*`,
+`csf-card-scheme-*`, `csf-hide-*`) with rules in the stylesheet; the only
+per-instance CSS left is the responsive grid and image aspect ratio.
+
+The pre-1.10 `blockPadding` / `blockMargin` attributes are still read when a
+block has no core spacing set, so existing content keeps its layout until it
+is re-saved with the Dimensions panel.
+
 ## Adding a token
 
 1. Define it in `csf-color-system.css` (and a dark value if it is a colour).

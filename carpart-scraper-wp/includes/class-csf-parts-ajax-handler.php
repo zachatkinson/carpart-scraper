@@ -151,44 +151,7 @@ class CSF_Parts_AJAX_Handler {
 		// Build HTML for parts.
 		ob_start();
 		foreach ( $parts as $part ) {
-			$part_url      = csf_get_part_url( $part->sku );
-			$display_title = ! empty( $part->name ) ? $part->name : $part->category . ' - ' . $part->sku;
-			$primary_image = $this->get_primary_image( $part->images );
-			?>
-			<div class="csf-grid-item" style="border: 1px solid #ddd; border-radius: 4px; padding: 16px;">
-				<div class="csf-item-image" style="margin-bottom: 12px;">
-					<a href="<?php echo esc_url( $part_url ); ?>">
-						<img
-							src="<?php echo esc_url( $primary_image ); ?>"
-							alt="<?php echo esc_attr( $display_title ); ?>"
-							style="width: 100%; height: auto; border-radius: 4px;"
-						/>
-					</a>
-				</div>
-				<div class="csf-item-content">
-					<h3 class="csf-item-title" style="margin: 0 0 8px; font-size: 16px;">
-						<a href="<?php echo esc_url( $part_url ); ?>" style="text-decoration: none; color: #333;">
-							<?php echo esc_html( $display_title ); ?>
-						</a>
-					</h3>
-					<p class="csf-item-sku" style="margin: 4px 0; font-size: 13px; color: #757575;">
-						<strong><?php esc_html_e( 'SKU:', 'csf-parts' ); ?></strong> <?php echo esc_html( $part->sku ); ?>
-					</p>
-					<?php if ( ! is_null( $part->price ) && $part->price > 0 ) : ?>
-						<p class="csf-item-price" style="margin: 4px 0; font-size: 14px; font-weight: 600; color: #2c3e50;">
-							$<?php echo esc_html( number_format( (float) $part->price, 2 ) ); ?>
-						</p>
-					<?php endif; ?>
-					<a
-						href="<?php echo esc_url( $part_url ); ?>"
-						class="csf-item-link"
-						style="display: inline-block; margin-top: 8px; padding: 6px 12px; background: #0073aa; color: #fff; text-decoration: none; border-radius: 3px; font-size: 13px;"
-					>
-						<?php esc_html_e( 'View Details', 'csf-parts' ); ?>
-					</a>
-				</div>
-			</div>
-			<?php
+			echo CSF_Parts_Part_Card::render( $part, csf_get_part_url( $part->sku ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer.
 		}
 		$html = ob_get_clean();
 
@@ -327,103 +290,17 @@ class CSF_Parts_AJAX_Handler {
 			return ! empty( $params ) ? add_query_arg( $params, $base_url ) : $base_url;
 		};
 
-		// Helper function to get dimensions.
-		$get_dimensions = function( $specifications_json ) {
-			$specs = json_decode( $specifications_json, true );
-			if ( ! is_array( $specs ) ) {
-				return null;
-			}
-
-			$length = $specs['Box Length (in)'] ?? null;
-			$width  = $specs['Box Width (in)'] ?? null;
-			$height = $specs['Box Height (in)'] ?? null;
-
-			if ( ! $length || ! $width || ! $height ) {
-				return null;
-			}
-
-			// Format fractions (basic version).
-			return sprintf( '%s" × %s" × %s"', $length, $width, $height );
-		};
-
 		// Build HTML for parts matching render.php structure.
 		ob_start();
 		if ( empty( $parts ) ) {
 			?>
-			<div class="csf-no-results" style="padding: 24px; text-align: center; background: #f9f9f9; border-radius: 4px;">
-				<p style="margin: 0;">No parts found matching your selection. Please try different filters.</p>
+			<div class="csf-no-results">
+				<p class="csf-no-results__text">No parts found matching your selection. Please try different filters.</p>
 			</div>
 			<?php
 		} else {
 			foreach ( $parts as $part ) {
-				$part_url      = $get_part_url( $part->category, $part->sku );
-				$display_title = csf_format_sku_display( $part->sku );  // Use shared helper for consistent formatting.
-				$primary_image = $this->get_primary_image( $part->images );
-				$dimensions    = $get_dimensions( $part->specifications );
-
-				// Get compatibility data for fitment badges.
-				$compatibility_data = ! empty( $part->compatibility ) ? json_decode( $part->compatibility, true ) : array();
-				$part_makes         = array();
-				if ( is_array( $compatibility_data ) ) {
-					foreach ( $compatibility_data as $vehicle ) {
-						if ( isset( $vehicle['make'] ) && ! in_array( $vehicle['make'], $part_makes, true ) ) {
-							$part_makes[] = $vehicle['make'];
-						}
-					}
-				}
-				?>
-				<article class="csf-part-card">
-					<a href="<?php echo esc_url( $part_url ); ?>" class="csf-part-card__link">
-						<?php if ( $primary_image ) : ?>
-							<div class="csf-part-card__image">
-								<img
-									src="<?php echo esc_url( $primary_image ); ?>"
-									alt="<?php echo esc_attr( $display_title ); ?>"
-									loading="lazy"
-								/>
-								<?php if ( ! empty( $part->category ) ) : ?>
-									<span class="csf-part-card__badge"><?php echo esc_html( $part->category ); ?></span>
-								<?php endif; ?>
-							</div>
-						<?php else : ?>
-							<div class="csf-part-card__image csf-part-card__image--placeholder">
-								<svg width="48" height="48" viewBox="0 0 20 20" fill="currentColor" opacity="0.2">
-									<path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/>
-								</svg>
-								<?php if ( ! empty( $part->category ) ) : ?>
-									<span class="csf-part-card__badge"><?php echo esc_html( $part->category ); ?></span>
-								<?php endif; ?>
-							</div>
-						<?php endif; ?>
-						<div class="csf-part-card__content">
-							<h3 class="csf-part-card__title"><?php echo esc_html( $display_title ); ?></h3>
-							<?php if ( ! empty( $dimensions ) ) : ?>
-								<div class="csf-dimensions-section">
-									<p class="csf-dimensions-section__label">Dimensions</p>
-									<p class="csf-dimensions-section__value"><?php echo esc_html( $dimensions ); ?></p>
-								</div>
-							<?php endif; ?>
-							<?php if ( ! empty( $part_makes ) ) : ?>
-								<div class="csf-fitment-section">
-									<p class="csf-fitment-section__label">Fits Models By</p>
-									<div class="csf-part-card__makes">
-										<?php
-										$max_badges    = 4;
-										$display_makes = array_slice( $part_makes, 0, $max_badges );
-										foreach ( $display_makes as $make ) :
-										?>
-											<span class="csf-part-card__make-badge"><?php echo esc_html( $make ); ?></span>
-										<?php endforeach; ?>
-										<?php if ( count( $part_makes ) > $max_badges ) : ?>
-											<span class="csf-part-card__make-badge csf-part-card__make-badge--more">+<?php echo esc_html( count( $part_makes ) - $max_badges ); ?></span>
-										<?php endif; ?>
-									</div>
-								</div>
-							<?php endif; ?>
-						</div>
-					</a>
-				</article>
-				<?php
+				echo CSF_Parts_Part_Card::render( $part, $get_part_url( $part->category, $part->sku ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer.
 			}
 		}
 		$html = ob_get_clean();

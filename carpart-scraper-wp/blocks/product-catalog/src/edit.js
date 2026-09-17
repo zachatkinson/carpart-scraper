@@ -9,8 +9,7 @@ import {
 	SelectControl,
 	ButtonGroup,
 	Button,
-	ColorPicker,
-	BoxControl
+	ColorPicker
 } from '@wordpress/components';
 import { __ } from '@wordpress/i18n';
 import { useState } from '@wordpress/element';
@@ -44,8 +43,6 @@ export default function Edit({ attributes, setAttributes }) {
 		borderWidth,
 		borderColor,
 		cardShadow,
-		blockPadding,
-		blockMargin,
 		hideOnMobile,
 		hideOnTablet,
 		hideOnDesktop,
@@ -303,28 +300,32 @@ export default function Edit({ attributes, setAttributes }) {
 						help={__('Animation when hovering over cards', 'csf-parts')}
 					/>
 					<RangeControl
-						label={__('Border Radius', 'csf-parts')}
+						label={__('Card Border Radius', 'csf-parts')}
 						value={borderRadius}
 						onChange={(value) => setAttributes({ borderRadius: value })}
 						min={0}
 						max={50}
-						help={__('Rounded corners in pixels', 'csf-parts')}
+						allowReset
+						resetFallbackValue={undefined}
+						help={__('Pixels. Reset to use the Design setting (card radius).', 'csf-parts')}
 					/>
 					<RangeControl
-						label={__('Border Width', 'csf-parts')}
+						label={__('Card Border Width', 'csf-parts')}
 						value={borderWidth}
 						onChange={(value) => setAttributes({ borderWidth: value })}
 						min={0}
 						max={10}
-						help={__('Border thickness in pixels', 'csf-parts')}
+						allowReset
+						resetFallbackValue={undefined}
+						help={__('Pixels. Reset to use the default 1px border.', 'csf-parts')}
 					/>
 					<PanelColorSettings
-						title={__('Border Color', 'csf-parts')}
+						title={__('Card Border Color', 'csf-parts')}
 						colorSettings={[
 							{
 								value: borderColor,
-								onChange: (value) => setAttributes({ borderColor: value }),
-								label: __('Border', 'csf-parts')
+								onChange: (value) => setAttributes({ borderColor: value || '' }),
+								label: __('Border (clear to use Design setting)', 'csf-parts')
 							}
 						]}
 					/>
@@ -340,21 +341,6 @@ export default function Edit({ attributes, setAttributes }) {
 							{ label: __('Extra Large', 'csf-parts'), value: 'xl' }
 						]}
 						help={__('Drop shadow intensity', 'csf-parts')}
-					/>
-				</PanelBody>
-
-				<PanelBody title={__('Spacing', 'csf-parts')} initialOpen={false}>
-					<BoxControl
-						label={__('Block Padding', 'csf-parts')}
-						values={blockPadding}
-						onChange={(value) => setAttributes({ blockPadding: value })}
-						units={[{ value: 'px', label: 'px' }]}
-					/>
-					<BoxControl
-						label={__('Block Margin', 'csf-parts')}
-						values={blockMargin}
-						onChange={(value) => setAttributes({ blockMargin: value })}
-						units={[{ value: 'px', label: 'px' }]}
 					/>
 				</PanelBody>
 
@@ -393,7 +379,7 @@ export default function Edit({ attributes, setAttributes }) {
 						help={__('Animation when scrolling into view', 'csf-parts')}
 					/>
 					<SelectControl
-						label={__('Color Scheme', 'csf-parts')}
+						label={__('Card Color Scheme', 'csf-parts')}
 						value={colorScheme}
 						onChange={(value) => setAttributes({ colorScheme: value })}
 						options={[
@@ -402,7 +388,7 @@ export default function Edit({ attributes, setAttributes }) {
 							{ label: __('Dark', 'csf-parts'), value: 'dark' },
 							{ label: __('Brand', 'csf-parts'), value: 'brand' }
 						]}
-						help={__('Preset color scheme for cards', 'csf-parts')}
+						help={__('Default follows the Design tokens. Dark uses the inverse panel colours, Brand uses the primary colour. Block background, text and spacing are in the Styles tab.', 'csf-parts')}
 					/>
 				</PanelBody>
 

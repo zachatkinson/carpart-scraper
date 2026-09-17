@@ -116,19 +116,33 @@
 	color: var(--csf-text-muted);
 }
 
+/* Buttons (block markup uses .csf-btn / .csf-btn-reset; .csf-button-reset kept as alias) */
+.csf-btn,
 .csf-button-reset {
+	display: inline-block;
 	padding: 8px 24px;
-	background: var(--csf-error);
+	background: var(--csf-primary);
 	color: var(--csf-on-primary);
 	border: none;
 	border-radius: var(--csf-radius-control);
 	font-size: 14px;
 	font-weight: 600;
+	font-family: inherit;
+	line-height: 1.4;
+	text-decoration: none;
 	cursor: pointer;
+	transition: var(--csf-transition);
 }
 
+.csf-btn:hover,
 .csf-button-reset:hover {
-	opacity: 0.9;
+	background: var(--csf-primary-hover);
+	color: var(--csf-on-primary);
+}
+
+.csf-btn:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 3px var(--csf-focus-ring);
 }
 
 /* Results Header */
@@ -234,4 +248,107 @@
 .csf-pagination-ellipsis {
 	padding: 8px 4px;
 	color: var(--csf-text-muted);
+}
+
+/* Card styling driven by block attributes.
+   render.php sets --csf-card-* on the wrapper only when the author set a
+   value; otherwise the design tokens apply. */
+.csf-product-catalog .csf-part-card {
+	border-width: var(--csf-card-border-width, 1px);
+	border-color: var(--csf-card-border-color, var(--csf-border));
+	border-radius: var(--csf-card-radius, var(--csf-radius-card));
+	box-shadow: var(--csf-card-shadow, var(--csf-shadow-sm));
+}
+
+/* Card colour schemes */
+.csf-card-scheme-light .csf-part-card {
+	background: var(--csf-surface);
+	color: var(--csf-text);
+}
+
+.csf-card-scheme-dark .csf-part-card {
+	background: var(--csf-inverse-bg);
+	color: var(--csf-inverse-text);
+}
+
+.csf-card-scheme-dark .csf-part-card .csf-part-card__title,
+.csf-card-scheme-dark .csf-part-card .csf-part-card__label {
+	color: var(--csf-inverse-text);
+}
+
+.csf-card-scheme-brand .csf-part-card {
+	background: var(--csf-primary);
+	color: var(--csf-on-primary);
+}
+
+.csf-card-scheme-brand .csf-part-card .csf-part-card__title,
+.csf-card-scheme-brand .csf-part-card .csf-part-card__label {
+	color: var(--csf-on-primary);
+}
+
+/* Hover effects */
+.csf-hover-none .csf-part-card:hover {
+	transform: none;
+	animation: none;
+}
+
+.csf-hover-lift .csf-part-card:hover {
+	transform: translateY(-4px);
+	box-shadow: var(--csf-shadow-lg);
+}
+
+.csf-hover-zoom .csf-part-card__image {
+	overflow: hidden;
+}
+
+.csf-hover-zoom .csf-part-card:hover img {
+	transform: scale(1.05);
+}
+
+.csf-hover-shadow .csf-part-card:hover {
+	box-shadow: var(--csf-shadow-xl);
+}
+
+/* Scroll-in animations */
+.csf-anim-fade .csf-part-card {
+	opacity: 0;
+	animation: csf-fade 0.6s ease forwards;
+}
+
+.csf-anim-slide-up .csf-part-card {
+	opacity: 0;
+	animation: csf-slide-up 0.6s ease forwards;
+}
+
+.csf-anim-slide-left .csf-part-card {
+	opacity: 0;
+	animation: csf-slide-left 0.6s ease forwards;
+}
+
+@keyframes csf-fade {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+
+@keyframes csf-slide-up {
+	from { opacity: 0; transform: translateY(20px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes csf-slide-left {
+	from { opacity: 0; transform: translateX(20px); }
+	to { opacity: 1; transform: translateX(0); }
+}
+
+/* Responsive visibility */
+@media (max-width: 767px) {
+	.csf-hide-mobile { display: none !important; }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+	.csf-hide-tablet { display: none !important; }
+}
+
+@media (min-width: 1024px) {
+	.csf-hide-desktop { display: none !important; }
 }

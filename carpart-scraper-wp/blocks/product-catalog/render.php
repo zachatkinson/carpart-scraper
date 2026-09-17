@@ -52,19 +52,9 @@ $order_direction     = $attributes['orderDirection'] ?? 'asc';
 $button_text         = $attributes['buttonText'] ?? 'Find Parts';
 $enable_ajax         = $attributes['enableAjax'] ?? true;
 $pagination_type     = $attributes['paginationType'] ?? 'numbered';
-$image_aspect_ratio  = $attributes['imageAspectRatio'] ?? '1/1';
-$hover_effect        = $attributes['hoverEffect'] ?? 'lift';
-$border_radius       = absint( $attributes['borderRadius'] ?? 4 );
-$border_width        = absint( $attributes['borderWidth'] ?? 1 );
-$border_color        = sanitize_hex_color( $attributes['borderColor'] ?? '#dddddd' );
-$card_shadow         = $attributes['cardShadow'] ?? 'sm';
-$block_padding       = $attributes['blockPadding'] ?? array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 );
-$block_margin        = $attributes['blockMargin'] ?? array( 'top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0 );
-$hide_on_mobile      = $attributes['hideOnMobile'] ?? false;
-$hide_on_tablet      = $attributes['hideOnTablet'] ?? false;
-$hide_on_desktop     = $attributes['hideOnDesktop'] ?? false;
-$scroll_animation    = $attributes['scrollAnimation'] ?? 'none';
-$color_scheme        = $attributes['colorScheme'] ?? 'default';
+// Card styling, aspect ratio, hover, animation, visibility and colour scheme are
+// resolved by CSF_Parts_Block_Styles into wrapper custom properties/classes and
+// a small per-instance stylesheet (see the wrapper below).
 
 // Get current page from URL.
 $current_page = 1;
@@ -232,226 +222,19 @@ $get_part_url = function( $category, $sku ) use ( $selected_year, $selected_make
 	return ! empty( $params ) ? add_query_arg( $params, $base_url ) : $base_url;
 };
 
-// Helper function to get primary image from JSON.
-$get_primary_image = function( $images_json ) {
-	if ( empty( $images_json ) ) {
-		return null;
-	}
-
-	$images = json_decode( $images_json, true );
-	if ( ! is_array( $images ) || empty( $images ) ) {
-		return null;
-	}
-
-	// Prefer second image (product photo) if available, otherwise use first (technical drawing).
-	$image_index = isset( $images[1] ) ? 1 : 0;
-	$image = $images[ $image_index ];
-
-	$raw_url = null;
-	if ( is_string( $image ) ) {
-		$raw_url = $image;
-	} elseif ( is_array( $image ) && isset( $image['url'] ) ) {
-		$raw_url = $image['url'];
-	}
-
-	return $raw_url ? csf_resolve_image_url( $raw_url ) : null;
-};
-
-// Helper function to extract dimensions from specifications.
-$get_dimensions = function( $specifications_json ) {
-	if ( empty( $specifications_json ) ) {
-		return null;
-	}
-
-	$specs = json_decode( $specifications_json, true );
-	if ( ! is_array( $specs ) || empty( $specs ) ) {
-		return null;
-	}
-
-	$length = $specs['Core Length (in)'] ?? null;
-	$width  = $specs['Core Width (in)'] ?? null;
-	$height = $specs['Core Thickness (in)'] ?? null;
-
-	if ( ! $length || ! $width || ! $height ) {
-		return null;
-	}
-
-	// Strip " (in)" from values since we add " in the format string
-	$length = str_replace( ' (in)', '', $length );
-	$width  = str_replace( ' (in)', '', $width );
-	$height = str_replace( ' (in)', '', $height );
-
-	// Convert fractions to HTML entities using shared helper function.
-	$length = csf_format_dimension_fractions( $length );
-	$width  = csf_format_dimension_fractions( $width );
-	$height = csf_format_dimension_fractions( $height );
-
-	// Format: L × W × H.
-	return sprintf( '%s" × %s" × %s"', $length, $width, $height );
-};
 ?>
 <?php
-// Helper: Get shadow CSS value.
-$get_shadow_css = function( $shadow_type ) {
-	switch ( $shadow_type ) {
-		case 'none':
-			return 'none';
-		case 'sm':
-			return '0 1px 2px 0 rgba(0, 0, 0, 0.05)';
-		case 'md':
-			return '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)';
-		case 'lg':
-			return '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)';
-		case 'xl':
-			return '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)';
-		default:
-			return 'none';
-	}
-};
-
-// Helper: Get color scheme CSS.
-$get_color_scheme_css = function( $scheme ) {
-	switch ( $scheme ) {
-		case 'light':
-			return 'background: var(--csf-surface); color: var(--csf-text);';
-		case 'dark':
-			return 'background: var(--csf-inverse-bg); color: var(--csf-inverse-text);';
-		case 'brand':
-			return 'background: var(--csf-primary); color: var(--csf-on-primary);';
-		case 'default':
-		default:
-			return '';
-	}
-};
-
-// Generate comprehensive CSS for this block instance.
-$comprehensive_css = sprintf(
-	'
-	/* Block Container */
-	#%1$s {
-		padding: %2$dpx %3$dpx %4$dpx %5$dpx;
-		margin: %6$dpx %7$dpx %8$dpx %9$dpx;
-	}
-
-	/* Grid Layout */
-	#%1$s .csf-grid-items {
-		display: grid;
-		gap: %10$dpx;
-		grid-template-columns: repeat(%11$d, 1fr);
-	}
-
-	/* Card Base Styles */
-	#%1$s .csf-grid-item {
-		border: %12$dpx solid %13$s;
-		border-radius: %14$dpx;
-		box-shadow: %15$s;
-		transition: all 0.3s ease;
-		%16$s
-	}
-
-	/* Image Aspect Ratio */
-	#%1$s .csf-item-image img {
-		width: 100%%;
-		height: auto;
-		object-fit: cover;
-		%17$s
-	}
-
-	/* Hover Effects - Lift */
-	%18$s
-
-	/* Hover Effects - Zoom */
-	%19$s
-
-	/* Hover Effects - Shadow */
-	%20$s
-
-	/* Scroll Animation */
-	%21$s
-
-	/* Tablet Responsive */
-	@media (min-width: 768px) {
-		#%1$s .csf-grid-items {
-			gap: %22$dpx;
-			grid-template-columns: repeat(%23$d, 1fr);
-		}
-		%24$s
-	}
-
-	/* Desktop Responsive */
-	@media (min-width: 1024px) {
-		#%1$s .csf-grid-items {
-			gap: %25$dpx;
-			grid-template-columns: repeat(%26$d, 1fr);
-		}
-		%27$s
-	}
-	',
-	// 1. Block ID
-	esc_attr( $block_id ),
-	// 2-5. Block padding
-	absint( $block_padding['top'] ?? 0 ),
-	absint( $block_padding['right'] ?? 0 ),
-	absint( $block_padding['bottom'] ?? 0 ),
-	absint( $block_padding['left'] ?? 0 ),
-	// 6-9. Block margin
-	absint( $block_margin['top'] ?? 0 ),
-	absint( $block_margin['right'] ?? 0 ),
-	absint( $block_margin['bottom'] ?? 0 ),
-	absint( $block_margin['left'] ?? 0 ),
-	// 10-11. Mobile grid
-	absint( $gap['mobile'] ),
-	absint( $columns['mobile'] ),
-	// 12-14. Border
-	$border_width,
-	esc_attr( $border_color ),
-	$border_radius,
-	// 15. Shadow
-	esc_attr( $get_shadow_css( $card_shadow ) ),
-	// 16. Color scheme
-	esc_attr( $get_color_scheme_css( $color_scheme ) ),
-	// 17. Aspect ratio
-	'auto' === $image_aspect_ratio ? '' : 'aspect-ratio: ' . esc_attr( $image_aspect_ratio ) . ';',
-	// 18. Hover - Lift
-	'lift' === $hover_effect ? '#' . esc_attr( $block_id ) . ' .csf-grid-item:hover { transform: translateY(-4px); box-shadow: var(--csf-shadow-lg); }' : '',
-	// 19. Hover - Zoom
-	'zoom' === $hover_effect ? '#' . esc_attr( $block_id ) . ' .csf-grid-item:hover img { transform: scale(1.05); } #' . esc_attr( $block_id ) . ' .csf-item-image { overflow: hidden; }' : '',
-	// 20. Hover - Shadow
-	'shadow' === $hover_effect ? '#' . esc_attr( $block_id ) . ' .csf-grid-item:hover { box-shadow: var(--csf-shadow-xl); }' : '',
-	// 21. Scroll animation
-	'none' !== $scroll_animation ? '#' . esc_attr( $block_id ) . ' .csf-grid-item { opacity: 0; animation: csf-' . esc_attr( $scroll_animation ) . ' 0.6s ease forwards; } @keyframes csf-fade { from { opacity: 0; } to { opacity: 1; } } @keyframes csf-slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } } @keyframes csf-slideLeft { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }' : '',
-	// 22-23. Tablet grid
-	absint( $gap['tablet'] ),
-	absint( $columns['tablet'] ),
-	// 24. Hide on tablet
-	$hide_on_tablet ? '#' . esc_attr( $block_id ) . ' { display: none !important; }' : '',
-	// 25-26. Desktop grid
-	absint( $gap['desktop'] ),
-	absint( $columns['desktop'] ),
-	// 27. Hide on desktop
-	$hide_on_desktop ? '#' . esc_attr( $block_id ) . ' { display: none !important; }' : ''
-);
-
-// Mobile visibility.
-if ( $hide_on_mobile ) {
-	$comprehensive_css .= sprintf(
-		'
-		@media (max-width: 767px) {
-			#%s { display: none !important; }
-		}
-		',
-		esc_attr( $block_id )
-	);
-}
-
-
-// Output CSS.
-echo '<style>' . $comprehensive_css . '</style>';
+// Per-instance CSS: only the responsive grid and image aspect ratio vary per block.
+echo '<style>' . CSF_Parts_Block_Styles::instance_css( $block_id, $attributes ) . '</style>';
 
 // Get block wrapper attributes (includes alignment classes like alignfull, alignwide).
+$wrapper_style   = CSF_Parts_Block_Styles::card_style_vars( $attributes ) . CSF_Parts_Block_Styles::legacy_spacing_style( $attributes );
+$wrapper_classes = trim( 'csf-product-catalog ' . CSF_Parts_Block_Styles::wrapper_classes( $attributes ) );
+
 $wrapper_attributes = get_block_wrapper_attributes(
 	array(
-		'class'                   => 'csf-product-catalog',
+		'class'                   => $wrapper_classes,
+		'style'                   => $wrapper_style,
 		'id'                      => $block_id,
 		'data-ajax'               => $enable_ajax ? '1' : '0',
 		'data-pagination-type'    => $pagination_type,
@@ -585,79 +368,8 @@ $wrapper_attributes = get_block_wrapper_attributes(
 					// Generate part URL.
 					$part_url = $get_part_url( $part->category, $part->sku );
 
-					// Display title: Use shared helper for consistent formatting.
-					$display_title = csf_format_sku_display( $part->sku );
-
-					// Get primary image.
-					$primary_image = $get_primary_image( $part->images );
+					echo CSF_Parts_Part_Card::render( $part, $part_url ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer.
 					?>
-					<article class="csf-part-card">
-						<a href="<?php echo esc_url( $part_url ); ?>" class="csf-part-card__link">
-							<?php if ( $primary_image ) : ?>
-								<div class="csf-part-card__image">
-									<img
-										src="<?php echo esc_url( $primary_image ); ?>"
-										alt="<?php echo esc_attr( $display_title ); ?>"
-										loading="lazy"
-									/>
-									<?php if ( ! empty( $part->category ) ) : ?>
-										<span class="csf-part-card__badge"><?php echo esc_html( $part->category ); ?></span>
-									<?php endif; ?>
-								</div>
-							<?php else : ?>
-								<div class="csf-part-card__image csf-part-card__image--placeholder">
-									<svg width="48" height="48" viewBox="0 0 20 20" fill="currentColor" opacity="0.2">
-										<path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/>
-									</svg>
-									<?php if ( ! empty( $part->category ) ) : ?>
-										<span class="csf-part-card__badge"><?php echo esc_html( $part->category ); ?></span>
-									<?php endif; ?>
-								</div>
-							<?php endif; ?>
-							<div class="csf-part-card__content">
-								<h3 class="csf-part-card__title"><?php echo esc_html( $display_title ); ?></h3>
-								<?php
-								// Display dimensions if available.
-								$dimensions = $get_dimensions( $part->specifications );
-								if ( ! empty( $dimensions ) ) :
-								?>
-									<div class="csf-dimensions-section">
-										<p class="csf-dimensions-section__label"><?php esc_html_e( 'Dimensions', 'csf-parts' ); ?></p>
-										<p class="csf-dimensions-section__value"><?php echo wp_kses( $dimensions, array( 'sup' => array(), 'sub' => array() ) ); ?></p>
-									</div>
-								<?php endif; ?>
-								<?php
-								// Display fitment section with make badges if compatibility data exists.
-								$compatibility_data = ! empty( $part->compatibility ) ? json_decode( $part->compatibility, true ) : array();
-								$part_makes = array();
-								if ( is_array( $compatibility_data ) ) {
-									foreach ( $compatibility_data as $vehicle ) {
-										if ( isset( $vehicle['make'] ) && ! in_array( $vehicle['make'], $part_makes, true ) ) {
-											$part_makes[] = $vehicle['make'];
-										}
-									}
-								}
-								if ( ! empty( $part_makes ) ) :
-								?>
-									<div class="csf-fitment-section">
-										<p class="csf-fitment-section__label"><?php esc_html_e( 'Fits Models By', 'csf-parts' ); ?></p>
-										<div class="csf-part-card__makes">
-											<?php
-											$max_badges = 4;
-											$display_makes = array_slice( $part_makes, 0, $max_badges );
-											foreach ( $display_makes as $make ) :
-											?>
-												<span class="csf-part-card__make-badge"><?php echo esc_html( $make ); ?></span>
-											<?php endforeach; ?>
-											<?php if ( count( $part_makes ) > $max_badges ) : ?>
-												<span class="csf-part-card__make-badge csf-part-card__make-badge--more">+<?php echo esc_html( count( $part_makes ) - $max_badges ); ?></span>
-											<?php endif; ?>
-										</div>
-									</div>
-								<?php endif; ?>
-							</div>
-						</a>
-					</article>
 				<?php endforeach; ?>
 			</div>
 		<?php elseif ( $show_filters && ( $selected_year || $selected_make || $selected_model || $selected_category ) ) : ?>
