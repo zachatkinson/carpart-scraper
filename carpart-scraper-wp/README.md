@@ -97,6 +97,8 @@ The dark palette lives in `public/css/csf-color-system-dark.css` and is enqueued
 
 #### Product Catalog Block
 
+New catalog blocks are sorted by most recently updated first ("Latest Fitments / Updates", descending). Change it under Display Settings → Sort By.
+
 Block background, text colour, padding, margin and typography live in the editor's **Styles** tab (core block supports). Card radius, border, shadow, hover effect and colour scheme are under **Card Styling**; leave them unset to inherit the Design page.
 
 1. Add "CSF Product Catalog" block

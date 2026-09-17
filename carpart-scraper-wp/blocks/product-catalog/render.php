@@ -47,8 +47,8 @@ $gap = wp_parse_args(
 	)
 );
 
-$order_by            = $attributes['orderBy'] ?? 'name';
-$order_direction     = $attributes['orderDirection'] ?? 'asc';
+$order_by            = $attributes['orderBy'] ?? 'updated_at';
+$order_direction     = $attributes['orderDirection'] ?? 'desc';
 $button_text         = $attributes['buttonText'] ?? 'Find Parts';
 $enable_ajax         = $attributes['enableAjax'] ?? true;
 $pagination_type     = $attributes['paginationType'] ?? 'numbered';
