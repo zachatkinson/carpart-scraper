@@ -24,6 +24,136 @@ final class CSF_Parts_Part_Page {
 	private const RANGE_MIN_RUN = 4;
 
 	/**
+	 * Everything the part blocks need, in one array.
+	 *
+	 * @param object             $part     Part row.
+	 * @param string             $year     Visitor's year or ''.
+	 * @param string             $make     Visitor's make or ''.
+	 * @param string             $model    Visitor's model or ''.
+	 * @param CSF_Parts_Database $database For related parts.
+	 * @return array<string, mixed>
+	 */
+	public static function build_view( object $part, string $year, string $make, string $model, CSF_Parts_Database $database ): array {
+		$compatibility       = ! empty( $part->compatibility ) ? json_decode( $part->compatibility, true ) : array();
+		$specifications      = ! empty( $part->specifications ) ? json_decode( $part->specifications, true ) : array();
+		$features            = ! empty( $part->features ) ? json_decode( $part->features, true ) : array();
+		$images              = ! empty( $part->images ) ? json_decode( $part->images, true ) : array();
+		$interchange_numbers = ! empty( $part->interchange_numbers ) ? json_decode( $part->interchange_numbers, true ) : array();
+		$compatibility       = is_array( $compatibility ) ? $compatibility : array();
+		$specifications      = is_array( $specifications ) ? $specifications : array();
+		$features            = is_array( $features ) ? $features : array();
+		$images              = is_array( $images ) ? $images : array();
+		$interchange_numbers = is_array( $interchange_numbers ) ? $interchange_numbers : array();
+
+		$is_vehicle_specific = '' !== $year && '' !== $make && '' !== $model;
+		$display_name        = csf_format_sku_display( (string) $part->sku );
+		$heading             = sanitize_text_field( self::title( $part ) );
+		$title               = $heading . ' (' . $display_name . ')';
+		if ( $is_vehicle_specific ) {
+			$title = sprintf( '%s %s %s – %s', sanitize_text_field( $year ), sanitize_text_field( ucwords( str_replace( '-', ' ', $make ) ) ), sanitize_text_field( ucwords( str_replace( '-', ' ', $model ) ) ), $title );
+		}
+
+		// The visitor's vehicle: rewrite vars first, then catalog filter params.
+		$searched_year  = isset( $_GET['csf_year'] ) ? sanitize_text_field( wp_unslash( $_GET['csf_year'] ) ) : $year; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$searched_make  = isset( $_GET['csf_make'] ) ? sanitize_text_field( wp_unslash( $_GET['csf_make'] ) ) : $make; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$searched_model = isset( $_GET['csf_model'] ) ? sanitize_text_field( wp_unslash( $_GET['csf_model'] ) ) : $model; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+
+		return array(
+			'part'                => $part,
+			'title'               => $title,
+			'heading'             => $heading,
+			'eyebrow'             => self::eyebrow( $part, $specifications ),
+			'canonical_url'       => csf_get_part_url( (string) $part->sku ),
+			'compatibility'       => $compatibility,
+			'specifications'      => $specifications,
+			'spec_groups'         => self::spec_groups( $specifications ),
+			'features'            => $features,
+			'images'              => $images,
+			'interchange_numbers' => $interchange_numbers,
+			'is_vehicle_specific' => $is_vehicle_specific,
+			'year'                => $year,
+			'make'                => $make,
+			'model'               => $model,
+			'searched_year'       => $searched_year,
+			'searched_make'       => $searched_make,
+			'searched_model'      => $searched_model,
+			'fitment_rows'        => self::fitment_rows( $compatibility ),
+			'fitment_layout'      => (string) get_option( CSF_Parts_Constants::OPTION_FITMENT_LAYOUT, CSF_Parts_Constants::FITMENT_LAYOUT_TABLE ),
+			'distributor_url'     => self::cta_url( (string) get_option( CSF_Parts_Constants::OPTION_DISTRIBUTOR_URL, '' ), (string) $part->sku ),
+			'tech_service_url'    => self::cta_url( (string) get_option( CSF_Parts_Constants::OPTION_TECH_SERVICE_URL, '' ), (string) $part->sku ),
+			'part_page_note'      => (string) get_option( CSF_Parts_Constants::OPTION_PART_PAGE_NOTE, CSF_Parts_Constants::PART_PAGE_NOTE_DEFAULT ),
+			'related_parts'       => self::related_parts( $part, $compatibility, $year, $make, $model, $database ),
+			'get_image_url'       => array( self::class, 'image_url' ),
+			'get_image_alt'       => array( self::class, 'image_alt' ),
+		);
+	}
+
+	/**
+	 * Other parts for the same vehicle (the visitor's, else the part's first fitment).
+	 *
+	 * @param object                            $part          Current part.
+	 * @param array<int, array<string, mixed>>  $compatibility Decoded compatibility rows.
+	 * @param string                            $year          Visitor's year or ''.
+	 * @param string                            $make          Visitor's make or ''.
+	 * @param string                            $model         Visitor's model or ''.
+	 * @param CSF_Parts_Database                $database      Database.
+	 * @return array{vehicle: string, url: string, parts: object[]}
+	 */
+	public static function related_parts( object $part, array $compatibility, string $year, string $make, string $model, CSF_Parts_Database $database ): array {
+		$empty = array( 'vehicle' => '', 'url' => '', 'parts' => array() );
+		$count = min( CSF_Parts_Constants::RELATED_COUNT_MAX, max( 0, (int) get_option( CSF_Parts_Constants::OPTION_RELATED_COUNT, CSF_Parts_Constants::RELATED_COUNT_DEFAULT ) ) );
+		if ( 0 === $count ) {
+			return $empty;
+		}
+		if ( '' === $make || '' === $model ) {
+			$first = $compatibility[0] ?? null;
+			if ( ! is_array( $first ) || empty( $first['make'] ) || empty( $first['model'] ) ) {
+				return $empty;
+			}
+			$make  = (string) $first['make'];
+			$model = (string) $first['model'];
+			$year  = '';
+		}
+		$filters = array( 'makes' => array( $make ), 'models' => array( $model ) );
+		if ( '' !== $year ) {
+			$filters['years'] = array( $year );
+		}
+		$result = $database->query_parts( $filters, $count + 1, 1 );
+		$parts  = array_values( array_filter( $result['parts'] ?? array(), static fn( $p ) => $p->sku !== $part->sku ) );
+		$params = array( 'csf_make' => $make, 'csf_model' => $model );
+		if ( '' !== $year ) {
+			$params['csf_year'] = $year;
+		}
+		return array(
+			'vehicle' => trim( $year . ' ' . $make . ' ' . $model ),
+			'url'     => add_query_arg( array_map( 'rawurlencode', $params ), csf_find_catalog_page_url() ),
+			'parts'   => array_slice( $parts, 0, $count ),
+		);
+	}
+
+	/**
+	 * Resolved URL for an image entry (string or {url}).
+	 *
+	 * @param mixed $image Image entry.
+	 * @return string
+	 */
+	public static function image_url( $image ): string {
+		$raw = is_array( $image ) ? (string) ( $image['url'] ?? '' ) : ( is_string( $image ) ? $image : '' );
+		return '' !== $raw ? csf_resolve_image_url( $raw ) : '';
+	}
+
+	/**
+	 * Alt text for an image entry, with a fallback.
+	 *
+	 * @param mixed  $image    Image entry.
+	 * @param string $fallback Fallback text.
+	 * @return string
+	 */
+	public static function image_alt( $image, string $fallback ): string {
+		return is_array( $image ) && ! empty( $image['alt_text'] ) ? (string) $image['alt_text'] : $fallback;
+	}
+
+	/**
 	 * Eyebrow line: "Radiator · Parallel Flow · CSF 4037".
 	 *
 	 * @param object               $part  Part row.

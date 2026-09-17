@@ -1353,3 +1353,51 @@
 		padding: 0 12px;
 	}
 }
+
+/* ==========================================================================
+   Block layout (1.16): part blocks inside core columns
+   ========================================================================== */
+
+.csf-part-modern .csf-part-layout__top {
+	gap: 60px;
+	margin: 40px 0 20px;
+}
+
+.csf-part-modern .csf-part-layout__top .wp-block-column {
+	min-width: 0;
+}
+
+.csf-part-block--header {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+}
+
+.csf-part-layout__top .wp-block-column > .csf-part-block + .csf-part-block {
+	margin-top: 24px;
+}
+
+.csf-part-block--gallery .csf-product-gallery {
+	position: sticky;
+	top: 100px;
+}
+
+.csf-part-block--fitment .csf-section,
+.csf-part-block--spec-cards .csf-section,
+.csf-part-block--features .csf-section,
+.csf-part-block--related .csf-section {
+	margin-top: 0;
+}
+
+.csf-part-block--fitment,
+.csf-part-block--spec-cards,
+.csf-part-block--features,
+.csf-part-block--related {
+	margin-top: 40px;
+}
+
+@media (max-width: 968px) {
+	.csf-part-modern .csf-part-layout__top {
+		gap: 32px;
+	}
+}

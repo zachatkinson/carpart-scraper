@@ -1,0 +1,57 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "csf-parts/part-header",
+	"title": "CSF Part Header",
+	"category": "csf-parts",
+	"icon": "heading",
+	"description": "Eyebrow, descriptive title, intro, action buttons and the visitor's vehicle box.",
+	"keywords": [
+		"part",
+		"title",
+		"header",
+		"buttons"
+	],
+	"usesContext": [],
+	"attributes": {
+		"showEyebrow": {
+			"type": "boolean",
+			"default": true
+		},
+		"showIntro": {
+			"type": "boolean",
+			"default": true
+		},
+		"showActions": {
+			"type": "boolean",
+			"default": true
+		},
+		"noteText": {
+			"type": "string",
+			"default": ""
+		},
+		"showVehicleBox": {
+			"type": "boolean",
+			"default": true
+		}
+	},
+	"supports": {
+		"html": false,
+		"color": {
+			"background": true,
+			"text": true,
+			"link": true
+		},
+		"spacing": {
+			"padding": true,
+			"margin": true
+		},
+		"typography": {
+			"fontSize": true,
+			"lineHeight": true
+		}
+	},
+	"editorScript": "file:../build/part-blocks/index.js",
+	"style": "csf-part-modern",
+	"render": "file:./render.php"
+}

@@ -96,6 +96,10 @@ The dark palette lives in `public/css/csf-color-system-dark.css` and is enqueued
    - Show/hide images
    - Show/hide compatibility
 
+#### Part Page Blocks
+
+The single part page is composed of nine **CSF Part** blocks (breadcrumbs, gallery, header, key specs, replaces, fitment, specifications, features, related parts). Each reads the part being viewed, supports the core Styles tab, and has a few content options that default to Settings → Part Page. The built-in layout mirrors the design; to rearrange it, use **Create layout page from built-in layout** in Settings → Part Page and edit that page in the block editor (previews use a sample part). Themes can still override `csf-parts/part-single-modern.php`.
+
 #### Part Finder Block
 
 A search card for hero sections: part-number box plus Year / Make / Model dropdowns. "Show parts" sends the visitor to the Parts page (auto-detected as the page holding the Product Catalog block, or set a URL) with the chosen filters in the query string (`csf_search`, `csf_year`, `csf_make`, `csf_model`). Works without JavaScript; with it, Year, Make and Model narrow each other in whichever order they are picked, and empty fields are dropped from the URL. Colours, spacing, border and shadow are in the Styles tab; the footnote's `{count}` shows the live number of parts.

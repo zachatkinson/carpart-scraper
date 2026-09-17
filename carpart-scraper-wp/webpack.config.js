@@ -10,6 +10,7 @@ export default {
 		'product-catalog/index': path.resolve( __dirname, 'blocks/product-catalog/src/index.js' ),
 		'single-product/index': path.resolve( __dirname, 'blocks/single-product/src/index.js' ),
 		'part-finder/index': path.resolve( __dirname, 'blocks/part-finder/src/index.js' ),
+		'part-blocks/index': path.resolve( __dirname, 'blocks/part-blocks/src/index.js' ),
 	},
 	output: {
 		...defaultConfig.output,

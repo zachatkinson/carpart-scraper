@@ -82,6 +82,15 @@ class CSF_Parts_Assets {
 			'all'
 		);
 
+		// Part page stylesheet, registered so part blocks (block.json "style") can enqueue it anywhere.
+		wp_register_style(
+			'csf-part-modern',
+			CSF_PARTS_PLUGIN_URL . 'public/css/part-single-modern.css',
+			array( 'csf-parts-colors', 'csf-parts-catalog-block' ),
+			CSF_PARTS_VERSION,
+			'all'
+		);
+
 		// Part Finder block CSS (block.json "style" handle).
 		wp_enqueue_style(
 			'csf-parts-part-finder',
@@ -300,6 +309,14 @@ class CSF_Parts_Assets {
 		wp_enqueue_style(
 			'csf-parts-part-finder',
 			CSF_PARTS_PLUGIN_URL . 'public/css/part-finder-block.css',
+			array( 'csf-parts-colors', 'csf-parts-catalog-block' ),
+			CSF_PARTS_VERSION,
+			'all'
+		);
+
+		wp_enqueue_style(
+			'csf-part-modern',
+			CSF_PARTS_PLUGIN_URL . 'public/css/part-single-modern.css',
 			array( 'csf-parts-colors', 'csf-parts-catalog-block' ),
 			CSF_PARTS_VERSION,
 			'all'

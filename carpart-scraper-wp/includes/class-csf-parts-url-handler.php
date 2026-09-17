@@ -163,42 +163,9 @@ class CSF_Parts_URL_Handler {
 	 * @param string $model Vehicle model (optional).
 	 */
 	private function render_part_page( object $part, string $year = '', string $make = '', string $model = '' ): void {
-		// Decode JSON fields.
-		$compatibility       = ! empty( $part->compatibility ) ? json_decode( $part->compatibility, true ) : array();
-		$specifications      = ! empty( $part->specifications ) ? json_decode( $part->specifications, true ) : array();
-		$features            = ! empty( $part->features ) ? json_decode( $part->features, true ) : array();
-		$images              = ! empty( $part->images ) ? json_decode( $part->images, true ) : array();
-		$interchange_numbers = ! empty( $part->interchange_numbers ) ? json_decode( $part->interchange_numbers, true ) : array();
-
-		// Determine if this is canonical or vehicle-specific page.
-		$is_vehicle_specific = ! empty( $year ) && ! empty( $make ) && ! empty( $model );
-
-		// Display name: Use shared helper for consistent formatting.
-		$display_name = csf_format_sku_display( $part->sku );
-
-		// Descriptive heading ("Radiator for 2024 to 2026 Toyota Tacoma"); the
-		// document title adds the part number, and the visitor's vehicle when set.
-		$heading = sanitize_text_field( CSF_Parts_Part_Page::title( $part ) );
-		$title   = $heading . ' (' . $display_name . ')';
-		if ( $is_vehicle_specific ) {
-			$title = sprintf(
-				'%s %s %s – %s',
-				sanitize_text_field( $year ),
-				sanitize_text_field( ucwords( str_replace( '-', ' ', $make ) ) ),
-				sanitize_text_field( ucwords( str_replace( '-', ' ', $model ) ) ),
-				$title
-			);
-		}
-
-		// Page settings and derived view data.
-		$eyebrow          = CSF_Parts_Part_Page::eyebrow( $part, is_array( $specifications ) ? $specifications : array() );
-		$spec_groups      = CSF_Parts_Part_Page::spec_groups( is_array( $specifications ) ? $specifications : array() );
-		$fitment_rows     = CSF_Parts_Part_Page::fitment_rows( is_array( $compatibility ) ? $compatibility : array() );
-		$fitment_layout   = (string) get_option( CSF_Parts_Constants::OPTION_FITMENT_LAYOUT, CSF_Parts_Constants::FITMENT_LAYOUT_TABLE );
-		$distributor_url  = CSF_Parts_Part_Page::cta_url( (string) get_option( CSF_Parts_Constants::OPTION_DISTRIBUTOR_URL, '' ), (string) $part->sku );
-		$tech_service_url = CSF_Parts_Part_Page::cta_url( (string) get_option( CSF_Parts_Constants::OPTION_TECH_SERVICE_URL, '' ), (string) $part->sku );
-		$part_page_note   = (string) get_option( CSF_Parts_Constants::OPTION_PART_PAGE_NOTE, CSF_Parts_Constants::PART_PAGE_NOTE_DEFAULT );
-		$related_parts    = $this->related_parts( $part, is_array( $compatibility ) ? $compatibility : array(), $year, $make, $model );
+		$view = CSF_Parts_Part_Page::build_view( $part, $year, $make, $model, $this->database );
+		$title  = $view['title'];
+		$images = $view['images'];
 
 		// Generate canonical URL (always points to generic SKU page).
 		// Use shared helper for URL generation.
@@ -278,58 +245,11 @@ class CSF_Parts_URL_Handler {
 		}, 20 );
 
 		// Set template variables for use in template file.
-		$template_vars = compact( 'part', 'title', 'heading', 'eyebrow', 'canonical_url', 'compatibility', 'specifications', 'spec_groups', 'features', 'images', 'interchange_numbers', 'is_vehicle_specific', 'year', 'make', 'model', 'fitment_rows', 'fitment_layout', 'distributor_url', 'tech_service_url', 'part_page_note', 'related_parts' );
+		$template_vars         = $view;
+		$template_vars['view'] = $view;
 
 		// Load template.
 		$this->load_template( 'part-single-modern', $template_vars );
-	}
-
-	/**
-	 * Other parts for the same vehicle (the visitor's, else the part's first fitment).
-	 *
-	 * @since 1.15.0
-	 * @param object                          $part          Current part.
-	 * @param array<int, array<string,mixed>> $compatibility Decoded compatibility rows.
-	 * @param string                          $year          Visitor's year or ''.
-	 * @param string                          $make          Visitor's make or ''.
-	 * @param string                          $model         Visitor's model or ''.
-	 * @return array{vehicle: string, url: string, parts: object[]}
-	 */
-	private function related_parts( object $part, array $compatibility, string $year, string $make, string $model ): array {
-		$empty = array( 'vehicle' => '', 'url' => '', 'parts' => array() );
-		$count = min( CSF_Parts_Constants::RELATED_COUNT_MAX, max( 0, (int) get_option( CSF_Parts_Constants::OPTION_RELATED_COUNT, CSF_Parts_Constants::RELATED_COUNT_DEFAULT ) ) );
-		if ( 0 === $count ) {
-			return $empty;
-		}
-
-		if ( '' === $make || '' === $model ) {
-			$first = $compatibility[0] ?? null;
-			if ( ! is_array( $first ) || empty( $first['make'] ) || empty( $first['model'] ) ) {
-				return $empty;
-			}
-			$make  = (string) $first['make'];
-			$model = (string) $first['model'];
-			$year  = '';
-		}
-
-		$filters = array( 'makes' => array( $make ), 'models' => array( $model ) );
-		if ( '' !== $year ) {
-			$filters['years'] = array( $year );
-		}
-		$result = $this->database->query_parts( $filters, $count + 1, 1 );
-		$parts  = array_values( array_filter( $result['parts'] ?? array(), static fn( $p ) => $p->sku !== $part->sku ) );
-		$parts  = array_slice( $parts, 0, $count );
-
-		$params = array( 'csf_make' => $make, 'csf_model' => $model );
-		if ( '' !== $year ) {
-			$params['csf_year'] = $year;
-		}
-
-		return array(
-			'vehicle' => trim( $year . ' ' . $make . ' ' . $model ),
-			'url'     => add_query_arg( array_map( 'rawurlencode', $params ), csf_find_catalog_page_url() ),
-			'parts'   => $parts,
-		);
 	}
 
 	/**

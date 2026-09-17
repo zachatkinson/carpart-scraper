@@ -44,7 +44,7 @@ class CSF_Parts_Block_Manager {
 		add_filter( 'block_categories_all', array( $this, 'register_block_category' ), 10, 2 );
 
 		// Register blocks (will be built with @wordpress/scripts).
-		$blocks = array( 'single-product', 'product-catalog', 'part-finder' );
+		$blocks = array_merge( array( 'single-product', 'product-catalog', 'part-finder' ), CSF_Parts_Part_Layout::BLOCKS );
 
 		foreach ( $blocks as $block ) {
 			$block_path = CSF_PARTS_PLUGIN_DIR . 'blocks/' . $block;

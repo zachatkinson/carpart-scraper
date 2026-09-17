@@ -1,0 +1,48 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "csf-parts/part-key-specs",
+	"title": "CSF Part Key Specs",
+	"category": "csf-parts",
+	"icon": "editor-table",
+	"description": "Core size, rows, inlet/outlet, tank material and transmission cooler.",
+	"keywords": [
+		"part",
+		"specifications"
+	],
+	"usesContext": [],
+	"attributes": {
+		"title": {
+			"type": "string",
+			"default": ""
+		},
+		"maxRows": {
+			"type": "number",
+			"default": 8
+		}
+	},
+	"supports": {
+		"html": false,
+		"color": {
+			"background": true,
+			"text": true,
+			"link": true
+		},
+		"spacing": {
+			"padding": true,
+			"margin": true
+		},
+		"typography": {
+			"fontSize": true,
+			"lineHeight": true
+		},
+		"__experimentalBorder": {
+			"color": true,
+			"radius": true,
+			"width": true
+		}
+	},
+	"editorScript": "file:../build/part-blocks/index.js",
+	"style": "csf-part-modern",
+	"render": "file:./render.php"
+}

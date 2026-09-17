@@ -1,0 +1,53 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "csf-parts/part-spec-cards",
+	"title": "CSF Part Specifications",
+	"category": "csf-parts",
+	"icon": "index-card",
+	"description": "Dimensions and Construction cards, plus any remaining specifications.",
+	"keywords": [
+		"part",
+		"dimensions",
+		"construction",
+		"specifications"
+	],
+	"usesContext": [],
+	"attributes": {
+		"showDimensions": {
+			"type": "boolean",
+			"default": true
+		},
+		"showConstruction": {
+			"type": "boolean",
+			"default": true
+		},
+		"showMore": {
+			"type": "boolean",
+			"default": true
+		}
+	},
+	"supports": {
+		"html": false,
+		"color": {
+			"background": true,
+			"text": true,
+			"link": true
+		},
+		"spacing": {
+			"padding": true,
+			"margin": true
+		},
+		"typography": {
+			"fontSize": true,
+			"lineHeight": true
+		},
+		"align": [
+			"wide",
+			"full"
+		]
+	},
+	"editorScript": "file:../build/part-blocks/index.js",
+	"style": "csf-part-modern",
+	"render": "file:./render.php"
+}

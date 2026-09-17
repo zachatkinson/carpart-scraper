@@ -1,0 +1,45 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "csf-parts/part-replaces",
+	"title": "CSF Part Replaces",
+	"category": "csf-parts",
+	"icon": "tag",
+	"description": "OEM and aftermarket numbers this part replaces, as chips.",
+	"keywords": [
+		"part",
+		"interchange",
+		"oem"
+	],
+	"usesContext": [],
+	"attributes": {
+		"label": {
+			"type": "string",
+			"default": ""
+		}
+	},
+	"supports": {
+		"html": false,
+		"color": {
+			"background": true,
+			"text": true,
+			"link": true
+		},
+		"spacing": {
+			"padding": true,
+			"margin": true
+		},
+		"typography": {
+			"fontSize": true,
+			"lineHeight": true
+		},
+		"__experimentalBorder": {
+			"color": true,
+			"radius": true,
+			"width": true
+		}
+	},
+	"editorScript": "file:../build/part-blocks/index.js",
+	"style": "csf-part-modern",
+	"render": "file:./render.php"
+}

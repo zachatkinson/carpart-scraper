@@ -115,13 +115,15 @@ is re-saved with the Dimensions panel.
 
 ## Part page
 
-The single part page is a PHP template (`templates/part-single-modern.php`)
-rendered by the URL handler, not a block, so its options live in Settings →
-Part Page rather than the block Styles tab. `CSF_Parts_Part_Page` derives
-the eyebrow, the descriptive title ("Radiator for 2024 to 2026 Toyota
-Tacoma"), fitment table rows, grouped specifications (key / dimensions /
-construction / more) and CTA URLs; the template only escapes and prints.
-Themes can override the template via `csf-parts/part-single-modern.php`.
+The single part page is composed of `csf-parts/part-*` blocks. The URL
+handler builds a view (`CSF_Parts_Part_Page::build_view()`), stores it in
+`CSF_Parts_Part_Context`, and renders the layout (`CSF_Parts_Part_Layout`):
+the built-in block markup, or the content of a page chosen in Settings →
+Part Page. Each block reads the context (a sample part in the editor), has
+core colour/spacing/typography supports, and content attributes whose empty
+value means "use the plugin setting". `templates/part-single-modern.php` is
+now a wrapper (header, breadcrumb container, layout, footer) that themes can
+still override via `csf-parts/part-single-modern.php`.
 
 ## Adding a token
 

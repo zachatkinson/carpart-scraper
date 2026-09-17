@@ -1,0 +1,43 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "csf-parts/part-related",
+	"title": "CSF Related Parts",
+	"category": "csf-parts",
+	"icon": "screenoptions",
+	"description": "Other parts for the same vehicle.",
+	"keywords": [
+		"part",
+		"related",
+		"vehicle"
+	],
+	"usesContext": [],
+	"attributes": {
+		"count": {
+			"type": "number"
+		}
+	},
+	"supports": {
+		"html": false,
+		"color": {
+			"background": true,
+			"text": true,
+			"link": true
+		},
+		"spacing": {
+			"padding": true,
+			"margin": true
+		},
+		"typography": {
+			"fontSize": true,
+			"lineHeight": true
+		},
+		"align": [
+			"wide",
+			"full"
+		]
+	},
+	"editorScript": "file:../build/part-blocks/index.js",
+	"style": "csf-part-modern",
+	"render": "file:./render.php"
+}
