@@ -214,39 +214,48 @@
 
 .csf-pagination-btn {
 	display: inline-block;
-	padding: 8px 12px;
-	background: var(--csf-secondary);
-	color: var(--csf-on-secondary);
-	border: none;
-	border-radius: var(--csf-radius-control);
+	min-width: 44px;
+	padding: 10px 14px;
+	background: var(--csf-surface);
+	color: var(--csf-text);
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius-md);
 	font-size: 14px;
+	font-weight: 600;
 	font-family: inherit;
 	line-height: 1.4;
+	text-align: center;
 	text-decoration: none;
 	cursor: pointer;
-	transition: var(--csf-transition-slow);
+	transition: var(--csf-transition);
 }
 
 .csf-pagination-prev,
 .csf-pagination-next {
-	padding: 8px 16px;
+	padding: 10px 16px;
 }
 
 .csf-pagination-btn:not(.csf-pagination-current):hover {
-	background: var(--csf-secondary-hover);
-	color: var(--csf-on-secondary);
+	background: var(--csf-bg-alt);
+	border-color: var(--csf-border-hover);
+	color: var(--csf-text);
 }
 
 .csf-pagination-current {
-	background: transparent;
-	color: var(--csf-secondary);
-	border: 2px solid var(--csf-secondary);
-	font-weight: 600;
+	background: var(--csf-inverse-bg);
+	color: var(--csf-inverse-text);
+	border-color: var(--csf-inverse-bg);
 	cursor: default;
 }
 
 .csf-pagination-ellipsis {
-	padding: 8px 4px;
+	display: inline-block;
+	min-width: 44px;
+	padding: 10px 8px;
+	text-align: center;
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius-md);
+	background: var(--csf-surface);
 	color: var(--csf-text-muted);
 }
 

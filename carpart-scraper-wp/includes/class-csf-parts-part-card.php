@@ -48,21 +48,18 @@ final class CSF_Parts_Part_Card {
 							alt="<?php echo esc_attr( $display_title ); ?>"
 							loading="lazy"
 						/>
-						<?php if ( '' !== $category ) : ?>
-							<span class="csf-part-card__badge"><?php echo esc_html( $category ); ?></span>
-						<?php endif; ?>
 					</div>
 				<?php else : ?>
 					<div class="csf-part-card__image csf-part-card__image--placeholder">
 						<svg width="48" height="48" viewBox="0 0 20 20" fill="currentColor" opacity="0.2" aria-hidden="true">
 							<path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/>
 						</svg>
-						<?php if ( '' !== $category ) : ?>
-							<span class="csf-part-card__badge"><?php echo esc_html( $category ); ?></span>
-						<?php endif; ?>
 					</div>
 				<?php endif; ?>
 				<div class="csf-part-card__content">
+					<?php if ( '' !== $category ) : ?>
+						<p class="csf-part-card__badge"><?php echo esc_html( $category ); ?></p>
+					<?php endif; ?>
 					<h3 class="csf-part-card__title"><?php echo esc_html( $display_title ); ?></h3>
 					<?php if ( null !== $dimensions ) : ?>
 						<div class="csf-dimensions-section">

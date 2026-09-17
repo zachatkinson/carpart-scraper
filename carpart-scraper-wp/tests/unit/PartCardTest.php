@@ -64,7 +64,7 @@ final class PartCardTest extends TestCase {
 		// Assert
 		$this->assertStringContainsString( '<article class="csf-part-card">', $html );
 		$this->assertStringContainsString( 'csf-part-card__image--placeholder', $html );
-		$this->assertStringContainsString( '<span class="csf-part-card__badge">Radiator</span>', $html );
+		$this->assertMatchesRegularExpression( '#<p class="csf-part-card__badge">Radiator</p>\s*<h3 class="csf-part-card__title">#', $html );
 		$this->assertStringNotContainsString( 'csf-fitment-section', $html );
 		$this->assertStringNotContainsString( 'style=', $html );
 	}

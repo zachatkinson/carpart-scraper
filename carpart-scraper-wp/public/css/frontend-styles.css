@@ -290,34 +290,8 @@
 	opacity: 1;
 }
 
-/* Dim other cards when hovering over the grid */
-.csf-search__grid:hover .csf-part-card,
-.csf-grid-items:hover .csf-part-card {
-	opacity: 0.5;
-}
-
-/* Restore full opacity to the hovered card */
-.csf-search__grid:hover .csf-part-card:hover,
-.csf-grid-items:hover .csf-part-card:hover {
-	opacity: 1;
-}
-
 .csf-part-card:hover {
-	transform: translateY(-2px);
-	animation: csf-card-glow 2s ease-in-out infinite;
-}
-
-@keyframes csf-card-glow {
-	0%, 100% {
-		box-shadow: 0 0 8px var(--csf-glow-color),
-		            0 0 16px var(--csf-focus-ring),
-		            0 4px 12px rgba(0, 0, 0, 0.1);
-	}
-	50% {
-		box-shadow: 0 0 16px var(--csf-glow-color-strong),
-		            0 0 32px var(--csf-glow-color),
-		            0 4px 12px rgba(0, 0, 0, 0.1);
-	}
+	border-color: var(--csf-border-hover);
 }
 
 .csf-part-card__link {
@@ -338,7 +312,8 @@
 	position: relative;
 	width: 100%;
 	aspect-ratio: 4 / 3;
-	background: var(--csf-bg-alt);
+	background: linear-gradient(180deg, var(--csf-surface) 0%, var(--csf-bg-alt) 100%);
+	border-bottom: 1px solid var(--csf-border);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -348,61 +323,48 @@
 .csf-part-card__image img {
 	width: 100%;
 	height: 100%;
-	object-fit: cover;
+	object-fit: contain;
+	padding: var(--csf-spacing-md);
+	box-sizing: border-box;
 	transition: var(--csf-transition);
 }
 
-.csf-part-card:hover .csf-part-card__image img {
-	transform: scale(1.05);
-}
-
 .csf-part-card__image--placeholder {
-	background: linear-gradient(135deg, var(--csf-bg-alt) 0%, var(--csf-border) 100%);
+	color: var(--csf-text-muted);
 }
 
 /* Card Content */
 .csf-part-card__content {
-	padding: var(--csf-spacing-md);
+	padding: var(--csf-spacing-lg) var(--csf-spacing-md) var(--csf-spacing-md);
 	flex: 1;
 	display: flex;
 	flex-direction: column;
+	gap: var(--csf-spacing-xs);
 }
 
-.csf-part-card__badge {
-	position: absolute;
-	bottom: var(--csf-spacing-sm);
-	right: var(--csf-spacing-sm);
-	display: inline-block;
+/* Category eyebrow above the title */
+.csf-part-card .csf-part-card__badge {
 	margin: 0;
-	padding: 0.25rem 0.75rem;
-	font-size: 0.7rem;
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
 	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	font-weight: 600;
-	border-radius: var(--csf-radius-md);
-	background-color: var(--csf-secondary);
-	color: #ffffff;
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	color: var(--csf-text-muted);
 }
 
-/* Dimensions Section */
+/* Dimensions line ("31 ⅝ × 21 × 4 ⅞ in") */
 .csf-dimensions-section {
-	margin-bottom: var(--csf-spacing-sm);
+	margin: 0;
 }
 
 .csf-dimensions-section__label {
-	margin: 0 0 var(--csf-spacing-xs) 0 !important;
-	font-size: 0.6875rem;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	color: var(--csf-text-muted);
+	display: none;
 }
 
 .csf-dimensions-section__value {
 	margin: 0;
 	font-size: 0.8125rem;
-	color: var(--csf-text-secondary);
+	color: var(--csf-text-muted);
 	line-height: 1.5;
 }
 
@@ -412,18 +374,14 @@
 	line-height: 0;
 }
 
-/* Fitment Section */
+/* Fitment chips */
 .csf-fitment-section {
-	margin-bottom: var(--csf-spacing-sm);
+	margin: auto 0 0;
+	padding-top: var(--csf-spacing-xs);
 }
 
 .csf-fitment-section__label {
-	margin: 0 0 var(--csf-spacing-xs) 0 !important;
-	font-size: 0.6875rem;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	color: var(--csf-text-muted);
+	display: none;
 }
 
 /* Make Badges */
@@ -439,10 +397,14 @@
 	font-size: 0.75rem;
 	font-weight: 500;
 	border-radius: var(--csf-radius-badge);
-	background-color: var(--csf-text-muted);
-	color: #FCFCFC;
+	background-color: var(--csf-bg-alt);
+	color: var(--csf-text-secondary);
 	border: none;
 	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	font-size: 0.6875rem;
+	font-weight: 700;
+	padding: 0.2rem 0.6rem;
 }
 
 .csf-part-card__make-badge--more {
@@ -451,10 +413,11 @@
 }
 
 .csf-part-card__title {
-	margin: 0 0 var(--csf-spacing-sm);
-	font-size: 1rem;
-	font-weight: 600;
-	line-height: 1.4;
+	margin: 0;
+	font-family: var(--csf-font-heading);
+	font-size: 1.375rem;
+	font-weight: 700;
+	line-height: 1.2;
 	color: var(--csf-text);
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
@@ -466,7 +429,6 @@
 	margin: 0 0 var(--csf-spacing-xs);
 	font-size: 0.875rem;
 	color: var(--csf-text-muted);
-	font-family: "Courier New", monospace;
 }
 
 .csf-part-card__manufacturer {
@@ -529,18 +491,18 @@
 	height: 40px;
 	padding: var(--csf-spacing-sm);
 	border: 1px solid var(--csf-border);
-	border-radius: var(--csf-radius-badge);
+	border-radius: var(--csf-radius-md);
 	background: var(--csf-surface);
 	color: var(--csf-text);
 	font-size: 0.875rem;
+	font-weight: 600;
 	cursor: pointer;
 	transition: var(--csf-transition);
 }
 
 .csf-pagination__button:hover:not(:disabled):not(.csf-pagination__button--active) {
 	background: var(--csf-bg-alt);
-	border-color: var(--csf-primary);
-	color: var(--csf-primary);
+	border-color: var(--csf-border-hover);
 }
 
 .csf-pagination__button:disabled {
@@ -549,9 +511,9 @@
 }
 
 .csf-pagination__button--active {
-	background: var(--csf-primary);
-	color: #FCFCFC;
-	border-color: var(--csf-primary);
+	background: var(--csf-inverse-bg);
+	color: var(--csf-inverse-text);
+	border-color: var(--csf-inverse-bg);
 	font-weight: 600;
 }
 

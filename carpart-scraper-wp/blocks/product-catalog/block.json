@@ -125,7 +125,7 @@
 		},
 		"cardShadow": {
 			"type": "string",
-			"default": "sm",
+			"default": "none",
 			"enum": [
 				"none",
 				"sm",

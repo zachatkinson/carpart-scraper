@@ -154,7 +154,7 @@
 	border: 1px solid var(--csf-border);
 	border-radius: var(--csf-radius-card);
 	overflow: hidden;
-	background: var(--csf-bg-alt);
+	background: linear-gradient(180deg, var(--csf-surface) 0%, var(--csf-bg-alt) 100%);
 	aspect-ratio: 1 / 1;
 	display: flex;
 	align-items: center;
@@ -195,12 +195,12 @@
 }
 
 .csf-thumb:hover {
-	border-color: var(--csf-accent);
+	border-color: var(--csf-border-hover);
 }
 
 .csf-thumb.active {
-	border-color: var(--csf-accent);
-	background: var(--csf-bg-alt);
+	border-color: var(--csf-primary);
+	background: var(--csf-surface);
 }
 
 .csf-no-image-placeholder {
@@ -234,29 +234,31 @@
 	align-self: flex-start;
 }
 
+/* Eyebrow: "RADIATOR · CSF 4037" in brand red */
 .csf-category-badge a {
 	display: inline-block;
-	padding: 6px 14px;
-	background: var(--csf-secondary);
-	color: #FCFCFC;
+	padding: 0;
+	background: transparent;
+	color: var(--csf-primary);
 	text-decoration: none;
-	border-radius: var(--csf-radius-badge);
-	font-size: 13px;
-	font-weight: 600;
+	font-size: 12px;
+	font-weight: 700;
 	text-transform: uppercase;
-	letter-spacing: 0.5px;
+	letter-spacing: 0.08em;
 	transition: var(--csf-transition);
 }
 
 .csf-category-badge a:hover {
-	background: var(--csf-accent);
-	color: #FCFCFC;
+	color: var(--csf-primary-hover);
+	text-decoration: underline;
 }
 
 .csf-product-title {
-	font-size: 36px;
+	font-family: var(--csf-font-heading);
+	font-size: 40px;
 	font-weight: 700;
-	line-height: 1.2;
+	line-height: 1.1;
+	letter-spacing: -0.01em;
 	margin: 0;
 	color: var(--csf-text) !important;
 }
@@ -444,16 +446,16 @@
 }
 
 .csf-quick-specs {
-	padding: 20px;
-	background: var(--csf-bg-alt);
+	padding: 20px 24px;
+	background: var(--csf-surface);
 	border-radius: var(--csf-radius-card);
 	border: 1px solid var(--csf-border);
 }
 
 .csf-quick-specs h3 {
-	margin: 0 0 16px;
-	font-size: 16px;
-	font-weight: 600;
+	margin: 0 0 8px;
+	font-size: 14px;
+	font-weight: 700;
 	color: var(--csf-text);
 }
 
@@ -462,15 +464,17 @@
 	padding: 0;
 	margin: 0;
 	display: grid;
-	gap: 10px;
+	gap: 0;
 }
 
 .csf-quick-specs li {
 	display: flex;
 	justify-content: space-between;
-	align-items: center;
-	padding: 8px 0;
+	align-items: baseline;
+	gap: 16px;
+	padding: 10px 0;
 	border-bottom: 1px solid var(--csf-border);
+	font-size: 15px;
 }
 
 .csf-quick-specs li:last-child {
@@ -478,30 +482,31 @@
 }
 
 .spec-label {
-	font-weight: 500;
+	font-weight: 400;
 	color: var(--csf-text-muted);
 }
 
 .spec-value {
-	font-weight: 600;
+	font-weight: 700;
 	color: var(--csf-text);
+	text-align: right;
 }
 
+/* Reference note: quiet small print, no box */
 .csf-cta-section {
-	padding: 20px;
-	background: rgba(0, 153, 204, 0.1);
-	border: 1px solid var(--csf-secondary);
-	border-radius: var(--csf-radius-card);
-	margin-top: 12px;
+	padding: 0;
+	background: transparent;
+	border: none;
+	margin-top: 0;
 }
 
 .csf-reference-note {
 	display: flex;
 	align-items: flex-start;
-	gap: 12px;
+	gap: 8px;
 	margin: 0;
-	color: var(--csf-secondary);
-	font-size: 14px;
+	color: var(--csf-text-muted);
+	font-size: 13px;
 	line-height: 1.5;
 }
 
@@ -912,13 +917,16 @@
 }
 
 .csf-spec-row dt {
-	background: var(--csf-bg-alt);
-	font-weight: 600;
-	color: var(--csf-text);
+	background: var(--csf-surface);
+	font-weight: 400;
+	color: var(--csf-text-muted);
 }
 
 .csf-spec-row dd {
-	color: var(--csf-text-muted);
+	background: var(--csf-surface);
+	font-weight: 700;
+	color: var(--csf-text);
+	text-align: right;
 }
 
 @media (max-width: 768px) {
@@ -944,7 +952,8 @@
 	align-items: flex-start;
 	gap: 12px;
 	padding: 16px;
-	background: var(--csf-bg-alt);
+	background: var(--csf-surface);
+	border: 1px solid var(--csf-border);
 	border-radius: var(--csf-radius-card);
 	font-size: 15px;
 	line-height: 1.5;
@@ -961,34 +970,37 @@
    Interchange Grid
    ========================================================================== */
 
+/* Interchange numbers as chips: "OEM 16400-AK030" */
 .csf-interchange-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-	gap: 16px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
 }
 
 .csf-interchange-card {
-	padding: 16px;
-	background: var(--csf-bg-alt);
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 7px 14px;
+	background: var(--csf-surface);
 	border: 1px solid var(--csf-border);
-	border-radius: var(--csf-radius-card);
-	text-align: center;
+	border-radius: var(--csf-radius-badge);
+	text-align: left;
 }
 
 .interchange-type {
-	font-size: 12px;
-	font-weight: 600;
+	font-size: 13px;
+	font-weight: 400;
 	color: var(--csf-text-muted);
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	margin-bottom: 8px;
+	text-transform: none;
+	letter-spacing: 0;
+	margin: 0;
 }
 
 .interchange-number {
-	font-size: 16px;
+	font-size: 14px;
 	font-weight: 700;
 	color: var(--csf-text);
-	font-family: 'Courier New', monospace;
 }
 
 /* ==========================================================================
