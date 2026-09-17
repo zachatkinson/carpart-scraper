@@ -87,7 +87,7 @@ to light mode only; dark keeps the preset or stylesheet value.
 
 ## Block-level options
 
-Both blocks use WordPress core block supports for the wrapper: background,
+All three blocks use WordPress core block supports for the wrapper: background,
 text and link colour, padding and margin, font size and line height (the
 Single Product block also gets border and shadow). Core renders those through
 `get_block_wrapper_attributes()`, so they need no plugin code and preview in

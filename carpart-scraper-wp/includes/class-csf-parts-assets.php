@@ -82,6 +82,15 @@ class CSF_Parts_Assets {
 			'all'
 		);
 
+		// Part Finder block CSS (block.json "style" handle).
+		wp_enqueue_style(
+			'csf-parts-part-finder',
+			CSF_PARTS_PLUGIN_URL . 'public/css/part-finder-block.css',
+			array( 'csf-parts-colors', 'csf-parts-catalog-block' ),
+			CSF_PARTS_VERSION,
+			'all'
+		);
+
 		// Async search JS.
 		wp_enqueue_script(
 			'csf-parts-search',
@@ -283,6 +292,14 @@ class CSF_Parts_Assets {
 		wp_enqueue_style(
 			'csf-parts-public',
 			CSF_PARTS_PLUGIN_URL . 'public/css/frontend-styles.css',
+			array( 'csf-parts-colors', 'csf-parts-catalog-block' ),
+			CSF_PARTS_VERSION,
+			'all'
+		);
+
+		wp_enqueue_style(
+			'csf-parts-part-finder',
+			CSF_PARTS_PLUGIN_URL . 'public/css/part-finder-block.css',
 			array( 'csf-parts-colors', 'csf-parts-catalog-block' ),
 			CSF_PARTS_VERSION,
 			'all'

@@ -1,0 +1,142 @@
+/**
+ * Part Finder block
+ * A search card: part-number box, Year / Make / Model cascade, submit button.
+ * All colours, radii and shadows come from --csf-* tokens.
+ */
+
+.csf-part-finder {
+	box-sizing: border-box;
+	max-width: 100%;
+	background: var(--csf-surface);
+	color: var(--csf-text);
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius-card);
+	box-shadow: var(--csf-shadow-lg);
+	padding: var(--csf-spacing-xl);
+}
+
+.csf-part-finder__form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--csf-spacing-sm);
+}
+
+.csf-part-finder__eyebrow {
+	margin: 0;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--csf-primary);
+}
+
+.csf-part-finder__heading {
+	margin: 0 0 var(--csf-spacing-xs);
+	font-family: var(--csf-font-heading);
+	font-size: 1.5rem;
+	line-height: 1.2;
+	font-weight: 700;
+	color: var(--csf-text);
+}
+
+.csf-part-finder__search {
+	position: relative;
+}
+
+.csf-part-finder__input {
+	width: 100%;
+	box-sizing: border-box;
+	height: 44px;
+	padding: 0 40px 0 14px;
+	border: 1px solid var(--csf-border);
+	border-radius: var(--csf-radius-control);
+	background: var(--csf-surface);
+	color: var(--csf-text);
+	font-size: 14px;
+	font-family: inherit;
+	appearance: none;
+	-webkit-appearance: none;
+}
+
+.csf-part-finder__input::placeholder {
+	color: var(--csf-text-muted);
+}
+
+.csf-part-finder__input:hover {
+	border-color: var(--csf-border-hover);
+}
+
+.csf-part-finder__input:focus {
+	outline: none;
+	border-color: var(--csf-secondary);
+	box-shadow: 0 0 0 3px var(--csf-focus-ring);
+}
+
+.csf-part-finder__search-icon {
+	position: absolute;
+	right: 14px;
+	top: 50%;
+	transform: translateY(-50%);
+	color: var(--csf-text-muted);
+	pointer-events: none;
+}
+
+.csf-part-finder__divider {
+	display: flex;
+	align-items: center;
+	gap: var(--csf-spacing-sm);
+	color: var(--csf-text-muted);
+	font-size: 12px;
+	text-transform: lowercase;
+}
+
+.csf-part-finder__divider::before,
+.csf-part-finder__divider::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: var(--csf-border);
+}
+
+.csf-part-finder__row {
+	display: flex;
+	gap: var(--csf-spacing-sm);
+}
+
+.csf-part-finder__field {
+	flex: 1;
+	min-width: 0;
+}
+
+.csf-part-finder .csf-part-finder__select {
+	height: 44px;
+	font-size: 14px;
+}
+
+.csf-part-finder .csf-part-finder__select:disabled {
+	opacity: 0.55;
+}
+
+.csf-part-finder__submit {
+	width: 100%;
+	height: 46px;
+	margin-top: var(--csf-spacing-xs);
+	font-size: 15px;
+}
+
+.csf-part-finder__footnote {
+	margin: var(--csf-spacing-xs) 0 0;
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--csf-text-muted);
+}
+
+@media (max-width: 480px) {
+	.csf-part-finder {
+		padding: var(--csf-spacing-lg);
+	}
+
+	.csf-part-finder__row {
+		flex-direction: column;
+	}
+}

@@ -9,6 +9,7 @@ export default {
 	entry: {
 		'product-catalog/index': path.resolve( __dirname, 'blocks/product-catalog/src/index.js' ),
 		'single-product/index': path.resolve( __dirname, 'blocks/single-product/src/index.js' ),
+		'part-finder/index': path.resolve( __dirname, 'blocks/part-finder/src/index.js' ),
 	},
 	output: {
 		...defaultConfig.output,

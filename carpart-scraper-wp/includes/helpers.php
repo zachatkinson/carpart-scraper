@@ -299,3 +299,47 @@ function csf_resolve_image_url( string $url ): string {
 	$upload_dir = wp_upload_dir();
 	return $upload_dir['baseurl'] . '/csf-parts/' . ltrim( $url, '/' );
 }
+
+/**
+ * URL of the published page that contains the Product Catalog block.
+ *
+ * Used as the default destination for the Part Finder block. Cached for an
+ * hour; the cache is cleared whenever a page is saved.
+ *
+ * @since 1.11.0
+ * @return string Page permalink, or home_url( '/parts/' ) when none is found.
+ */
+function csf_find_catalog_page_url(): string {
+	$cached = get_transient( 'csf_parts_catalog_page_url' );
+	if ( is_string( $cached ) && '' !== $cached ) {
+		return $cached;
+	}
+
+	global $wpdb;
+	$page_id = (int) $wpdb->get_var(
+		"SELECT ID FROM {$wpdb->posts}
+		 WHERE post_type = 'page' AND post_status = 'publish'
+		   AND post_content LIKE '%wp:csf-parts/product-catalog%'
+		 ORDER BY menu_order ASC, ID ASC LIMIT 1"
+	);
+
+	$url = $page_id > 0 ? (string) get_permalink( $page_id ) : home_url( '/parts/' );
+	set_transient( 'csf_parts_catalog_page_url', $url, HOUR_IN_SECONDS );
+
+	return $url;
+}
+
+/**
+ * Forget the cached catalog page URL when any page changes.
+ *
+ * @since 1.11.0
+ * @param int $post_id Saved post ID.
+ */
+function csf_flush_catalog_page_url_cache( int $post_id ): void {
+	if ( 'page' === get_post_type( $post_id ) ) {
+		delete_transient( 'csf_parts_catalog_page_url' );
+	}
+}
+if ( function_exists( 'add_action' ) ) { // Absent when helpers load under PHPUnit.
+	add_action( 'save_post', 'csf_flush_catalog_page_url_cache' );
+}

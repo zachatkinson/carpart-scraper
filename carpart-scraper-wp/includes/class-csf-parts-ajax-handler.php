@@ -200,12 +200,12 @@ class CSF_Parts_AJAX_Handler {
 		$year = isset( $_POST['year'] ) ? intval( $_POST['year'] ) : 0;
 		$make = isset( $_POST['make'] ) ? sanitize_text_field( wp_unslash( $_POST['make'] ) ) : '';
 
-		if ( $year <= 0 || empty( $make ) ) {
-			wp_send_json_error( array( 'message' => 'Invalid year or make parameter' ) );
+		if ( empty( $make ) ) {
+			wp_send_json_error( array( 'message' => 'Invalid make parameter' ) );
 		}
 
-		// Get models for year and make using shared database instance.
-		$models = $this->database->get_vehicle_models( $make, $year );
+		// Get models for the make, narrowed by year when one was chosen.
+		$models = $this->database->get_vehicle_models( $make, $year > 0 ? $year : null );
 
 		wp_send_json_success( array( 'models' => $models ) );
 	}

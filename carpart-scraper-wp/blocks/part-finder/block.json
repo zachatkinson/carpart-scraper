@@ -1,0 +1,88 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "csf-parts/part-finder",
+	"title": "CSF Part Finder",
+	"category": "csf-parts",
+	"icon": "search",
+	"description": "A compact search card: part number box plus Year / Make / Model dropdowns. Sends visitors to the Parts page with those filters applied.",
+	"keywords": ["parts", "search", "finder", "vehicle", "hero"],
+	"attributes": {
+		"eyebrow": {
+			"type": "string",
+			"default": "Find your part"
+		},
+		"heading": {
+			"type": "string",
+			"default": "Search by vehicle or number"
+		},
+		"headingLevel": {
+			"type": "number",
+			"default": 2
+		},
+		"showSearch": {
+			"type": "boolean",
+			"default": true
+		},
+		"searchPlaceholder": {
+			"type": "string",
+			"default": "CSF, OEM or Partslink number"
+		},
+		"showYear": {
+			"type": "boolean",
+			"default": true
+		},
+		"showMake": {
+			"type": "boolean",
+			"default": true
+		},
+		"showModel": {
+			"type": "boolean",
+			"default": true
+		},
+		"buttonText": {
+			"type": "string",
+			"default": "Show parts"
+		},
+		"targetUrl": {
+			"type": "string",
+			"default": ""
+		},
+		"showFootnote": {
+			"type": "boolean",
+			"default": true
+		},
+		"footnoteText": {
+			"type": "string",
+			"default": "{count} parts in the catalogue. Every listing carries dimensions, connections and the OE numbers it replaces."
+		}
+	},
+	"supports": {
+		"html": false,
+		"align": ["wide", "full"],
+		"color": {
+			"background": true,
+			"text": true,
+			"link": true
+		},
+		"spacing": {
+			"padding": true,
+			"margin": true
+		},
+		"typography": {
+			"fontSize": true,
+			"lineHeight": true
+		},
+		"__experimentalBorder": {
+			"color": true,
+			"radius": true,
+			"style": true,
+			"width": true
+		},
+		"shadow": true
+	},
+	"editorScript": "file:../build/part-finder/index.js",
+	"viewScript": "file:./view.js",
+	"style": "csf-parts-part-finder",
+	"render": "file:./render.php"
+}
