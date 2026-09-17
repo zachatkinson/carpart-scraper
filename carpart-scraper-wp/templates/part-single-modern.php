@@ -182,7 +182,7 @@ get_header();
 			<!-- Discontinued Badge (if applicable) -->
 			<?php if ( ! empty( $part->discontinued ) && 1 === (int) $part->discontinued ) : ?>
 				<div class="csf-category-badge">
-					<span class="csf-badge csf-discontinued-badge" style="display: inline-block; padding: 6px 14px; background: transparent; color: var(--global-palette1, #C41C10); border: 2px solid var(--global-palette1, #C41C10); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-radius: 20px;">DISCONTINUED</span>
+					<span class="csf-badge csf-discontinued-badge">DISCONTINUED</span>
 				</div>
 			<?php endif; ?>
 
@@ -238,9 +238,9 @@ get_header();
 								<line x1="12" y1="16" x2="12" y2="12"></line>
 								<line x1="12" y1="8" x2="12.01" y2="8"></line>
 							</svg>
-							<div style="line-height: 1.4;">
-								<strong style="display: block; margin-bottom: 4px;">Please select your vehicle's engine.</strong>
-								<span style="font-size: 13px; font-style: italic;">Unsure? Contact your local dealer or distributor to verify this part fits your specific vehicle configuration.</span>
+							<div class="engine-notice__body">
+								<strong class="engine-notice__title">Please select your vehicle's engine.</strong>
+								<span class="engine-notice__hint">Unsure? Contact your local dealer or distributor to verify this part fits your specific vehicle configuration.</span>
 							</div>
 						</div>
 							<label for="csf-engine-variant">Select Engine:</label>
@@ -263,7 +263,7 @@ get_header();
 							<span class="engine-label">Engine:</span>
 							<span class="engine-value"><?php echo esc_html( $engine_variants[0] ); ?></span>
 						</div>
-						<div class="engine-verify-notice" style="margin-top: 8px; padding: 8px 12px; background: var(--global-palette12, var(--csf-accent)); border-left: 3px solid var(--global-palette12, var(--csf-accent)); border-radius: 0 4px 4px 0; font-size: 13px; color: var(--global-palette9, var(--csf-surface));">
+						<div class="engine-verify-notice">
 							Please verify this matches your vehicle's engine before purchasing.
 						</div>
 					<?php endif; ?>
@@ -400,8 +400,8 @@ get_header();
 					}
 				);
 				?>
-				<h3 style="margin: 24px 0 12px; font-size: 16px; font-weight: 600; color: var(--global-palette3, #0A0A0A);">Interchange Numbers</h3>
-				<p class="csf-interchange-description" style="margin: 0 0 16px; font-size: 14px; color: var(--csf-text-light);">This part replaces the following OEM and aftermarket part numbers:</p>
+				<h3 class="csf-interchange-heading">Interchange Numbers</h3>
+				<p class="csf-interchange-description">This part replaces the following OEM and aftermarket part numbers:</p>
 				<div class="csf-interchange-grid">
 					<?php foreach ( $interchange_numbers as $reference ) : ?>
 						<div class="csf-interchange-card">

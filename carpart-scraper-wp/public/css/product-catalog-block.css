@@ -1,6 +1,6 @@
 /**
  * Product Catalog Block Styles
- * Uses Kadence global palette directly for automatic dark mode support
+ * All colours come from --csf-* tokens (see csf-color-system.css).
  */
 
 /* Block Container - Remove default padding for cleaner layout */
@@ -18,16 +18,16 @@
 	display: block;
 	margin-bottom: 4px;
 	font-weight: 600;
-	color: var(--global-palette3, var(--csf-text));
+	color: var(--csf-text);
 }
 
 .csf-search-box__input {
 	width: 100%;
 	padding: 8px;
 	border: 1px solid var(--csf-border);
-	border-radius: 4px;
-	background: var(--global-palette9, var(--csf-surface));
-	color: var(--global-palette3, var(--csf-text));
+	border-radius: var(--csf-radius-control);
+	background: var(--csf-surface);
+	color: var(--csf-text);
 	font-size: 14px;
 	font-family: inherit;
 	line-height: 1.4;
@@ -45,8 +45,8 @@
 
 .csf-search-box__input:focus {
 	outline: none !important;
-	border-color: var(--global-palette2, var(--csf-secondary)) !important;
-	box-shadow: 0 0 0 3px rgba(0, 153, 204, 0.2) !important;
+	border-color: var(--csf-secondary) !important;
+	box-shadow: 0 0 0 3px var(--csf-focus-ring) !important;
 }
 
 .csf-search-box__help-text {
@@ -73,16 +73,16 @@
 	display: block;
 	margin-bottom: 4px;
 	font-weight: 600;
-	color: var(--global-palette3, var(--csf-text));
+	color: var(--csf-text);
 }
 
 .csf-select {
 	width: 100%;
 	padding: 8px;
 	border: 1px solid var(--csf-border);
-	border-radius: 4px;
-	background: var(--global-palette9, var(--csf-surface));
-	color: var(--global-palette3, var(--csf-text));
+	border-radius: var(--csf-radius-control);
+	background: var(--csf-surface);
+	color: var(--csf-text);
 	font-size: 14px;
 	font-family: inherit;
 	line-height: 1.4;
@@ -105,23 +105,23 @@
 
 .csf-select:focus {
 	outline: none;
-	border-color: var(--global-palette2, var(--csf-secondary));
+	border-color: var(--csf-secondary);
 	box-shadow: 0 0 0 3px var(--csf-focus-ring);
 }
 
 .csf-select:disabled {
-	background: var(--global-palette7, var(--csf-bg-alt));
+	background: var(--csf-bg-alt);
 	cursor: not-allowed !important;
 	opacity: 0.5;
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 }
 
 .csf-button-reset {
 	padding: 8px 24px;
-	background: var(--global-palette8, var(--csf-error));
-	color: #FCFCFC !important;
+	background: var(--csf-error);
+	color: var(--csf-on-primary);
 	border: none;
-	border-radius: 4px;
+	border-radius: var(--csf-radius-control);
 	font-size: 14px;
 	font-weight: 600;
 	cursor: pointer;
@@ -139,7 +139,7 @@
 .csf-results-header__title {
 	margin: 0;
 	font-size: 18px;
-	color: var(--global-palette3, var(--csf-text));
+	color: var(--csf-text);
 }
 
 /* Empty State */
@@ -149,4 +149,89 @@
 	color: var(--csf-text-secondary);
 }
 
-/* Dark mode handled in csf-color-system.css via scoped --global-palette* overrides. */
+
+/* Results states */
+.csf-no-results,
+.csf-placeholder {
+	padding: 24px;
+	text-align: center;
+	background: var(--csf-bg-alt);
+	border-radius: var(--csf-radius-card);
+}
+
+.csf-placeholder {
+	padding: 48px 24px;
+}
+
+.csf-no-results__text {
+	margin: 0;
+}
+
+.csf-placeholder__text {
+	margin: 0;
+	font-size: 16px;
+	color: var(--csf-text-muted);
+}
+
+/* Numbered pagination (block) */
+.csf-product-catalog .csf-pagination {
+	display: flex;
+	justify-content: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-top: 32px;
+}
+
+.csf-product-catalog .csf-load-more,
+.csf-product-catalog .csf-endless-trigger {
+	display: block;
+	text-align: center;
+	margin-top: 32px;
+}
+
+.csf-product-catalog .csf-endless-trigger {
+	padding: 24px;
+}
+
+.csf-loading-indicator {
+	display: none;
+	color: var(--csf-text-muted);
+}
+
+.csf-pagination-btn {
+	display: inline-block;
+	padding: 8px 12px;
+	background: var(--csf-secondary);
+	color: var(--csf-on-secondary);
+	border: none;
+	border-radius: var(--csf-radius-control);
+	font-size: 14px;
+	font-family: inherit;
+	line-height: 1.4;
+	text-decoration: none;
+	cursor: pointer;
+	transition: var(--csf-transition-slow);
+}
+
+.csf-pagination-prev,
+.csf-pagination-next {
+	padding: 8px 16px;
+}
+
+.csf-pagination-btn:not(.csf-pagination-current):hover {
+	background: var(--csf-secondary-hover);
+	color: var(--csf-on-secondary);
+}
+
+.csf-pagination-current {
+	background: transparent;
+	color: var(--csf-secondary);
+	border: 2px solid var(--csf-secondary);
+	font-weight: 600;
+	cursor: default;
+}
+
+.csf-pagination-ellipsis {
+	padding: 8px 4px;
+	color: var(--csf-text-muted);
+}

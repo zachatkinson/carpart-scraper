@@ -28,12 +28,21 @@ class CSF_Parts_Assets {
 	private CSF_Parts_Customizer $customizer;
 
 	/**
+	 * Design tokens instance.
+	 *
+	 * @var CSF_Parts_Design
+	 */
+	private CSF_Parts_Design $design;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param CSF_Parts_Customizer $customizer Customizer instance for color overrides.
+	 * @param CSF_Parts_Customizer $customizer Customizer instance for legacy color overrides.
+	 * @param CSF_Parts_Design     $design     Design tokens (presets + overrides).
 	 */
-	public function __construct( CSF_Parts_Customizer $customizer ) {
+	public function __construct( CSF_Parts_Customizer $customizer, CSF_Parts_Design $design ) {
 		$this->customizer = $customizer;
+		$this->design     = $design;
 	}
 
 	/**
@@ -53,21 +62,7 @@ class CSF_Parts_Assets {
 	 * @since 2.0.0
 	 */
 	public function enqueue_public_assets(): void {
-		// Color System (foundation - must load first).
-		wp_enqueue_style(
-			'csf-parts-colors',
-			CSF_PARTS_PLUGIN_URL . 'public/css/csf-color-system.css',
-			array(),
-			CSF_PARTS_VERSION,
-			'all'
-		);
-
-		// Dark palette: enqueued (or not) according to the Color scheme setting.
-		$color_handle = $this->enqueue_dark_color_scheme();
-
-		// Add custom color overrides from customizer. Attached to the last
-		// color stylesheet so customizer colors win in both light and dark.
-		$this->customizer->add_custom_color_overrides( $color_handle );
+		$this->enqueue_color_system();
 
 		// Product Catalog Block CSS.
 		wp_enqueue_style(
@@ -118,16 +113,59 @@ class CSF_Parts_Assets {
 	}
 
 	/**
+	 * Enqueue the token stylesheets in precedence order.
+	 *
+	 * base tokens → dark tokens (per Color Scheme) → Design settings inline CSS
+	 * → legacy Customizer colours. Shared by the front end and the block editor
+	 * so previews match.
+	 *
+	 * @since 1.9.0
+	 */
+	private function enqueue_color_system(): void {
+		// Color System (foundation - must load first).
+		wp_enqueue_style(
+			'csf-parts-colors',
+			CSF_PARTS_PLUGIN_URL . 'public/css/csf-color-system.css',
+			array(),
+			CSF_PARTS_VERSION,
+			'all'
+		);
+
+		// Dark palette: enqueued (or not) according to the Color scheme setting.
+		$scheme       = $this->get_color_scheme();
+		$color_handle = $this->enqueue_dark_color_scheme( $scheme );
+
+		// Design presets + overrides, after the dark sheet so they win.
+		$design_css = $this->design->inline_css( $scheme );
+		if ( '' !== $design_css ) {
+			wp_add_inline_style( $color_handle, $design_css );
+		}
+
+		// Legacy customizer colours (kept for sites that set them before 1.9.0).
+		$this->customizer->add_custom_color_overrides( $color_handle );
+	}
+
+	/**
+	 * Current Color Scheme setting, sanitized.
+	 *
+	 * @since 1.9.0
+	 * @return string
+	 */
+	private function get_color_scheme(): string {
+		return self::sanitize_color_scheme(
+			(string) get_option( CSF_Parts_Constants::OPTION_COLOR_SCHEME, CSF_Parts_Constants::COLOR_SCHEME_DEFAULT )
+		);
+	}
+
+	/**
 	 * Enqueue the dark color-scheme stylesheet according to the plugin setting.
 	 *
 	 * @since 1.8.11
+	 * @param string $scheme One of CSF_Parts_Constants::COLOR_SCHEMES.
 	 * @return string Handle of the last enqueued color stylesheet.
 	 */
-	private function enqueue_dark_color_scheme(): string {
-		$scheme = self::sanitize_color_scheme(
-			(string) get_option( CSF_Parts_Constants::OPTION_COLOR_SCHEME, CSF_Parts_Constants::COLOR_SCHEME_DEFAULT )
-		);
-		$media  = self::get_dark_stylesheet_media( $scheme );
+	private function enqueue_dark_color_scheme( string $scheme ): string {
+		$media = self::get_dark_stylesheet_media( $scheme );
 
 		if ( null === $media ) {
 			return 'csf-parts-colors';
@@ -207,6 +245,12 @@ class CSF_Parts_Assets {
 			true
 		);
 
+		// Design page uses the core colour picker.
+		if ( false !== strpos( $hook, 'csf-parts-design' ) ) {
+			wp_enqueue_style( 'wp-color-picker' );
+			wp_enqueue_script( 'wp-color-picker' );
+		}
+
 		// Localize admin script.
 		wp_localize_script(
 			'csf-parts-admin',
@@ -224,11 +268,22 @@ class CSF_Parts_Assets {
 	 * @since 2.0.0
 	 */
 	public function enqueue_block_editor_assets(): void {
+		// Same token stack as the front end so editor previews match.
+		$this->enqueue_color_system();
+
+		wp_enqueue_style(
+			'csf-parts-catalog-block',
+			CSF_PARTS_PLUGIN_URL . 'public/css/product-catalog-block.css',
+			array( 'csf-parts-colors' ),
+			CSF_PARTS_VERSION,
+			'all'
+		);
+
 		// Enqueue frontend styles in the block editor so blocks render correctly.
 		wp_enqueue_style(
 			'csf-parts-public',
 			CSF_PARTS_PLUGIN_URL . 'public/css/frontend-styles.css',
-			array(),
+			array( 'csf-parts-colors', 'csf-parts-catalog-block' ),
 			CSF_PARTS_VERSION,
 			'all'
 		);

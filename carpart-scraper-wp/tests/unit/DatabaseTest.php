@@ -70,12 +70,10 @@ final class DatabaseTest extends TestCase {
 		// Use reflection to inject mock wpdb and fix table_parts property.
 		$reflection    = new ReflectionClass( $this->database );
 		$wpdb_property = $reflection->getProperty( 'wpdb' );
-		$wpdb_property->setAccessible( true );
 		$wpdb_property->setValue( $this->database, $this->wpdb_mock );
 
 		// Fix table_parts property to use mock prefix.
 		$table_property = $reflection->getProperty( 'table_parts' );
-		$table_property->setAccessible( true );
 		$table_property->setValue( $this->database, 'wp_csf_parts' );
 	}
 

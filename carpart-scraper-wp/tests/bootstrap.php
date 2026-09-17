@@ -35,6 +35,7 @@ if ( file_exists( CSF_PARTS_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
 }
 
 // Load plugin files.
+require_once CSF_PARTS_PLUGIN_DIR . 'includes/helpers.php';
 require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-constants.php';
 require_once CSF_PARTS_PLUGIN_DIR . 'includes/import-sources/interface-import-source-strategy.php';
 require_once CSF_PARTS_PLUGIN_DIR . 'includes/import-sources/class-url-import-source.php';
@@ -49,6 +50,14 @@ require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-rest-api.php';
 require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-json-importer.php';
 require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-ajax-handler.php';
 require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-shortcodes.php';
+
+// Minimal $wpdb stand-in so classes that read table prefixes in their
+// constructors can be instantiated. Tests that query replace it with a mock.
+global $wpdb;
+if ( ! isset( $wpdb ) ) {
+	$wpdb = new stdClass();
+	$wpdb->prefix = 'wp_';
+}
 
 // Mock WordPress functions for testing.
 // Note: Common functions like get_option(), __(), _x() are NOT defined here

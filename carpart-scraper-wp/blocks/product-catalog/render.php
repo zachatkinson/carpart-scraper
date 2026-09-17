@@ -313,11 +313,11 @@ $get_shadow_css = function( $shadow_type ) {
 $get_color_scheme_css = function( $scheme ) {
 	switch ( $scheme ) {
 		case 'light':
-			return 'background: #ffffff; color: #1a202c;';
+			return 'background: var(--csf-surface); color: var(--csf-text);';
 		case 'dark':
-			return 'background: #2d3748; color: #f7fafc;';
+			return 'background: var(--csf-inverse-bg); color: var(--csf-inverse-text);';
 		case 'brand':
-			return 'background: var(--global-palette2, #0099CC); color: var(--global-palette3, #0A0A0A);';
+			return 'background: var(--csf-primary); color: var(--csf-on-primary);';
 		case 'default':
 		default:
 			return '';
@@ -413,11 +413,11 @@ $comprehensive_css = sprintf(
 	// 17. Aspect ratio
 	'auto' === $image_aspect_ratio ? '' : 'aspect-ratio: ' . esc_attr( $image_aspect_ratio ) . ';',
 	// 18. Hover - Lift
-	'lift' === $hover_effect ? '#' . esc_attr( $block_id ) . ' .csf-grid-item:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15); }' : '',
+	'lift' === $hover_effect ? '#' . esc_attr( $block_id ) . ' .csf-grid-item:hover { transform: translateY(-4px); box-shadow: var(--csf-shadow-lg); }' : '',
 	// 19. Hover - Zoom
 	'zoom' === $hover_effect ? '#' . esc_attr( $block_id ) . ' .csf-grid-item:hover img { transform: scale(1.05); } #' . esc_attr( $block_id ) . ' .csf-item-image { overflow: hidden; }' : '',
 	// 20. Hover - Shadow
-	'shadow' === $hover_effect ? '#' . esc_attr( $block_id ) . ' .csf-grid-item:hover { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }' : '',
+	'shadow' === $hover_effect ? '#' . esc_attr( $block_id ) . ' .csf-grid-item:hover { box-shadow: var(--csf-shadow-xl); }' : '',
 	// 21. Scroll animation
 	'none' !== $scroll_animation ? '#' . esc_attr( $block_id ) . ' .csf-grid-item { opacity: 0; animation: csf-' . esc_attr( $scroll_animation ) . ' 0.6s ease forwards; } @keyframes csf-fade { from { opacity: 0; } to { opacity: 1; } } @keyframes csf-slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } } @keyframes csf-slideLeft { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }' : '',
 	// 22-23. Tablet grid
@@ -444,30 +444,6 @@ if ( $hide_on_mobile ) {
 	);
 }
 
-// Pagination hover styles.
-$comprehensive_css .= sprintf(
-	'
-	/* Pagination button base styles with transition */
-	#%1$s .csf-pagination-btn {
-		transition: all 0.3s ease;
-	}
-
-	/* Pagination hover - all buttons except current page */
-	#%1$s .csf-pagination-btn:not(.csf-pagination-current):hover {
-		background: var(--global-palette10, #E7E5E4) !important;
-		color: var(--global-palette9, #FAFAF9) !important;
-	}
-
-	/* Current page - no background change on hover, just add subtle shadow */
-	#%1$s .csf-pagination-current:hover {
-		background: transparent !important;
-		color: var(--global-palette1, #C41C10) !important;
-		border-color: var(--global-palette1, #C41C10) !important;
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-	}
-	',
-	esc_attr( $block_id )
-);
 
 // Output CSS.
 echo '<style>' . $comprehensive_css . '</style>';
@@ -588,7 +564,7 @@ $wrapper_attributes = get_block_wrapper_attributes(
 	<div class="csf-catalog-results">
 		<?php if ( ! empty( $parts ) ) : ?>
 			<?php if ( $show_results_count ) : ?>
-				<div class="csf-results-header" style="margin-bottom: 16px;">
+				<div class="csf-results-header">
 					<h3 class="csf-results-header__title">
 						<?php
 						echo esc_html(
@@ -685,12 +661,12 @@ $wrapper_attributes = get_block_wrapper_attributes(
 				<?php endforeach; ?>
 			</div>
 		<?php elseif ( $show_filters && ( $selected_year || $selected_make || $selected_model || $selected_category ) ) : ?>
-			<div class="csf-no-results" style="padding: 24px; text-align: center; background: #f9f9f9; border-radius: 4px;">
-				<p style="margin: 0;"><?php esc_html_e( 'No parts found matching your selection. Please try different filters.', 'csf-parts' ); ?></p>
+			<div class="csf-no-results">
+				<p class="csf-no-results__text"><?php esc_html_e( 'No parts found matching your selection. Please try different filters.', 'csf-parts' ); ?></p>
 			</div>
 		<?php else : ?>
-			<div class="csf-placeholder" style="padding: 48px 24px; text-align: center; background: #f9f9f9; border-radius: 4px;">
-				<p style="margin: 0; font-size: 16px; color: #757575;">
+			<div class="csf-placeholder">
+				<p class="csf-placeholder__text">
 					<?php
 					if ( $show_filters ) {
 						esc_html_e( 'Select filters to find parts.', 'csf-parts' );
@@ -727,12 +703,11 @@ $wrapper_attributes = get_block_wrapper_attributes(
 
 			<?php if ( 'numbered' === $pagination_type ) : ?>
 				<!-- Numbered Pagination -->
-				<div class="csf-pagination" style="margin-top: 32px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
+				<div class="csf-pagination">
 					<?php if ( $current_page > 1 ) : ?>
 						<a
 							href="<?php echo esc_url( $get_page_url( $current_page - 1 ) ); ?>"
 							class="csf-pagination-btn csf-pagination-prev"
-							style="padding: 8px 16px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease;"
 						>
 							<?php esc_html_e( '← Previous', 'csf-parts' ); ?>
 						</a>
@@ -750,12 +725,11 @@ $wrapper_attributes = get_block_wrapper_attributes(
 						<a
 							href="<?php echo esc_url( $get_page_url( 1 ) ); ?>"
 							class="csf-pagination-btn"
-							style="padding: 8px 12px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease;"
 						>
 							1
 						</a>
 						<?php if ( $start > 2 ) : ?>
-							<span style="padding: 8px 4px; color: var(--global-palette3, #5A5A5A);">...</span>
+							<span class="csf-pagination-ellipsis">...</span>
 						<?php endif; ?>
 					<?php endif; ?>
 
@@ -763,7 +737,6 @@ $wrapper_attributes = get_block_wrapper_attributes(
 						<?php if ( $i === $current_page ) : ?>
 							<span
 								class="csf-pagination-btn csf-pagination-current"
-								style="padding: 8px 12px; background: transparent; color: var(--global-palette2, #0099CC); border: 2px solid var(--global-palette2, #0099CC); border-radius: 4px; font-size: 14px; font-weight: 600; transition: all 0.3s ease;"
 							>
 								<?php echo esc_html( $i ); ?>
 							</span>
@@ -771,7 +744,6 @@ $wrapper_attributes = get_block_wrapper_attributes(
 							<a
 								href="<?php echo esc_url( $get_page_url( $i ) ); ?>"
 								class="csf-pagination-btn"
-								style="padding: 8px 12px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease;"
 							>
 								<?php echo esc_html( $i ); ?>
 							</a>
@@ -783,12 +755,11 @@ $wrapper_attributes = get_block_wrapper_attributes(
 					if ( $end < $total_pages ) :
 						?>
 						<?php if ( $end < $total_pages - 1 ) : ?>
-							<span style="padding: 8px 4px; color: var(--global-palette3, #5A5A5A);">...</span>
+							<span class="csf-pagination-ellipsis">...</span>
 						<?php endif; ?>
 						<a
 							href="<?php echo esc_url( $get_page_url( $total_pages ) ); ?>"
 							class="csf-pagination-btn"
-							style="padding: 8px 12px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease;"
 						>
 							<?php echo esc_html( $total_pages ); ?>
 						</a>
@@ -798,7 +769,6 @@ $wrapper_attributes = get_block_wrapper_attributes(
 						<a
 							href="<?php echo esc_url( $get_page_url( $current_page + 1 ) ); ?>"
 							class="csf-pagination-btn csf-pagination-next"
-							style="padding: 8px 16px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease;"
 						>
 							<?php esc_html_e( 'Next →', 'csf-parts' ); ?>
 						</a>
@@ -808,13 +778,12 @@ $wrapper_attributes = get_block_wrapper_attributes(
 			<?php elseif ( 'loadmore' === $pagination_type ) : ?>
 				<!-- Load More Button -->
 				<?php if ( $current_page < $total_pages ) : ?>
-					<div class="csf-pagination csf-load-more" style="margin-top: 32px; text-align: center;">
+					<div class="csf-pagination csf-load-more">
 						<button
 							class="csf-load-more-btn"
 							data-block-id="<?php echo esc_attr( $block_id ); ?>"
 							data-next-page="<?php echo esc_attr( $current_page + 1 ); ?>"
 							data-total-pages="<?php echo esc_attr( $total_pages ); ?>"
-							class="csf-search-box__button"
 						>
 							<?php
 							echo esc_html(
@@ -837,9 +806,8 @@ $wrapper_attributes = get_block_wrapper_attributes(
 						data-block-id="<?php echo esc_attr( $block_id ); ?>"
 						data-next-page="<?php echo esc_attr( $current_page + 1 ); ?>"
 						data-total-pages="<?php echo esc_attr( $total_pages ); ?>"
-						style="margin-top: 32px; text-align: center; padding: 24px;"
 					>
-						<span class="csf-loading-indicator" style="display: none; color: #757575;">
+						<span class="csf-loading-indicator">
 							<?php esc_html_e( 'Loading more parts...', 'csf-parts' ); ?>
 						</span>
 					</div>

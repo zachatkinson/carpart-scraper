@@ -112,7 +112,7 @@ if ( ! $is_block_theme ) {
 					<p class="csf-category">
 						<strong>Category:</strong> <?php echo esc_html( $part->category ); ?>
 						<?php if ( ! empty( $part->discontinued ) && 1 === (int) $part->discontinued ) : ?>
-							<span class="csf-badge csf-discontinued-badge" style="display: inline-block; margin-left: 8px; padding: 6px 14px; background: transparent; color: var(--global-palette1, #C41C10); border: 2px solid var(--global-palette1, #C41C10); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-radius: 20px;">DISCONTINUED</span>
+							<span class="csf-badge csf-discontinued-badge" style="display: inline-block; margin-left: 8px; padding: 6px 14px; background: transparent; color: var(--csf-primary); border: 2px solid var(--csf-primary); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-radius: 20px;">DISCONTINUED</span>
 						<?php endif; ?>
 					</p>
 				<?php endif; ?>

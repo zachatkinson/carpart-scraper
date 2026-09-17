@@ -325,14 +325,10 @@
 	 */
 	function buildPaginationHTML(currentPage, totalPages) {
 		var html = '';
-		var btnStyle = 'padding: 8px 12px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease; cursor: pointer; border: none;';
-		var navBtnStyle = 'padding: 8px 16px; background: var(--global-palette2, #0099CC); color: var(--global-palette9, #FAFAF9); text-decoration: none; border-radius: 4px; font-size: 14px; transition: all 0.3s ease; cursor: pointer; border: none;';
-		var currentStyle = 'padding: 8px 12px; background: transparent; color: var(--global-palette2, #0099CC); border: 2px solid var(--global-palette2, #0099CC); border-radius: 4px; font-size: 14px; font-weight: 600; transition: all 0.3s ease;';
-		var ellipsisStyle = 'padding: 8px 4px; color: var(--global-palette3, #5A5A5A);';
 
 		// Previous button.
 		if (currentPage > 1) {
-			html += '<button type="button" class="csf-pagination-btn csf-pagination-prev" data-page="' + (currentPage - 1) + '" style="' + navBtnStyle + '">';
+			html += '<button type="button" class="csf-pagination-btn csf-pagination-prev" data-page="' + (currentPage - 1) + '">';
 			html += '\u2190 Previous';
 			html += '</button>';
 		}
@@ -344,32 +340,32 @@
 
 		// First page + leading ellipsis.
 		if (start > 1) {
-			html += '<button type="button" class="csf-pagination-btn" data-page="1" style="' + btnStyle + '">1</button>';
+			html += '<button type="button" class="csf-pagination-btn" data-page="1">1</button>';
 			if (start > 2) {
-				html += '<span style="' + ellipsisStyle + '">...</span>';
+				html += '<span class="csf-pagination-ellipsis">...</span>';
 			}
 		}
 
 		// Page number buttons.
 		for (var i = start; i <= end; i++) {
 			if (i === currentPage) {
-				html += '<span class="csf-pagination-btn csf-pagination-current" style="' + currentStyle + '">' + i + '</span>';
+				html += '<span class="csf-pagination-btn csf-pagination-current">' + i + '</span>';
 			} else {
-				html += '<button type="button" class="csf-pagination-btn" data-page="' + i + '" style="' + btnStyle + '">' + i + '</button>';
+				html += '<button type="button" class="csf-pagination-btn" data-page="' + i + '">' + i + '</button>';
 			}
 		}
 
 		// Trailing ellipsis + last page.
 		if (end < totalPages) {
 			if (end < totalPages - 1) {
-				html += '<span style="' + ellipsisStyle + '">...</span>';
+				html += '<span class="csf-pagination-ellipsis">...</span>';
 			}
-			html += '<button type="button" class="csf-pagination-btn" data-page="' + totalPages + '" style="' + btnStyle + '">' + totalPages + '</button>';
+			html += '<button type="button" class="csf-pagination-btn" data-page="' + totalPages + '">' + totalPages + '</button>';
 		}
 
 		// Next button.
 		if (currentPage < totalPages) {
-			html += '<button type="button" class="csf-pagination-btn csf-pagination-next" data-page="' + (currentPage + 1) + '" style="' + navBtnStyle + '">';
+			html += '<button type="button" class="csf-pagination-btn csf-pagination-next" data-page="' + (currentPage + 1) + '">';
 			html += 'Next \u2192';
 			html += '</button>';
 		}

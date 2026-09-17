@@ -71,6 +71,16 @@ class CSF_Parts_Admin_Menu {
 			array( $this, 'render_settings_page' )
 		);
 
+		// Design page.
+		add_submenu_page(
+			'csf-parts',
+			'Design',
+			'Design',
+			'manage_options',
+			'csf-parts-design',
+			array( $this, 'render_design_page' )
+		);
+
 		// Import log page (hidden from menu).
 		add_submenu_page(
 			'',
@@ -93,6 +103,19 @@ class CSF_Parts_Admin_Menu {
 		}
 
 		require_once CSF_PARTS_PLUGIN_DIR . 'admin/views/parts-list-page.php';
+	}
+
+	/**
+	 * Render design page.
+	 *
+	 * @since 1.9.0
+	 */
+	public function render_design_page(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html( 'You do not have permission to access this page.' ) );
+		}
+
+		require_once CSF_PARTS_PLUGIN_DIR . 'admin/views/design-page.php';
 	}
 
 	/**

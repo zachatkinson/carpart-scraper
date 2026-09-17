@@ -87,6 +87,7 @@ class CSF_Parts_Plugin {
 
 		// Load separated responsibility classes (SOLID refactoring).
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-customizer.php';
+		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-design.php';
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-assets.php';
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-block-manager.php';
 
@@ -116,8 +117,11 @@ class CSF_Parts_Plugin {
 		$this->components['customizer'] = new CSF_Parts_Customizer();
 		$this->components['customizer']->init();
 
+		// Design tokens (presets + overrides).
+		$this->components['design'] = new CSF_Parts_Design();
+
 		// Asset management (separated from main class).
-		$this->components['assets'] = new CSF_Parts_Assets( $this->components['customizer'] );
+		$this->components['assets'] = new CSF_Parts_Assets( $this->components['customizer'], $this->components['design'] );
 		$this->components['assets']->init();
 
 		// Block management (separated from main class).

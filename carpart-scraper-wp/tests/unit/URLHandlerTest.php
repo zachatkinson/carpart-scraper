@@ -16,6 +16,17 @@ use Brain\Monkey\Filters;
 use Mockery\MockInterface;
 
 /**
+ * URL handler whose request termination throws instead of exiting.
+ *
+ * Named (not anonymous) because Brain Monkey validates hook callback class names.
+ */
+final class Testable_URL_Handler extends CSF_Parts_URL_Handler {
+	protected function exit_request(): void {
+		throw new RuntimeException( 'exit' );
+	}
+}
+
+/**
  * Class URLHandlerTest
  *
  * Tests virtual URL routing and dynamic page generation following AAA pattern.
@@ -65,13 +76,13 @@ final class URLHandlerTest extends TestCase {
 		// Create mock database.
 		$this->database_mock = Mockery::mock( 'CSF_Parts_Database' );
 
-		// Create URL handler instance.
-		$this->url_handler = new CSF_Parts_URL_Handler();
+		// Create URL handler instance. Subclass turns exit() into an exception
+		// so a rendered page ends the test instead of the PHP process.
+		$this->url_handler = new Testable_URL_Handler();
 
 		// Inject mock database via reflection.
-		$reflection      = new ReflectionClass( $this->url_handler );
+		$reflection      = new ReflectionClass( CSF_Parts_URL_Handler::class ); // Private property lives on the parent.
 		$database_property = $reflection->getProperty( 'database' );
-		$database_property->setAccessible( true );
 		$database_property->setValue( $this->url_handler, $this->database_mock );
 	}
 
@@ -97,7 +108,7 @@ final class URLHandlerTest extends TestCase {
 	/**
 	 * Test: register_rewrite_rules registers vehicle-specific URL pattern.
 	 *
-	 * Verifies vehicle-specific pattern: /parts/{year}-{make}-{model}-{category}-{sku}
+	 * Verifies vehicle-specific pattern: /parts/{year}-{make}-{model}-csf{sku}
 	 */
 	public function test_register_rewrite_rules_registers_vehicle_specific_pattern(): void {
 		// Arrange.
@@ -105,7 +116,7 @@ final class URLHandlerTest extends TestCase {
 		Functions\when( 'add_rewrite_rule' )
 			->alias(
 				function ( $pattern, $query, $priority ) use ( &$call_count ) {
-					if ( $pattern === '^parts/([0-9]{4})-([^/-]+)-([^/-]+)-([^/-]+)-(.+)/?$' ) {
+					if ( $pattern === '^parts/([0-9]{4})-([^/-]+)-([^/-]+)-(csf[^/]+)/?$' ) {
 						$call_count++;
 					}
 				}
@@ -138,8 +149,8 @@ final class URLHandlerTest extends TestCase {
 
 		// Assert.
 		$this->assertCount( 4, $registered_patterns, 'Should register 4 rewrite rules' );
-		$this->assertContains( '^parts/([0-9]{4})-([^/-]+)-([^/-]+)-([^/-]+)-(.+)/?$', $registered_patterns, 'Vehicle-specific pattern' );
-		$this->assertContains( '^parts/([^-]+)-(.+)/?$', $registered_patterns, 'Canonical pattern' );
+		$this->assertContains( '^parts/([0-9]{4})-([^/-]+)-([^/-]+)-(csf[^/]+)/?$', $registered_patterns, 'Vehicle-specific pattern' );
+		$this->assertContains( '^parts/(csf[^/]+)/?$', $registered_patterns, 'Canonical pattern' );
 		$this->assertContains( '^parts/category/([^/]+)/?$', $registered_patterns, 'Category archive pattern' );
 		$this->assertContains( '^parts/search/([^/]+)/?$', $registered_patterns, 'Search pattern' );
 	}
@@ -219,7 +230,7 @@ final class URLHandlerTest extends TestCase {
 						return '1';
 					}
 					if ( $var === 'csf_sku' ) {
-						return 'CSF-3000';
+						return 'csf3000'; // URL slug form; handler rebuilds CSF-3000.
 					}
 					return '';
 				}

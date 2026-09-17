@@ -120,6 +120,12 @@ final class CSF_Parts_Constants {
 	);
 
 	/**
+	 * Design settings (preset + per-token overrides). See CSF_Parts_Design.
+	 */
+	public const OPTION_DESIGN         = 'csf_parts_design';
+	public const DESIGN_PRESET_DEFAULT = 'kadence';
+
+	/**
 	 * HTTP status codes.
 	 */
 	public const HTTP_OK                     = 200;

@@ -13,6 +13,12 @@
 			<directory>unit</directory>
 		</testsuite>
 	</testsuites>
+	<source>
+		<include>
+			<directory suffix=".php">../includes</directory>
+			<directory suffix=".php">../admin</directory>
+		</include>
+	</source>
 	<coverage>
 		<report>
 			<html outputDirectory="coverage/html"/>

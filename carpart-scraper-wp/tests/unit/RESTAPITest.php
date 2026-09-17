@@ -71,7 +71,6 @@ final class RESTAPITest extends TestCase {
 		// Inject mock database via reflection.
 		$reflection        = new ReflectionClass( $this->rest_api );
 		$database_property = $reflection->getProperty( 'database' );
-		$database_property->setAccessible( true );
 		$database_property->setValue( $this->rest_api, $this->database_mock );
 	}
 

@@ -1,93 +1,100 @@
 /**
- * CSF Parts Catalog - Color System
+ * CSF Parts Catalog - Color System (design tokens)
  *
- * Hybrid approach: Integrates with Kadence theme when available,
- * falls back to standalone WCAG AA compliant colors.
- * All fallback colors tested for minimum 4.5:1 contrast for text, 3:1 for large text.
+ * Every visual decision in the plugin's component CSS goes through a --csf-*
+ * token defined here. Component stylesheets NEVER reference --global-palette*
+ * directly; the inheritance from the Kadence Global Palette happens once, in
+ * this file, so a token can be overridden in one place.
+ *
+ * Precedence (later wins):
+ *   1. this file                          plugin defaults, inheriting Kadence slots
+ *   2. csf-color-system-dark.css          dark values (enqueued per Color Scheme setting)
+ *   3. Design settings inline CSS         CSF Parts → Design (preset + overrides)
+ *   4. block-level attributes             per-instance CSS from render.php
+ *
+ * Kadence slot semantics (Kadence's own layout, NOT a custom mapping):
+ *   1 accent, 2 accent hover/secondary, 3–6 text darkest→lightest,
+ *   7–9 backgrounds darkest→lightest. Slots ≥10 are site-specific and are
+ *   never inherited. Status colours (success/error) are plugin-owned because
+ *   Kadence has no slot for them.
+ *
+ * Full token reference: docs/DESIGN-TOKENS.md
  *
  * @package CSF_Parts_Catalog
  * @since   2.0.0
  */
 
-/**
- * Kadence Global Palette Integration
- *
- * This plugin uses Kadence's --global-palette* variables DIRECTLY with fallback values
- * for backward compatibility when Kadence theme is not active.
- *
- * Kadence Palette Structure — follow Kadence's own slot semantics, NOT a custom
- * mapping. Sites keep Kadence's default layout, where 3–6 are text shades and
- * 7–9 are backgrounds, so borrowing a text slot as a background renders dark
- * boxes on light sites (this bit us: palette5 is slate #4A5568 by default).
- *   --global-palette1: Accent / primary
- *   --global-palette2: Accent / secondary
- *   --global-palette3: Text (darkest)
- *   --global-palette4: Text secondary
- *   --global-palette5: Text muted — never use as a background
- *   --global-palette6: Lightest text shade (plugin uses it for success)
- *   --global-palette7: Background alt / subtle borders (use for --csf-bg-alt)
- *   --global-palette8: Light background (plugin uses it for error text)
- *   --global-palette9: Surface / lightest background (cards, on-accent text)
- *
- * Dark Mode: Kadence automatically updates --global-palette* values when
- * body.color-switch-dark is toggled. No manual overrides needed!
- *
- * Usage in CSS:
- *   background: var(--global-palette4, #FAFAF9);  ← Kadence bg or fallback
- *   color: var(--global-palette3, #0A0A0A);       ← Kadence text or fallback
- */
-
 :root {
-	/* ===== Semantic Color Tokens ===== */
-	/* Light mode defaults — dark values live in csf-color-system-dark.css, which is
-	   enqueued according to the "Color scheme" setting (Settings → Appearance).
-	   When Kadence theme is active, --global-palette* vars take precedence via
-	   the var(--global-palette*, var(--csf-*)) pattern used in component CSS. */
+	/* ===== Text ===== */
+	--csf-text: var(--global-palette3, #0A0A0A);
+	--csf-text-secondary: var(--global-palette4, #2D2D2D);
+	--csf-text-muted: var(--global-palette5, #5A5A5A);
+	--csf-text-light: var(--csf-text-muted); /* alias kept for older templates */
 
-	/* Text */
-	--csf-text: #0A0A0A;
-	--csf-text-muted: #5A5A5A;
-	--csf-text-secondary: #2D2D2D;
+	/* ===== Backgrounds ===== */
+	--csf-bg: var(--global-palette8, #FAFAF9);
+	--csf-bg-alt: var(--global-palette7, #F5F5F4);
+	--csf-surface: var(--global-palette9, #FFFFFF);
 
-	/* Backgrounds */
-	--csf-bg: #FAFAF9;
-	--csf-bg-alt: #F5F5F4;
-	--csf-surface: #ffffff;
+	/* Inverse panel: a dark surface used on a light page (and vice versa). */
+	--csf-inverse-bg: #2D3748;
+	--csf-inverse-text: #FCFCFC;
+	--csf-inverse-text-muted: #A0AEC0;
 
-	/* Borders */
+	/* ===== Borders ===== */
 	--csf-border: #E7E5E4;
 	--csf-border-hover: #D6D3D1;
 
-	/* Brand */
-	--csf-primary: #C41C10;
-	--csf-primary-hover: #9E1609;
-	--csf-secondary: #0099CC;
-	--csf-accent: #E89547;
+	/* ===== Brand ===== */
+	--csf-primary: var(--global-palette1, #C41C10);
+	--csf-primary-hover: color-mix(in srgb, var(--csf-primary) 82%, #000);
+	--csf-secondary: var(--global-palette2, #0099CC);
+	--csf-secondary-hover: color-mix(in srgb, var(--csf-secondary) 82%, #000);
+	--csf-accent: #D97706;
 
-	/* Status */
+	/* Text placed ON a brand-coloured background. */
+	--csf-on-primary: #FFFFFF;
+	--csf-on-secondary: #FFFFFF;
+	--csf-on-accent: #1A202C;
+
+	/* ===== Status ===== */
 	--csf-success: #059669;
+	--csf-warning: #D97706;
 	--csf-error: #C41C10;
 
-	/* Interactive */
-	--csf-focus-ring: rgba(0, 153, 204, 0.2);
+	/* ===== Interactive ===== */
+	--csf-focus-ring: color-mix(in srgb, var(--csf-secondary) 25%, transparent);
 	--csf-overlay-bg: rgba(255, 255, 255, 0.9);
-	--csf-glow-color: rgba(0, 153, 204, 0.3);
-	--csf-glow-color-strong: rgba(0, 153, 204, 0.6);
+	--csf-glow-color: color-mix(in srgb, var(--csf-secondary) 30%, transparent);
+	--csf-glow-color-strong: color-mix(in srgb, var(--csf-secondary) 60%, transparent);
 
-	/* ===== Layout & Spacing ===== */
-	/* Border radius */
+	/* ===== Radius =====
+	   Scale (edit these in Design settings) ... */
 	--csf-radius-sm: 4px;
 	--csf-radius-md: 8px;
-	--csf-radius-lg: 12px;
+	--csf-radius-lg: 16px;
+	--csf-radius-pill: 9999px;
+	/* ... and roles (what component CSS actually uses). A nested element uses
+	   the media role, which is the card radius minus its inset so the inner and
+	   outer curves stay concentric. */
+	--csf-radius-control: var(--csf-radius-sm);   /* buttons, inputs, selects, small notices */
+	--csf-radius-card: var(--csf-radius-lg);      /* cards, panels, gallery, sections */
+	--csf-radius-media: max(var(--csf-radius-sm), calc(var(--csf-radius-card) - 8px)); /* px, not rem: themes change the root font size */ /* thumbnails, images inside cards */
+	--csf-radius-badge: var(--csf-radius-pill);   /* year / category / status pills */
+	--csf-radius: var(--csf-radius-card);         /* alias kept for older rules */
 
-	/* Spacing scale (rem-based for accessibility) */
+	/* ===== Spacing (rem-based for accessibility) ===== */
 	--csf-spacing-xs: 0.5rem;   /* 8px */
 	--csf-spacing-sm: 0.75rem;  /* 12px */
 	--csf-spacing-md: 1rem;     /* 16px */
 	--csf-spacing-lg: 1.5rem;   /* 24px */
 	--csf-spacing-xl: 2rem;     /* 32px */
 
-	/* Transitions */
+	/* ===== Typography ===== */
+	--csf-font-heading: var(--global-heading-font-family, inherit);
+	--csf-font-body: var(--global-body-font-family, inherit);
+
+	/* ===== Motion ===== */
 	--csf-transition: all 0.2s ease-in-out;
 	--csf-transition-fast: all 0.1s ease-in-out;
 	--csf-transition-slow: all 0.3s ease-in-out;

@@ -32,7 +32,7 @@
 	max-width: 1200px;
 	margin: 0 auto;
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-	color: var(--global-palette3, var(--csf-text));
+	color: var(--csf-text);
 	line-height: 1.6;
 }
 
@@ -54,15 +54,15 @@
 	width: 100%;
 	padding: var(--csf-spacing-md) var(--csf-spacing-md) var(--csf-spacing-md) 3rem;
 	border: 2px solid var(--csf-border);
-	border-radius: var(--csf-radius-md);
+	border-radius: var(--csf-radius-control);
 	font-size: 1rem;
 	transition: var(--csf-transition);
-	background: var(--global-palette9, var(--csf-surface));
+	background: var(--csf-surface);
 }
 
 .csf-search__input:focus {
 	outline: none;
-	border-color: var(--global-palette2, var(--csf-secondary));
+	border-color: var(--csf-secondary);
 	box-shadow: 0 0 0 3px var(--csf-focus-ring);
 }
 
@@ -71,7 +71,7 @@
 	left: var(--csf-spacing-md);
 	top: 50%;
 	transform: translateY(-50%);
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 	pointer-events: none;
 }
 
@@ -89,30 +89,30 @@
 	padding: var(--csf-spacing-sm) var(--csf-spacing-md);
 	border: 1px solid var(--csf-border);
 	border-radius: var(--csf-radius-sm);
-	background: var(--global-palette9, var(--csf-surface));
+	background: var(--csf-surface);
 	font-size: 0.875rem;
 	transition: var(--csf-transition);
 }
 
 .csf-search__filter:focus {
 	outline: none;
-	border-color: var(--global-palette2, var(--csf-secondary));
+	border-color: var(--csf-secondary);
 	box-shadow: 0 0 0 3px var(--csf-focus-ring);
 }
 
 .csf-search__filter:disabled {
-	background: var(--global-palette7, var(--csf-bg-alt));
+	background: var(--csf-bg-alt);
 	cursor: not-allowed !important;
 	opacity: 0.5;
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 }
 
 .csf-search__clear-filters {
 	padding: var(--csf-spacing-sm) var(--csf-spacing-md);
 	border: 1px solid var(--csf-border);
 	border-radius: var(--csf-radius-sm);
-	background: var(--global-palette9, var(--csf-surface));
-	color: var(--global-palette3, var(--csf-text));
+	background: var(--csf-surface);
+	color: var(--csf-text);
 	font-size: 0.875rem;
 	cursor: pointer;
 	transition: var(--csf-transition);
@@ -120,14 +120,14 @@
 }
 
 .csf-search__clear-filters:hover:not(:disabled) {
-	background: var(--global-palette7, var(--csf-bg-alt));
+	background: var(--csf-bg-alt);
 	border-color: var(--csf-border-hover);
 }
 
 .csf-search__clear-filters:disabled {
 	opacity: 0.5;
 	cursor: not-allowed !important;
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 }
 
 /* ==========================================================================
@@ -147,7 +147,7 @@
 .csf-search__results-count {
 	margin: 0;
 	font-size: 0.875rem;
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 }
 
 /* ==========================================================================
@@ -161,14 +161,14 @@
 	justify-content: center;
 	padding: var(--csf-spacing-xl);
 	text-align: center;
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 }
 
 .csf-search__spinner {
 	width: 48px;
 	height: 48px;
 	border: 4px solid var(--csf-border);
-	border-top-color: var(--global-palette1, var(--csf-primary));
+	border-top-color: var(--csf-primary);
 	border-radius: 50%;
 	animation: csf-spin 0.8s linear infinite;
 	margin-bottom: var(--csf-spacing-md);
@@ -203,7 +203,7 @@
 	justify-content: center;
 	padding: var(--csf-spacing-xl);
 	text-align: center;
-	color: var(--global-palette8, var(--csf-error));
+	color: var(--csf-error);
 }
 
 .csf-search__error svg {
@@ -217,14 +217,14 @@
 
 .csf-search__error p {
 	margin: 0 0 var(--csf-spacing-md);
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 }
 
 .csf-search__retry {
 	padding: var(--csf-spacing-sm) var(--csf-spacing-lg);
 	border: none;
 	border-radius: var(--csf-radius-sm);
-	background: var(--global-palette1, var(--csf-primary));
+	background: var(--csf-primary);
 	color: white;
 	font-size: 0.875rem;
 	cursor: pointer;
@@ -246,7 +246,7 @@
 	justify-content: center;
 	padding: var(--csf-spacing-xl);
 	text-align: center;
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 }
 
 .csf-search__empty svg {
@@ -256,7 +256,7 @@
 .csf-search__empty h3 {
 	margin: 0 0 var(--csf-spacing-sm);
 	font-size: 1.25rem;
-	color: var(--global-palette3, var(--csf-text));
+	color: var(--csf-text);
 }
 
 .csf-search__empty p {
@@ -279,9 +279,9 @@
    ========================================================================== */
 
 .csf-part-card {
-	background: var(--global-palette9, var(--csf-surface));
+	background: var(--csf-surface);
 	border: 1px solid var(--csf-border);
-	border-radius: var(--csf-radius-md);
+	border-radius: var(--csf-radius-card);
 	overflow: hidden;
 	transition: var(--csf-transition);
 	height: 100%;
@@ -329,7 +329,7 @@
 }
 
 .csf-part-card__link:focus {
-	outline: 2px solid var(--global-palette1, var(--csf-primary));
+	outline: 2px solid var(--csf-primary);
 	outline-offset: 2px;
 }
 
@@ -338,7 +338,7 @@
 	position: relative;
 	width: 100%;
 	aspect-ratio: 4 / 3;
-	background: var(--global-palette7, var(--csf-bg-alt));
+	background: var(--csf-bg-alt);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -379,8 +379,8 @@
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
 	font-weight: 600;
-	border-radius: 12px;
-	background-color: var(--global-palette2, var(--csf-secondary));
+	border-radius: var(--csf-radius-md);
+	background-color: var(--csf-secondary);
 	color: #ffffff;
 	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -396,13 +396,13 @@
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 }
 
 .csf-dimensions-section__value {
 	margin: 0;
 	font-size: 0.8125rem;
-	color: var(--global-palette3, var(--csf-text-secondary));
+	color: var(--csf-text-secondary);
 	line-height: 1.5;
 }
 
@@ -423,7 +423,7 @@
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 }
 
 /* Make Badges */
@@ -438,8 +438,8 @@
 	padding: 0.15rem 0.5rem;
 	font-size: 0.75rem;
 	font-weight: 500;
-	border-radius: 20px;
-	background-color: var(--global-palette10, #8F8F8F);
+	border-radius: var(--csf-radius-badge);
+	background-color: var(--csf-text-muted);
 	color: #FCFCFC;
 	border: none;
 	text-transform: uppercase;
@@ -455,7 +455,7 @@
 	font-size: 1rem;
 	font-weight: 600;
 	line-height: 1.4;
-	color: var(--global-palette3, var(--csf-text));
+	color: var(--csf-text);
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
@@ -465,14 +465,14 @@
 .csf-part-card__sku {
 	margin: 0 0 var(--csf-spacing-xs);
 	font-size: 0.875rem;
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 	font-family: "Courier New", monospace;
 }
 
 .csf-part-card__manufacturer {
 	margin: 0 0 auto;
 	font-size: 0.875rem;
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 }
 
 /* Card Footer */
@@ -488,7 +488,7 @@
 .csf-part-card__price {
 	font-size: 1.125rem;
 	font-weight: 700;
-	color: var(--global-palette1, var(--csf-primary));
+	color: var(--csf-primary);
 }
 
 .csf-part-card__stock {
@@ -502,12 +502,12 @@
 
 .csf-part-card__stock--in-stock {
 	background: rgba(70, 180, 80, 0.1);
-	color: var(--global-palette6, var(--csf-success));
+	color: var(--csf-success);
 }
 
 .csf-part-card__stock--out-of-stock {
 	background: rgba(220, 50, 50, 0.1);
-	color: var(--global-palette8, var(--csf-error));
+	color: var(--csf-error);
 }
 
 /* ==========================================================================
@@ -529,18 +529,18 @@
 	height: 40px;
 	padding: var(--csf-spacing-sm);
 	border: 1px solid var(--csf-border);
-	border-radius: 20px;
-	background: var(--global-palette9, var(--csf-surface));
-	color: var(--global-palette3, var(--csf-text));
+	border-radius: var(--csf-radius-badge);
+	background: var(--csf-surface);
+	color: var(--csf-text);
 	font-size: 0.875rem;
 	cursor: pointer;
 	transition: var(--csf-transition);
 }
 
 .csf-pagination__button:hover:not(:disabled):not(.csf-pagination__button--active) {
-	background: var(--global-palette7, var(--csf-bg-alt));
-	border-color: var(--global-palette1, var(--csf-primary));
-	color: var(--global-palette1, var(--csf-primary));
+	background: var(--csf-bg-alt);
+	border-color: var(--csf-primary);
+	color: var(--csf-primary);
 }
 
 .csf-pagination__button:disabled {
@@ -549,15 +549,15 @@
 }
 
 .csf-pagination__button--active {
-	background: var(--global-palette1, var(--csf-primary));
+	background: var(--csf-primary);
 	color: #FCFCFC;
-	border-color: var(--global-palette1, var(--csf-primary));
+	border-color: var(--csf-primary);
 	font-weight: 600;
 }
 
 .csf-pagination__ellipsis {
 	padding: var(--csf-spacing-sm);
-	color: var(--global-palette3, var(--csf-text-muted));
+	color: var(--csf-text-muted);
 }
 
 /* ==========================================================================
@@ -634,7 +634,7 @@
 
 /* Dark mode is handled in csf-color-system.css via two mechanisms:
    1. --csf-* token overrides on :root (standalone fallback)
-   2. --global-palette* scoped overrides on plugin containers (Kadence integration) */
+   2. --csf-* tokens inherit Kadence palette slots in csf-color-system.css */
 
 /* ==========================================================================
    Interchange Numbers Table
@@ -645,32 +645,32 @@
 	padding: 1.5rem;
 	background-color: var(--csf-bg-alt);
 	border: 1px solid var(--csf-border);
-	border-radius: 4px;
+	border-radius: var(--csf-radius-control);
 }
 
 .csf-interchange h2 {
 	margin: 0 0 0.5rem;
 	font-size: 1.25rem;
 	font-weight: 600;
-	color: var(--global-palette3, var(--csf-text));
+	color: var(--csf-text);
 }
 
 .csf-interchange-description {
 	margin: 0 0 1rem;
 	font-size: 0.875rem;
-	color: var(--global-palette3, var(--csf-text-secondary));
+	color: var(--csf-text-secondary);
 }
 
 .csf-interchange-table {
 	width: 100%;
 	border-collapse: collapse;
 	background-color: var(--csf-surface);
-	border-radius: 4px;
+	border-radius: var(--csf-radius-control);
 	overflow: hidden;
 }
 
 .csf-interchange-table thead {
-	background-color: var(--global-palette1, var(--csf-primary));
+	background-color: var(--csf-primary);
 	color: #fff;
 }
 
@@ -686,7 +686,7 @@
 .csf-interchange-table td {
 	padding: 0.75rem 1rem;
 	border-top: 1px solid var(--csf-border);
-	color: var(--global-palette3, var(--csf-text));
+	color: var(--csf-text);
 	font-size: 0.9375rem;
 }
 
@@ -713,7 +713,7 @@
 	align-items: center;
 	justify-content: center;
 	z-index: 1000;
-	border-radius: 4px;
+	border-radius: var(--csf-radius-control);
 }
 
 /* Loading overlay dark mode handled by --csf-overlay-bg token */
@@ -721,7 +721,7 @@
 .csf-loading-overlay p {
 	margin-top: 1rem;
 	font-size: 1rem;
-	color: var(--global-palette3, var(--csf-text));
+	color: var(--csf-text);
 	font-weight: 500;
 }
 
@@ -730,7 +730,7 @@
 	width: 48px;
 	height: 48px;
 	border: 4px solid var(--csf-border);
-	border-top-color: var(--global-palette1, var(--csf-primary));
+	border-top-color: var(--csf-primary);
 	border-radius: 50%;
 	animation: csf-spin 0.8s linear infinite;
 }
@@ -765,7 +765,7 @@
 	.csf-search__retry:focus-visible,
 	.csf-part-card__link:focus-visible,
 	.csf-pagination__button:focus-visible {
-		outline: 2px solid var(--global-palette1, var(--csf-primary));
+		outline: 2px solid var(--csf-primary);
 		outline-offset: 2px;
 	}
 }
@@ -779,4 +779,22 @@
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;
 	}
+}
+
+/* Discontinued badge (part pages and single product block) */
+.csf-discontinued-badge {
+	display: inline-block;
+	padding: 6px 14px;
+	background: transparent;
+	color: var(--csf-primary);
+	border: 2px solid var(--csf-primary);
+	border-radius: var(--csf-radius-badge);
+	font-size: 13px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.csf-discontinued-badge--inline {
+	margin-left: 8px;
 }

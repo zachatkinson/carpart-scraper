@@ -150,7 +150,7 @@ class CSF_Parts_URL_Handler {
 
 		// Render part page.
 		$this->render_part_page( $part, $year, $make, $model );
-		exit;
+		$this->exit_request();
 	}
 
 	/**
@@ -299,6 +299,18 @@ class CSF_Parts_URL_Handler {
 	}
 
 	/**
+	 * End the request after a virtual page has been rendered.
+	 *
+	 * Isolated so tests can override it instead of letting exit() kill the
+	 * PHP process.
+	 *
+	 * @since 1.9.0
+	 */
+	protected function exit_request(): void {
+		exit;
+	}
+
+	/**
 	 * Render 404 page.
 	 *
 	 * @since 2.0.0
@@ -308,7 +320,7 @@ class CSF_Parts_URL_Handler {
 		$wp_query->set_404();
 		status_header( 404 );
 		get_template_part( 404 );
-		exit;
+		$this->exit_request();
 	}
 
 	/**

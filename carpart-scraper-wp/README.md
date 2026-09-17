@@ -76,6 +76,7 @@ Go to **CSF Parts → Settings** in wp-admin.
 | Section | Setting | Notes |
 |---------|---------|-------|
 | General | Enable Caching, Cache Duration, Parts Per Page | REST API response caching and default page size |
+| Design (own page) | Preset, token overrides | `CSF Parts → Design`. Pick `Inherit theme palette` or `CSF Red`, then override any token (colours, radii). See `docs/DESIGN-TOKENS.md`. |
 | Appearance | Color Scheme | `Automatic` (default) switches the plugin's palette to dark when the visitor's browser or OS prefers dark mode. `Light only` disables that switching so the catalog always uses your theme's light colors. `Dark only` always applies the dark palette. |
 | Automatic Import | Enable Auto-Import, Import Source, Frequency | Scheduled JSON imports |
 | Push API | API Key | Authenticates the Python scraper's push imports |
