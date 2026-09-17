@@ -73,9 +73,11 @@
 			if (!year) { return Promise.resolve(); }
 			var current = year.value;
 			if (!make || !make.value) { fill(year, allYears, 'year', current); return Promise.resolve(); }
+			loading(year);
 			return request('csf_get_years_by_make', { make: make.value, model: model && model.value ? model.value : '' })
 				.then(function (res) { fill(year, values(res, 'years'), 'year', current); })
 				.catch(function () { fill(year, allYears, 'year', current); });
+
 		}
 
 		// Makes that fit the current year, or every make when no year is chosen.
