@@ -7,6 +7,7 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-vehicle-names.php';
 require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-part-card.php';
 require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-part-page.php';
 
@@ -14,6 +15,17 @@ require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-part-page.php';
  * Test the part page view model.
  */
 final class PartPageTest extends TestCase {
+
+	protected function setUp(): void {
+		parent::setUp();
+		Brain\Monkey\setUp();
+		Brain\Monkey\Functions\when( 'wp_strip_all_tags' )->returnArg();
+	}
+
+	protected function tearDown(): void {
+		Brain\Monkey\tearDown();
+		parent::tearDown();
+	}
 
 	private function part( array $overrides = array() ): object {
 		return (object) array_merge( array( 'sku' => 'CSF-4037', 'category' => 'Radiator', 'compatibility' => '' ), $overrides );
@@ -30,7 +42,7 @@ final class PartPageTest extends TestCase {
 
 		// Act & Assert
 		$this->assertSame( 'Radiator · Plastic-tank Aluminum · CSF 4037', CSF_Parts_Part_Page::eyebrow( $part, $specs ) );
-		$this->assertSame( 'Radiator for 2024 to 2026 Toyota Tacoma, 2.4L L4 turbo', CSF_Parts_Part_Page::title( $part ) );
+		$this->assertSame( 'Radiator for 2024 to 2026 Toyota Tacoma, 2.4 L turbo', CSF_Parts_Part_Page::title( $part ) );
 		$this->assertSame( 'Radiator CSF 4037', CSF_Parts_Part_Page::title( $this->part() ) );
 	}
 
@@ -49,9 +61,9 @@ final class PartPageTest extends TestCase {
 
 		// Assert
 		$this->assertCount( 3, $rows );
-		$this->assertSame( array( 'Chevrolet', 'Colorado', '2004, 2005, 2006', '2.9L L4', '' ), array( $rows[0]['make'], $rows[0]['model'], $rows[0]['years_text'], $rows[0]['engine'], $rows[0]['notes'] ) );
+		$this->assertSame( array( 'Chevrolet', 'Colorado', '2004, 2005, 2006', '2.9 L L4', '' ), array( $rows[0]['make'], $rows[0]['model'], $rows[0]['years_text'], $rows[0]['engine'], $rows[0]['notes'] ) );
 		$this->assertSame( 'Z71', $rows[1]['notes'] );
-		$this->assertSame( 'Gmc', $rows[2]['make'] );
+		$this->assertSame( 'GMC', $rows[2]['make'] );
 		$this->assertSame( '2 makes · 2 models · 3 model years · 2 engines', CSF_Parts_Part_Page::fitment_counts( $rows ) );
 	}
 
@@ -88,6 +100,8 @@ final class PartPageTest extends TestCase {
 			'Inlet Tube'          => 'Block Fitting',
 			'Outlet Tube'         => 'Block Fitting',
 			'Fin Density'         => '18 fpi',
+			'Top Hose Fitting (in)' => '1 1/2 Left (in)',
+			'Tech Note'           => 'Upgraded thicker core.',
 		);
 
 		// Act
@@ -96,8 +110,9 @@ final class PartPageTest extends TestCase {
 		// Assert
 		$this->assertSame( array( 'Core' => '20 × 17 3/4 × 5/8 in', 'Inlet' => 'Block Fitting', 'Outlet' => 'Block Fitting' ), $groups['key'] );
 		$this->assertSame( array( 'Overall' => '29 1/7 × 5 1/3 × 23 in', 'Core length' => '20 in', 'Core width' => '17 3/4 in', 'Core thickness' => '5/8 in', 'Weight' => '8 lb' ), $groups['dimensions'] );
-		$this->assertSame( array( 'Core' => 'Parallel Flow', 'Hazardous material' => 'No' ), $groups['construction'] );
-		$this->assertSame( array( 'Fin density' => '18 fpi' ), $groups['more'] );
+		$this->assertSame( array( 'Core' => 'Parallel Flow' ), $groups['construction'] );
+		$this->assertSame( array( 'Fin density' => '18 fpi', 'Top hose fitting' => '1 1/2 Left in' ), $groups['more'] ); // hazmat and tech note never reach "More"; units move into the value
+		$this->assertSame( 'Upgraded thicker core.', CSF_Parts_Part_Page::intro( $this->part(), $specs ) );
 	}
 
 	public function test_cta_url_fills_placeholders(): void {
@@ -123,7 +138,7 @@ final class PartPageTest extends TestCase {
 		$this->assertSame( array( 'vehicle', 'Other parts for this 2005 Chevrolet Colorado', array( 'csf_make' => 'Chevrolet', 'csf_model' => 'Colorado', 'csf_year' => '2005' ) ), array( $vehicle['mode'], $vehicle['heading'], $vehicle['params'] ) );
 		$this->assertSame( array( 'single', 'Other parts for the Toyota Tacoma', 'All Toyota Tacoma parts →' ), array( $one['mode'], $one['heading'], $one['link_label'] ) );
 		$this->assertSame( array( 'multi', 'Related parts', 'Other parts that fit the same 2 vehicles', 'Browse the catalog →' ), array( $many['mode'], $many['heading'], $many['meta'], $many['link_label'] ) );
-		$this->assertSame( array( 'Chevrolet', 'Gmc' ), $many['makes'] );
+		$this->assertSame( array( 'Chevrolet', 'Gmc' ), $many['makes'] ); // stored casing, used for querying
 		$this->assertSame( 'none', $none['mode'] );
 	}
 }

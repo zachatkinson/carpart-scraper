@@ -107,7 +107,7 @@ class CSF_Parts_Design {
 					'error'          => '#CF2E2E',
 					'radius-sm'      => '3px',
 					'radius-md'      => '10px',
-					'radius-lg'      => '16px',
+					'radius-lg'      => '24px',
 				),
 				'dark'        => array(
 					'primary'      => '#F05252',

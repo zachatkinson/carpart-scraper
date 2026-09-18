@@ -214,7 +214,7 @@ final class CSF_Parts_Part_Card {
 					$vehicles[ $make ][] = $model;
 				}
 			}
-			$engine = trim( (string) ( $row['engine'] ?? '' ) );
+			$engine = CSF_Parts_Vehicle_Names::engine_short( (string) ( $row['engine'] ?? '' ), (string) ( $row['aspiration'] ?? '' ) );
 			if ( '' !== $engine && ! in_array( $engine, $engines, true ) ) {
 				$engines[] = $engine;
 			}
@@ -227,14 +227,28 @@ final class CSF_Parts_Part_Card {
 			$parts[] = $min === $max ? (string) $min : sprintf( '%d to %d', $min, $max );
 		}
 
+		// Name up to MAX_SUMMARY_VEHICLES vehicles ("Audi A3, TT, Volkswagen Golf"), then "and others".
 		$names = array();
+		$named = 0; // vehicles (make+model) already named
+		$more  = false;
 		foreach ( $vehicles as $make => $models ) {
-			$names[] = empty( $models ) ? $make : $make . ' ' . implode( ', ', array_slice( $models, 0, self::MAX_SUMMARY_VEHICLES ) );
+			if ( $named >= self::MAX_SUMMARY_VEHICLES ) {
+				$more = true;
+				break;
+			}
+			$make_name = CSF_Parts_Vehicle_Names::make( $make );
+			if ( empty( $models ) ) {
+				$names[] = $make_name;
+				$named++;
+				continue;
+			}
+			$shown  = array_slice( $models, 0, self::MAX_SUMMARY_VEHICLES - $named );
+			$named += count( $shown );
+			$more   = $more || count( $models ) > count( $shown );
+			$names[] = $make_name . ' ' . implode( ', ', array_map( array( CSF_Parts_Vehicle_Names::class, 'model' ), $shown ) );
 		}
 		if ( ! empty( $names ) ) {
-			$shown  = array_slice( $names, 0, self::MAX_SUMMARY_VEHICLES );
-			$extra  = count( $names ) - count( $shown );
-			$parts[] = implode( ', ', $shown ) . ( $extra > 0 ? sprintf( ' +%d more', $extra ) : '' );
+			$parts[] = implode( ', ', $names ) . ( $more ? ' and others' : '' );
 		}
 
 		$summary = implode( ' ', $parts );
@@ -310,7 +324,7 @@ final class CSF_Parts_Part_Card {
 		$makes = array();
 		foreach ( $rows as $vehicle ) {
 			if ( is_array( $vehicle ) && isset( $vehicle['make'] ) && ! in_array( $vehicle['make'], $makes, true ) ) {
-				$makes[] = (string) $vehicle['make'];
+				$makes[] = CSF_Parts_Vehicle_Names::make( (string) $vehicle['make'] );
 			}
 		}
 

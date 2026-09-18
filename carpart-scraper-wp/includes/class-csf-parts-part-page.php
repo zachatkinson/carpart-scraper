@@ -23,6 +23,35 @@ final class CSF_Parts_Part_Page {
 	/** Consecutive-year runs longer than this collapse to "2004–2012". */
 	private const RANGE_MIN_RUN = 4;
 
+	/** Specification keys that hold the per-part tech note. */
+	private const TECH_NOTE_KEYS = array( 'Tech Note', 'Tech Notes', 'Technical Note', 'Technical Notes', 'Note', 'Notes' );
+
+	/**
+	 * The per-part line shown under the title: the tech note when there is one.
+	 *
+	 * @param object               $part  Part row.
+	 * @param array<string, mixed> $specs Decoded specifications.
+	 * @return string Plain text, '' when none.
+	 */
+	public static function intro( object $part, array $specs ): string {
+		$note = self::spec_value( $specs, self::TECH_NOTE_KEYS );
+		if ( null === $note && ! empty( $part->tech_notes ) ) {
+			$note = trim( (string) $part->tech_notes );
+		}
+		return null === $note ? '' : trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( $note ) ) );
+	}
+
+	/**
+	 * Title-case a spec value unless it carries numbers or units ("Block Fitting", but "20 × 17 in").
+	 *
+	 * @param string $value Raw value.
+	 * @return string
+	 */
+	public static function pretty( string $value ): string {
+		$value = trim( $value );
+		return preg_match( '/\d/', $value ) ? $value : ucwords( strtolower( $value ) );
+	}
+
 	/**
 	 * Everything the part blocks need, in one array.
 	 *
@@ -63,6 +92,7 @@ final class CSF_Parts_Part_Page {
 			'title'               => $title,
 			'heading'             => $heading,
 			'eyebrow'             => self::eyebrow( $part, $specifications ),
+			'intro'               => self::intro( $part, $specifications ),
 			'canonical_url'       => csf_get_part_url( (string) $part->sku ),
 			'compatibility'       => $compatibility,
 			'specifications'      => $specifications,
@@ -115,7 +145,7 @@ final class CSF_Parts_Part_Page {
 					break;
 				}
 			}
-			$vehicle = trim( $year . ' ' . $make . ' ' . $model );
+			$vehicle = trim( $year . ' ' . CSF_Parts_Vehicle_Names::make( $make ) . ' ' . CSF_Parts_Vehicle_Names::model( $model ) );
 			$params  = array( 'csf_make' => $make, 'csf_model' => $model );
 			if ( '' !== $year ) {
 				$params['csf_year'] = $year;
@@ -146,7 +176,7 @@ final class CSF_Parts_Part_Page {
 		$models = array_values( array_unique( array_column( $pairs, 1 ) ) );
 
 		if ( 1 === count( $pairs ) ) {
-			$vehicle = $makes[0] . ' ' . $models[0];
+			$vehicle = CSF_Parts_Vehicle_Names::make( $makes[0] ) . ' ' . CSF_Parts_Vehicle_Names::model( $models[0] );
 			return array(
 				'mode'       => 'single',
 				'makes'      => $makes,
@@ -166,7 +196,7 @@ final class CSF_Parts_Part_Page {
 			'years'      => array(),
 			'heading'    => 'Related parts',
 			'meta'       => sprintf( 'Other parts that fit the same %d vehicles', count( $pairs ) ),
-			'link_label' => 1 === count( $makes ) ? sprintf( 'All %s parts →', $makes[0] ) : 'Browse the catalog →',
+			'link_label' => 1 === count( $makes ) ? sprintf( 'All %s parts →', CSF_Parts_Vehicle_Names::make( $makes[0] ) ) : 'Browse the catalog →',
 			'params'     => 1 === count( $makes ) ? array( 'csf_make' => $makes[0] ) : array(),
 		);
 	}
@@ -278,12 +308,13 @@ final class CSF_Parts_Part_Page {
 			if ( ! is_array( $vehicle ) || empty( $vehicle['make'] ) ) {
 				continue;
 			}
-			$make   = trim( (string) $vehicle['make'] );
-			$model  = trim( (string) ( $vehicle['model'] ?? '' ) );
-			$engine = trim( (string) ( $vehicle['engine'] ?? '' ) );
-			$notes  = array();
+			$make       = CSF_Parts_Vehicle_Names::make( trim( (string) $vehicle['make'] ) );
+			$model      = CSF_Parts_Vehicle_Names::model( trim( (string) ( $vehicle['model'] ?? '' ) ) );
 			$aspiration = trim( (string) ( $vehicle['aspiration'] ?? '' ) );
-			if ( '' !== $aspiration && 0 !== strcasecmp( 'None', $aspiration ) ) {
+			$engine     = CSF_Parts_Vehicle_Names::engine_detailed( trim( (string) ( $vehicle['engine'] ?? '' ) ), $aspiration );
+			$notes      = array();
+			// Aspiration is folded into the engine text; only keep it as a note when it adds something.
+			if ( '' !== $aspiration && 0 !== strcasecmp( 'None', $aspiration ) && ! preg_match( '/turbo|supercharg|natur/i', $aspiration ) ) {
 				$notes[] = $aspiration;
 			}
 			$submodel = trim( (string) ( $vehicle['submodel'] ?? '' ) );
@@ -464,16 +495,16 @@ final class CSF_Parts_Part_Page {
 				$value = $len && $wid ? $len . ' × ' . $wid . ' in' : ( $len ?: $wid );
 			}
 			if ( null !== $value && '' !== $value ) {
-				$key[ $port ] = ucwords( strtolower( $value ) );
+				$key[ $port ] = self::pretty( $value );
 			}
 		}
 		$tank = $take( array( 'Tank Material' ) );
 		if ( null !== $tank ) {
-			$key['Tank material'] = ucwords( strtolower( $tank ) );
+			$key['Tank material'] = self::pretty( $tank );
 		}
 		$trans = $take( array( 'Transmission Cooler', 'Trans Oil Cooler', 'Transmission Oil Cooler', 'Oil Cooler' ) );
 		if ( null !== $trans ) {
-			$key['Transmission cooler'] = ucwords( strtolower( $trans ) );
+			$key['Transmission cooler'] = self::pretty( $trans );
 		}
 
 		$dimensions = array();
@@ -496,15 +527,19 @@ final class CSF_Parts_Part_Page {
 		$construction = array();
 		$core_type = $take( array( 'Construction', 'Core Type', 'Core' ) );
 		if ( null !== $core_type ) {
-			$construction['Core'] = ucwords( strtolower( $core_type ) );
+			$construction['Core'] = self::pretty( $core_type );
 		}
 		if ( null !== $tank ) {
-			$construction['Tanks'] = ucwords( strtolower( $tank ) );
+			$construction['Tanks'] = self::pretty( $tank );
 		}
-		foreach ( array( 'Fin type' => array( 'Fin Type', 'Fins' ), 'Flow' => array( 'Flow', 'Flow Type', 'Flow Direction', 'Cross-flow/Down-flow' ), 'Pressure cap' => array( 'Pressure Cap', 'Cap' ), 'Warranty' => array( 'Warranty' ), 'Hazardous material' => array( 'Hazardous Material' ) ) as $label => $names ) {
+		// Fields nobody needs on the page: consumed so they never reach "More specifications".
+		$take( array( 'Hazardous Material', 'Hazmat' ) );
+		$take( self::TECH_NOTE_KEYS );
+
+		foreach ( array( 'Fin type' => array( 'Fin Type', 'Fins' ), 'Flow' => array( 'Flow', 'Flow Type', 'Flow Direction', 'Cross-flow/Down-flow' ), 'Pressure cap' => array( 'Pressure Cap', 'Cap' ), 'Warranty' => array( 'Warranty' ) ) as $label => $names ) {
 			$value = $take( $names );
 			if ( null !== $value ) {
-				$construction[ $label ] = ucwords( strtolower( $value ) );
+				$construction[ $label ] = self::pretty( $value );
 			}
 		}
 
@@ -514,7 +549,13 @@ final class CSF_Parts_Part_Page {
 			if ( isset( $used[ $spec_key ] ) || preg_match( '/^(CSF-?)?\d+$/', $spec_key ) || '' === trim( (string) $value ) ) {
 				continue;
 			}
-			$more[ ucfirst( strtolower( str_replace( '_', ' ', $spec_key ) ) ) ] = trim( (string) $value );
+			// Units belong to the value, not the label: "Top hose fitting (in)" / "1 ½ Left (in)" → "Top hose fitting" / "1 ½ Left in".
+			$label = trim( preg_replace( '/\s*\((in|lbs?|mm|cm|kg)\)\s*/i', ' ', str_replace( '_', ' ', $spec_key ) ) );
+			$clean = trim( preg_replace( '/\s*\((in|lbs?|mm|cm|kg)\)\s*$/i', '', (string) $value ) );
+			if ( $clean !== trim( (string) $value ) && preg_match( '/\d/', $clean ) && preg_match( '/\((in)\)\s*$/i', (string) $value ) ) {
+				$clean .= ' in';
+			}
+			$more[ ucfirst( strtolower( $label ) ) ] = $clean;
 		}
 
 		return compact( 'key', 'dimensions', 'construction', 'more' );

@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use Brain\Monkey;
 use Brain\Monkey\Functions;
 
+require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-vehicle-names.php';
 require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-part-card.php';
 
 /**
@@ -135,8 +136,8 @@ final class PartCardTest extends TestCase {
 		) );
 
 		// Act & Assert
-		$this->assertSame( '2024 to 2026 Toyota Tacoma, 2.4L L4 turbo', CSF_Parts_Part_Card::fitment_summary( $rows ) );
-		$this->assertSame( '2004 to 2006 Chevrolet Colorado, Gmc Canyon', CSF_Parts_Part_Card::fitment_summary( $mixed ) );
+		$this->assertSame( '2024 to 2026 Toyota Tacoma, 2.4 L turbo', CSF_Parts_Part_Card::fitment_summary( $rows ) );
+		$this->assertSame( '2004 to 2006 Chevrolet Colorado, GMC Canyon', CSF_Parts_Part_Card::fitment_summary( $mixed ) );
 		$this->assertSame( '', CSF_Parts_Part_Card::fitment_summary( '' ) );
 	}
 
@@ -193,5 +194,25 @@ final class PartCardTest extends TestCase {
 		$this->assertStringContainsString( '2020 Honda Civic', $default );
 		$this->assertStringNotContainsString( 'csf-part-card__new', $quiet );
 		$this->assertStringNotContainsString( 'csf-part-card__fitment', $quiet );
+	}
+
+	/**
+	 * Long fitment lists are capped and end with "and others"; makes/models get human casing.
+	 */
+	public function test_fitment_summary_caps_vehicles_and_cases_names(): void {
+		// Arrange
+		$rows = json_encode( array(
+			array( 'year' => 2006, 'make' => 'Audi', 'model' => 'A3 Quattro' ),
+			array( 'year' => 2018, 'make' => 'Audi', 'model' => 'Tt Quattro' ),
+			array( 'year' => 2010, 'make' => 'Volkswagen', 'model' => 'Passat' ),
+			array( 'year' => 2010, 'make' => 'Volkswagen', 'model' => 'Cc' ),
+			array( 'year' => 2010, 'make' => 'Volkswagen', 'model' => 'Golf' ),
+		) );
+
+		// Act
+		$summary = CSF_Parts_Part_Card::fitment_summary( $rows );
+
+		// Assert
+		$this->assertSame( '2006 to 2018 Audi A3 Quattro, TT Quattro, Volkswagen Passat and others', $summary );
 	}
 }

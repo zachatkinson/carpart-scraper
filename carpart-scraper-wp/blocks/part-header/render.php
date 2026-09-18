@@ -32,11 +32,8 @@ $block_attrs = $attributes ?? array();
 
 			<h1 class="csf-product-title"><?php echo esc_html( $heading ); ?></h1>
 
-			<?php
-			$intro = ! empty( $part->short_description ) ? $part->short_description : ( $part->description ?? '' );
-			if ( ! empty( $intro ) && ( $block_attrs['showIntro'] ?? true ) ) :
-				?>
-				<div class="csf-product-intro"><?php echo wp_kses_post( wpautop( $intro ) ); ?></div>
+			<?php if ( '' !== $intro && ( $block_attrs['showIntro'] ?? true ) ) : ?>
+				<p class="csf-product-intro"><?php echo esc_html( $intro ); ?></p>
 			<?php endif; ?>
 
 			<?php if ( ( $block_attrs['showActions'] ?? true ) && ( '' !== $distributor_url || '' !== $tech_service_url ) ) : ?>

@@ -142,7 +142,7 @@ final class CSF_Parts_Block_Styles {
 	 * @return string CSS (no <style> tag).
 	 */
 	public static function instance_css( string $block_id, array $attributes ): string {
-		$columns = array_merge( array( 'mobile' => 2, 'tablet' => 3, 'desktop' => 3 ), (array) ( $attributes['columns'] ?? array() ) );
+		$columns = array_merge( array( 'mobile' => 2, 'tablet' => 3, 'desktop' => 4 ), (array) ( $attributes['columns'] ?? array() ) );
 		$gap     = array_merge( array( 'mobile' => 16, 'tablet' => 20, 'desktop' => 24 ), (array) ( $attributes['gap'] ?? array() ) );
 		$id      = '#' . $block_id;
 
