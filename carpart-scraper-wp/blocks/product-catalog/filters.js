@@ -125,12 +125,12 @@
 			}
 
 			// Part-type chips: set the hidden category field and refresh in place.
-			const categoryInput = filterForm.querySelector('input[name="csf_category"]');
+			const categoryInput = filterForm.querySelector('input[name="csf_type"]');
 			filterForm.querySelectorAll('.csf-chip').forEach(function(chip) {
 				chip.addEventListener('click', function(e) {
 					e.preventDefault();
 					if (categoryInput) {
-						categoryInput.value = chip.dataset.category || '';
+						categoryInput.value = chip.dataset.type || '';
 					}
 					filterForm.querySelectorAll('.csf-chip').forEach(function(c) {
 						c.classList.toggle('is-active', c === chip);
@@ -228,6 +228,7 @@
 		const model = formData.get('csf_model') || '';
 		const searchQuery = formData.get('csf_search') || '';
 		const category = formData.get('csf_category') || '';
+		const partType = formData.get('csf_type') || '';
 
 		// Get block attributes.
 		const block = form.closest('.csf-product-catalog');
@@ -256,6 +257,7 @@
 		data.append('csf_model', model);
 		data.append('csf_search', searchQuery);
 		data.append('csf_category', category);
+		data.append('csf_type', partType);
 		data.append('per_page', perPage);
 		if (cardOptions) {
 			data.append('card_options', cardOptions);
@@ -327,6 +329,7 @@
 					csf_model: model,
 					csf_search: searchQuery,
 					csf_category: category,
+					csf_type: partType,
 					csf_sort: sortKey
 				};
 				if (currentPage > 1) {

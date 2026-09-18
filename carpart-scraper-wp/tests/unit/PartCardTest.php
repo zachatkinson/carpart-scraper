@@ -107,7 +107,7 @@ final class PartCardTest extends TestCase {
 	public function test_render_caps_make_badges_with_overflow(): void {
 		// Arrange
 		$rows = array();
-		foreach ( array( 'Honda', 'Honda', 'Acura', 'Toyota', 'Ford', 'Mazda', 'Kia' ) as $make ) {
+		foreach ( array( 'Honda', 'HONDA', 'honda', 'Acura', 'Toyota', 'Ford', 'Mazda', 'Kia' ) as $make ) { // casing variants must dedupe
 			$rows[] = array( 'make' => $make, 'model' => 'X' );
 		}
 		$part = $this->part( array( 'compatibility' => json_encode( $rows ) ) );

@@ -34,11 +34,29 @@ final class CSF_Parts_Part_Page {
 	 * @return string Plain text, '' when none.
 	 */
 	public static function intro( object $part, array $specs ): string {
+		return CSF_Parts_Part_Types::intro( CSF_Parts_Part_Types::line_for_category( (string) ( $part->category ?? '' ) ) );
+	}
+
+	/**
+	 * The per-part tech note, lightly normalised ("30mm" → "30 mm", "7%" → "7 percent").
+	 *
+	 * @param object               $part  Part row.
+	 * @param array<string, mixed> $specs Decoded specifications.
+	 * @return string '' when none.
+	 */
+	public static function tech_note( object $part, array $specs ): string {
 		$note = self::spec_value( $specs, self::TECH_NOTE_KEYS );
 		if ( null === $note && ! empty( $part->tech_notes ) ) {
 			$note = trim( (string) $part->tech_notes );
 		}
-		return null === $note ? '' : trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( $note ) ) );
+		if ( null === $note ) {
+			return '';
+		}
+		$note = trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( $note ) ) );
+		$note = preg_replace( '/(\d)(mm|cm|kg|lb|lbs|in)\b/i', '$1 $2', $note );
+		$note = preg_replace( '/(\d)\s*%/', '$1 percent', $note );
+		$note = rtrim( $note, '.' ) . '.';
+		return $note;
 	}
 
 	/**
@@ -93,6 +111,7 @@ final class CSF_Parts_Part_Page {
 			'heading'             => $heading,
 			'eyebrow'             => self::eyebrow( $part, $specifications ),
 			'intro'               => self::intro( $part, $specifications ),
+			'tech_note'           => self::tech_note( $part, $specifications ),
 			'canonical_url'       => csf_get_part_url( (string) $part->sku ),
 			'compatibility'       => $compatibility,
 			'specifications'      => $specifications,
@@ -163,9 +182,13 @@ final class CSF_Parts_Part_Page {
 		}
 
 		$pairs = array();
+		$years = array();
 		foreach ( $compatibility as $row ) {
 			if ( is_array( $row ) && ! empty( $row['make'] ) && ! empty( $row['model'] ) ) {
 				$pairs[ strtolower( $row['make'] . '|' . $row['model'] ) ] = array( (string) $row['make'], (string) $row['model'] );
+				if ( ! empty( $row['year'] ) ) {
+					$years[ (string) (int) $row['year'] ] = true;
+				}
 			}
 		}
 		if ( empty( $pairs ) ) {
@@ -174,6 +197,7 @@ final class CSF_Parts_Part_Page {
 
 		$makes  = array_values( array_unique( array_column( $pairs, 0 ) ) );
 		$models = array_values( array_unique( array_column( $pairs, 1 ) ) );
+		$years  = array_map( 'strval', array_keys( $years ) );
 
 		if ( 1 === count( $pairs ) ) {
 			$vehicle = CSF_Parts_Vehicle_Names::make( $makes[0] ) . ' ' . CSF_Parts_Vehicle_Names::model( $models[0] );
@@ -181,7 +205,7 @@ final class CSF_Parts_Part_Page {
 				'mode'       => 'single',
 				'makes'      => $makes,
 				'models'     => $models,
-				'years'      => array(),
+				'years'      => $years,
 				'heading'    => sprintf( 'Other parts for the %s', $vehicle ),
 				'meta'       => '',
 				'link_label' => sprintf( 'All %s parts →', $vehicle ),
@@ -193,7 +217,7 @@ final class CSF_Parts_Part_Page {
 			'mode'       => 'multi',
 			'makes'      => $makes,
 			'models'     => $models,
-			'years'      => array(),
+			'years'      => $years,
 			'heading'    => 'Related parts',
 			'meta'       => sprintf( 'Other parts that fit the same %d vehicles', count( $pairs ) ),
 			'link_label' => 1 === count( $makes ) ? sprintf( 'All %s parts →', CSF_Parts_Vehicle_Names::make( $makes[0] ) ) : 'Browse the catalog →',
@@ -220,12 +244,7 @@ final class CSF_Parts_Part_Page {
 			return $empty;
 		}
 
-		$filters = array( 'makes' => $context['makes'], 'models' => $context['models'] );
-		if ( ! empty( $context['years'] ) ) {
-			$filters['years'] = $context['years'];
-		}
-		$result = $database->query_parts( $filters, $count + 1, 1 );
-		$parts  = array_values( array_filter( $result['parts'] ?? array(), static fn( $p ) => $p->sku !== $part->sku ) );
+		$parts = self::pick_related( $part, $context, $count, $database );
 
 		return array(
 			'heading'    => $context['heading'],
@@ -234,6 +253,68 @@ final class CSF_Parts_Part_Page {
 			'url'        => empty( $context['params'] ) ? csf_find_catalog_page_url() : add_query_arg( array_map( 'rawurlencode', $context['params'] ), csf_find_catalog_page_url() ),
 			'parts'      => array_slice( $parts, 0, $count ),
 		);
+	}
+
+	/**
+	 * Candidate related parts: same vehicle AND overlapping years first; when
+	 * that yields fewer than $count, top up with make/model matches from any
+	 * year. Within each pass parts with images come first.
+	 *
+	 * @param object               $part     Current part.
+	 * @param array<string, mixed> $context  From related_context().
+	 * @param int                  $count    How many to return.
+	 * @param CSF_Parts_Database   $database Database.
+	 * @return object[]
+	 */
+	public static function pick_related( object $part, array $context, int $count, CSF_Parts_Database $database ): array {
+		$base   = array( 'makes' => $context['makes'], 'models' => $context['models'] );
+		$fetch  = max( 12, $count * 4 );
+		$chosen = array();
+		$seen   = array( (string) $part->sku => true );
+
+		$passes = array();
+		if ( ! empty( $context['years'] ) ) {
+			$passes[] = $base + array( 'years' => $context['years'] );
+		}
+		$passes[] = $base;
+
+		foreach ( $passes as $filters ) {
+			if ( count( $chosen ) >= $count ) {
+				break;
+			}
+			$found = $database->query_parts( $filters, $fetch, 1 )['parts'] ?? array();
+			$found = array_values( array_filter( $found, static fn( $p ) => ! isset( $seen[ (string) $p->sku ] ) ) );
+			$found = self::images_first( $found );
+			foreach ( $found as $candidate ) {
+				if ( count( $chosen ) >= $count ) {
+					break;
+				}
+				$chosen[]                         = $candidate;
+				$seen[ (string) $candidate->sku ] = true;
+			}
+		}
+
+		return $chosen;
+	}
+
+	/**
+	 * Stable sort: parts with at least one image before those without.
+	 *
+	 * @param object[] $parts Parts.
+	 * @return object[]
+	 */
+	public static function images_first( array $parts ): array {
+		$with    = array();
+		$without = array();
+		foreach ( $parts as $p ) {
+			$images = json_decode( (string) ( $p->images ?? '' ), true );
+			if ( is_array( $images ) && ! empty( $images ) ) {
+				$with[] = $p;
+			} else {
+				$without[] = $p;
+			}
+		}
+		return array_merge( $with, $without );
 	}
 
 	/**

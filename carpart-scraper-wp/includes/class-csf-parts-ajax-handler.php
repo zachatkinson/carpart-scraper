@@ -270,8 +270,12 @@ class CSF_Parts_AJAX_Handler {
 			}
 		}
 
+		$selected_type = isset( $_POST[ CSF_Parts_Part_Types::PARAM ] ) ? sanitize_key( wp_unslash( $_POST[ CSF_Parts_Part_Types::PARAM ] ) ) : '';
+
 		$filters = array();
-		if ( '' !== $selected_category ) {
+		if ( '' !== $selected_type && CSF_Parts_Part_Types::is_valid( $selected_type ) ) {
+			$filters['categories'] = CSF_Parts_Part_Types::categories_for_line( $selected_type, $this->database->get_all_categories() );
+		} elseif ( '' !== $selected_category ) {
 			$filters['categories'] = array( $selected_category );
 		} elseif ( ! empty( $default_categories ) ) {
 			$filters['categories'] = $default_categories;

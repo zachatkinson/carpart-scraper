@@ -32,8 +32,13 @@ $block_attrs = $attributes ?? array();
 
 			<h1 class="csf-product-title"><?php echo esc_html( $heading ); ?></h1>
 
-			<?php if ( '' !== $intro && ( $block_attrs['showIntro'] ?? true ) ) : ?>
-				<p class="csf-product-intro"><?php echo esc_html( $intro ); ?></p>
+			<?php if ( $block_attrs['showIntro'] ?? true ) : ?>
+				<?php if ( '' !== $intro ) : ?>
+					<p class="csf-product-intro"><?php echo esc_html( $intro ); ?></p>
+				<?php endif; ?>
+				<?php if ( '' !== ( $tech_note ?? '' ) ) : ?>
+					<p class="csf-product-technote"><span class="csf-product-technote__label"><?php esc_html_e( 'Tech note', 'csf-parts' ); ?></span> <?php echo esc_html( $tech_note ); ?></p>
+				<?php endif; ?>
 			<?php endif; ?>
 
 			<?php if ( ( $block_attrs['showActions'] ?? true ) && ( '' !== $distributor_url || '' !== $tech_service_url ) ) : ?>

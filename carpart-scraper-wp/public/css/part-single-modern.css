@@ -1129,6 +1129,27 @@
 	margin-bottom: 0;
 }
 
+.csf-product-technote {
+	margin: -12px 0 0;
+	font-size: 14px;
+	line-height: 1.5;
+	color: var(--csf-text-muted);
+}
+
+.csf-product-technote__label {
+	display: inline-block;
+	margin-right: 6px;
+	padding: 1px 8px;
+	border-radius: var(--csf-radius-badge);
+	background: var(--csf-bg-alt);
+	color: var(--csf-text-secondary);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	vertical-align: 1px;
+}
+
 .csf-product-actions {
 	display: flex;
 	flex-wrap: wrap;

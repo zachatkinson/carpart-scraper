@@ -55,6 +55,19 @@ if ( isset( $_POST['csf_save_settings'] ) && check_admin_referer( 'csf_settings_
 	update_option( CSF_Parts_Constants::OPTION_FITMENT_LAYOUT, in_array( $fitment_layout, CSF_Parts_Constants::FITMENT_LAYOUTS, true ) ? $fitment_layout : CSF_Parts_Constants::FITMENT_LAYOUT_TABLE );
 	update_option( CSF_Parts_Constants::OPTION_RELATED_COUNT, min( CSF_Parts_Constants::RELATED_COUNT_MAX, max( 0, isset( $_POST['csf_related_count'] ) ? (int) $_POST['csf_related_count'] : CSF_Parts_Constants::RELATED_COUNT_DEFAULT ) ) );
 
+	// Part type introductions.
+	$intros = array();
+	if ( isset( $_POST['csf_part_type_intro'] ) && is_array( $_POST['csf_part_type_intro'] ) ) {
+		foreach ( wp_unslash( $_POST['csf_part_type_intro'] ) as $type_slug => $text ) {
+			$type_slug = sanitize_key( $type_slug );
+			$text      = sanitize_textarea_field( (string) $text );
+			if ( CSF_Parts_Part_Types::is_valid( $type_slug ) && '' !== trim( $text ) && trim( $text ) !== ( CSF_Parts_Part_Types::default_intros()[ $type_slug ] ?? '' ) ) {
+				$intros[ $type_slug ] = trim( $text );
+			}
+		}
+	}
+	update_option( CSF_Parts_Constants::OPTION_PART_TYPE_INTROS, $intros );
+
 	// Auto-import settings.
 	$auto_import_enabled = isset( $_POST['csf_auto_import_enabled'] ) ? 1 : 0;
 	update_option( 'csf_parts_auto_import_enabled', $auto_import_enabled );
@@ -165,8 +178,8 @@ $api_key              = get_option( 'csf_parts_api_key', '' );
 				<tr>
 					<th scope="row"><label for="csf_tech_service_url"><?php echo esc_html( '"Ask technical service" URL' ); ?></label></th>
 					<td>
-						<input type="text" id="csf_tech_service_url" name="csf_tech_service_url" value="<?php echo esc_attr( $tech_service_url ); ?>" class="large-text" placeholder="https://example.com/contact/?part={sku}" />
-						<p class="description"><?php echo esc_html( 'Secondary button. Use {sku} to prefill the contact form. Leave empty to hide it.' ); ?></p>
+						<input type="text" id="csf_tech_service_url" name="csf_tech_service_url" value="<?php echo esc_attr( $tech_service_url ); ?>" class="large-text" placeholder="https://example.com/contact/?route=techservice&amp;part={sku_display}" />
+						<p class="description"><?php echo esc_html( 'Secondary button. {sku_display} inserts "CSF 4037", {sku} the stored "CSF-4037". Leave empty to hide it.' ); ?></p>
 					</td>
 				</tr>
 				<tr>
@@ -202,6 +215,23 @@ $api_key              = get_option( 'csf_parts_api_key', '' );
 						<p class="description"><?php echo esc_html( 'How many "Other parts for this vehicle" cards to show. 0 hides the section.' ); ?></p>
 					</td>
 				</tr>
+			</tbody>
+		</table>
+
+		<h2><?php echo esc_html( 'Part Type Introductions' ); ?></h2>
+		<p><?php echo esc_html( 'The standard paragraph shown under a part\'s title, by product line. The part\'s own tech note follows it as a separate line.' ); ?></p>
+
+		<table class="form-table" role="presentation">
+			<tbody>
+				<?php $all_types = CSF_Parts_Part_Types::lines() + array( CSF_Parts_Part_Types::OTHER => array( 'label' => 'Other' ) ); ?>
+				<?php foreach ( $all_types as $type_slug => $type_line ) : ?>
+					<tr>
+						<th scope="row"><label for="csf_part_type_intro_<?php echo esc_attr( $type_slug ); ?>"><?php echo esc_html( $type_line['label'] ); ?></label></th>
+						<td>
+							<textarea id="csf_part_type_intro_<?php echo esc_attr( $type_slug ); ?>" name="csf_part_type_intro[<?php echo esc_attr( $type_slug ); ?>]" rows="2" class="large-text"><?php echo esc_textarea( CSF_Parts_Part_Types::intro( $type_slug ) ); ?></textarea>
+						</td>
+					</tr>
+				<?php endforeach; ?>
 			</tbody>
 		</table>
 

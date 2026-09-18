@@ -105,6 +105,7 @@ $selected_year     = '';
 $selected_make     = '';
 $selected_model    = '';
 $selected_category = '';
+$selected_type     = '';
 $search_query      = '';
 
 if ( $show_filters ) {
@@ -123,6 +124,12 @@ if ( $show_filters ) {
 	if ( isset( $_GET['csf_model'] ) && ! empty( $_GET['csf_model'] ) ) {
 		$selected_model     = sanitize_text_field( wp_unslash( $_GET['csf_model'] ) );
 		$filters['models']  = array( $selected_model );
+	}
+	// Part-type line (csf_type) expands to its raw categories; csf_category still works for direct links.
+	$selected_type = isset( $_GET[ CSF_Parts_Part_Types::PARAM ] ) ? sanitize_key( wp_unslash( $_GET[ CSF_Parts_Part_Types::PARAM ] ) ) : '';
+	$selected_type = CSF_Parts_Part_Types::is_valid( $selected_type ) ? $selected_type : '';
+	if ( '' !== $selected_type ) {
+		$filters['categories'] = CSF_Parts_Part_Types::categories_for_line( $selected_type, $database->get_all_categories() );
 	}
 	if ( isset( $_GET['csf_category'] ) && ! empty( $_GET['csf_category'] ) ) {
 		$selected_category       = sanitize_text_field( wp_unslash( $_GET['csf_category'] ) );
@@ -345,21 +352,22 @@ $wrapper_attributes = get_block_wrapper_attributes(
 				</div>
 			</div>
 
-			<?php if ( $show_category_filter && ! empty( $categories ) ) : ?>
-				<?php $chip_base = remove_query_arg( array( 'csf_category', 'csf_page' ) ); ?>
+			<?php $type_chips = $show_category_filter ? CSF_Parts_Part_Types::chips( $categories ) : array(); ?>
+			<?php if ( ! empty( $type_chips ) ) : ?>
+				<?php $chip_base = remove_query_arg( array( CSF_Parts_Part_Types::PARAM, 'csf_category', 'csf_page' ) ); ?>
 				<div class="csf-part-types">
 					<span class="csf-part-types__label"><?php esc_html_e( 'Part type', 'csf-parts' ); ?></span>
 					<div class="csf-part-types__chips" role="group" aria-label="<?php esc_attr_e( 'Part type', 'csf-parts' ); ?>">
-						<a href="<?php echo esc_url( $chip_base ); ?>" class="csf-chip<?php echo '' === $selected_category ? ' is-active' : ''; ?>" data-category="" <?php echo '' === $selected_category ? 'aria-current="true"' : ''; ?>>
+						<a href="<?php echo esc_url( $chip_base ); ?>" class="csf-chip<?php echo '' === $selected_type ? ' is-active' : ''; ?>" data-type="" <?php echo '' === $selected_type ? 'aria-current="true"' : ''; ?>>
 							<?php esc_html_e( 'All', 'csf-parts' ); ?> <span class="csf-chip__count"><?php echo esc_html( number_format_i18n( array_sum( $categories ) ) ); ?></span>
 						</a>
-						<?php foreach ( $categories as $category_name => $category_count ) : ?>
-							<a href="<?php echo esc_url( add_query_arg( 'csf_category', rawurlencode( $category_name ), $chip_base ) ); ?>" class="csf-chip<?php echo $selected_category === $category_name ? ' is-active' : ''; ?>" data-category="<?php echo esc_attr( $category_name ); ?>" <?php echo $selected_category === $category_name ? 'aria-current="true"' : ''; ?>>
-								<?php echo esc_html( $category_name ); ?> <span class="csf-chip__count"><?php echo esc_html( number_format_i18n( $category_count ) ); ?></span>
+						<?php foreach ( $type_chips as $type_slug => $chip ) : ?>
+							<a href="<?php echo esc_url( add_query_arg( CSF_Parts_Part_Types::PARAM, $type_slug, $chip_base ) ); ?>" class="csf-chip<?php echo $selected_type === $type_slug ? ' is-active' : ''; ?>" data-type="<?php echo esc_attr( $type_slug ); ?>" <?php echo $selected_type === $type_slug ? 'aria-current="true"' : ''; ?>>
+								<?php echo esc_html( $chip['label'] ); ?> <span class="csf-chip__count"><?php echo esc_html( number_format_i18n( $chip['count'] ) ); ?></span>
 							</a>
 						<?php endforeach; ?>
 					</div>
-					<input type="hidden" name="csf_category" value="<?php echo esc_attr( $selected_category ); ?>" />
+					<input type="hidden" name="<?php echo esc_attr( CSF_Parts_Part_Types::PARAM ); ?>" value="<?php echo esc_attr( $selected_type ); ?>" />
 				</div>
 			<?php endif; ?>
 		</form>

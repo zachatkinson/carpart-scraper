@@ -323,8 +323,12 @@ final class CSF_Parts_Part_Card {
 
 		$makes = array();
 		foreach ( $rows as $vehicle ) {
-			if ( is_array( $vehicle ) && isset( $vehicle['make'] ) && ! in_array( $vehicle['make'], $makes, true ) ) {
-				$makes[] = CSF_Parts_Vehicle_Names::make( (string) $vehicle['make'] );
+			if ( ! is_array( $vehicle ) || empty( $vehicle['make'] ) ) {
+				continue;
+			}
+			$make = CSF_Parts_Vehicle_Names::make( (string) $vehicle['make'] );
+			if ( ! in_array( $make, $makes, true ) ) {
+				$makes[] = $make;
 			}
 		}
 

@@ -22,7 +22,7 @@ const CONTROLS = {
 	'csf-parts/part-gallery': [ [ 'showThumbnails', __( 'Show thumbnails', 'csf-parts' ), 'toggle' ] ],
 	'csf-parts/part-header': [
 		[ 'showEyebrow', __( 'Show eyebrow (category · construction · part number)', 'csf-parts' ), 'toggle' ],
-		[ 'showIntro', __( 'Show tech note under the title', 'csf-parts' ), 'toggle' ],
+		[ 'showIntro', __( 'Show intro paragraph and tech note', 'csf-parts' ), 'toggle' ],
 		[ 'showActions', __( 'Show buttons and note', 'csf-parts' ), 'toggle' ],
 		[ 'noteText', __( 'Note text', 'csf-parts' ), 'textarea', { help: __( 'Leave empty to use Settings → Part Page.', 'csf-parts' ) } ],
 		[ 'showVehicleBox', __( 'Show "Your vehicle" box on vehicle URLs', 'csf-parts' ), 'toggle' ],
