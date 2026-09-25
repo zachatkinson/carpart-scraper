@@ -1484,6 +1484,96 @@ class TestScrapeAllResume:
         orchestrator.fetcher.async_scrape_application_pages.assert_called_once_with([url_8000])
         assert ETagStore(tmp_path / "etags.json").get(url_8000) == "new_hash"
 
+    def test_force_full_reprocesses_checkpointed_applications(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """force_full on a resumed run re-scrapes every page and refreshes its hash."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = Mock()
+        orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
+        orchestrator.html_parser = Mock()
+        orchestrator.validator = Mock()
+        orchestrator.exporter = Mock()
+        orchestrator.image_processor = Mock()
+        orchestrator.output_dir = tmp_path / "exports"
+        orchestrator.checkpoint_dir = tmp_path / "checkpoints"
+        orchestrator.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        orchestrator.incremental = False
+        orchestrator.unique_parts = {}
+        orchestrator.vehicle_compat = {}
+        orchestrator.parts_scraped = 0
+        orchestrator.processed_application_ids = set()
+        orchestrator.new_skus = set()
+        orchestrator.changed_skus = set()
+        orchestrator.failure_tracker = FailureTracker()
+        orchestrator.delay_override = None
+        orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.detail_etag_store = ETagStore(tmp_path / "detail_etags.json")
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+        url_8000 = "https://csf.mycarparts.com/applications/8000"
+        url_9000 = "https://csf.mycarparts.com/applications/9000"
+        orchestrator.etag_store.set(url_8000, "stale_hash")
+        orchestrator.etag_store.set(url_9000, "same_hash")
+        orchestrator.etag_store.save()
+        checkpoint = {
+            "timestamp": "20250101_000000",
+            "make_filter": None,
+            "year_filter": None,
+            "processed_application_ids": [8000, 9000],
+            "unique_parts_count": 0,
+            "parts_scraped": 0,
+            "vehicles_tracked": 0,
+            "parts_data": {},
+            "vehicle_compat": {},
+        }
+        (orchestrator.checkpoint_dir / "checkpoint_all_20250101_000000.json").write_text(
+            json.dumps(checkpoint)
+        )
+        hierarchy = [
+            {
+                "make_id": 3,
+                "make": "Honda",
+                "year_id": 100,
+                "year": "2024",
+                "application_id": 8000,
+                "model": "Civic",
+            },
+            {
+                "make_id": 4,
+                "make": "Toyota",
+                "year_id": 200,
+                "year": "2024",
+                "application_id": 9000,
+                "model": "Camry",
+            },
+        ]
+        mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
+        mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
+        orchestrator.fetcher.async_check_etags = AsyncMock(
+            return_value=[(True, "fresh_hash"), (False, "same_hash")]
+        )
+        orchestrator.fetcher.async_scrape_application_pages = AsyncMock(
+            return_value=["<html>a</html>", "<html>b</html>"]
+        )
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = [
+            {"sku": "CSF-3001", "name": "Radiator", "vehicle_qualifiers": {}}
+        ]
+        orchestrator.validator.validate_batch.return_value = [
+            Part(sku="CSF-3001", name="Radiator", category="Radiator")
+        ]
+
+        # Act
+        result = orchestrator.scrape_all(resume=True, force_full=True, fetch_details=False)
+
+        # Assert — both checkpointed pages were re-scraped and the changed one's
+        # hash was refreshed on the way through
+        assert result["applications_processed"] == 2
+        orchestrator.fetcher.async_scrape_application_pages.assert_called_once_with(
+            [url_8000, url_9000]
+        )
+        assert ETagStore(tmp_path / "etags.json").get(url_8000) == "fresh_hash"
+
     def test_resume_loads_checkpoint_and_filters(
         self, mocker: MockerFixture, tmp_path: Path
     ) -> None:

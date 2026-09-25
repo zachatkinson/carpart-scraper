@@ -968,7 +968,9 @@ class ScraperOrchestrator:
         """
         return (self.output_dir / "parts.json").exists()
 
-    def _filter_by_etags(self, hierarchy: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _filter_by_etags(
+        self, hierarchy: list[dict[str, Any]], keep_all: bool = False
+    ) -> list[dict[str, Any]]:
         """Filter hierarchy to only applications whose pages have changed.
 
         Runs concurrent HTTP GET requests (capped by fetcher semaphore) for
@@ -987,6 +989,9 @@ class ScraperOrchestrator:
 
         Args:
             hierarchy: Full vehicle hierarchy from _build_hierarchy
+            keep_all: Return every application regardless of change state
+                (force-full runs) while still recording changed pages' hashes
+                for commit, so the store is refreshed as pages are processed
 
         Returns:
             Filtered hierarchy containing only changed/new/unprocessed applications
@@ -1035,8 +1040,8 @@ class ScraperOrchestrator:
             kept_unprocessed=kept_unprocessed,
         )
 
-        # First run: return all (all are "new")
-        if not has_data:
+        # First run (or forced full): return all
+        if not has_data or keep_all:
             return hierarchy
 
         return changed
@@ -1311,6 +1316,15 @@ class ScraperOrchestrator:
                 # Also load previously exported data if incremental mode
                 if self.incremental:
                     logger.info("incremental_mode_resume", checkpoint=str(checkpoint))
+                # A forced full run keeps the checkpoint's parts and fitments but
+                # treats no application as done, so every page is re-scraped and,
+                # if the run is cut short, the rest stay "unprocessed" for next time.
+                if force_full:
+                    logger.info(
+                        "force_full_reset_processed",
+                        previously_processed=len(self.processed_application_ids),
+                    )
+                    self.processed_application_ids.clear()
 
         # Load previous export as baseline (if incremental)
         previous_hashes: dict[str, str] = {}
@@ -1325,12 +1339,14 @@ class ScraperOrchestrator:
         )
         total_applications = len(hierarchy)
 
-        # Phase 1.5: ETag-based filtering (skip unchanged application pages)
+        # Phase 1.5: ETag-based filtering (skip unchanged application pages).
+        # A forced full run still hashes every page so the store is refreshed
+        # as pages are processed, but keeps them all.
         etag_skipped = 0
-        etag_filtered = self.incremental and not force_full
+        etag_filtered = self.incremental or force_full
         if etag_filtered:
             pre_filter_count = len(hierarchy)
-            hierarchy = self._filter_by_etags(hierarchy)
+            hierarchy = self._filter_by_etags(hierarchy, keep_all=force_full)
             etag_skipped = pre_filter_count - len(hierarchy)
             logger.info(
                 "etag_filtering_complete",
