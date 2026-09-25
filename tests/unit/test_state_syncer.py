@@ -370,6 +370,75 @@ class TestPushParts:
             for call in syncer.client.post.call_args_list
         )
 
+    def test_push_parts_aggregates_change_report_across_chunks(
+        self, syncer: StateSyncer, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """Sums the per-field histogram and collects SKU samples from every chunk."""
+        # Arrange
+        parts = [{"sku": f"CSF-{i:05d}"} for i in range(4)]
+        parts_file = tmp_path / "parts_complete.json"
+        parts_file.write_text(json.dumps({"parts": parts}))
+
+        first = mocker.Mock(spec=httpx.Response)
+        first.json.return_value = {
+            "success": True,
+            "results": {
+                "updated": 2,
+                "changed_fields": {"compatibility": 2, "images": 1},
+                "changes": {
+                    "CSF-00000": ["compatibility", "images"],
+                    "CSF-00001": ["compatibility"],
+                },
+            },
+        }
+        second = mocker.Mock(spec=httpx.Response)
+        second.json.return_value = {
+            "success": True,
+            "results": {
+                "updated": 1,
+                "unchanged": 1,
+                "changed_fields": {"compatibility": 1},
+                "changes": {"CSF-00002": ["compatibility"]},
+            },
+        }
+        syncer.client.post.side_effect = [first, second]
+        log_spy = mocker.patch("src.scraper.state_syncer.logger")
+
+        # Act
+        result = syncer.push_parts(parts_file, chunk_size=2)
+
+        # Assert
+        assert result is True
+        events = {call.args[0]: call.kwargs for call in log_spy.info.call_args_list}
+        assert events["parts_push_success"]["updated"] == 3
+        assert events["parts_push_success"]["changed_fields"] == {"compatibility": 3, "images": 1}
+        assert events["parts_push_updated_parts"]["parts"] == {
+            "CSF-00000": ["compatibility", "images"],
+            "CSF-00001": ["compatibility"],
+            "CSF-00002": ["compatibility"],
+        }
+
+    def test_push_parts_without_change_report_logs_no_samples(
+        self, syncer: StateSyncer, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """Older plugin responses without a change report still log a clean summary."""
+        # Arrange
+        parts_file = tmp_path / "parts_complete.json"
+        parts_file.write_text(json.dumps({"parts": [{"sku": "CSF-001"}]}))
+        mock_response = mocker.Mock(spec=httpx.Response)
+        mock_response.json.return_value = {"success": True, "results": {"unchanged": 1}}
+        syncer.client.post.return_value = mock_response
+        log_spy = mocker.patch("src.scraper.state_syncer.logger")
+
+        # Act
+        result = syncer.push_parts(parts_file)
+
+        # Assert
+        assert result is True
+        events = [call.args[0] for call in log_spy.info.call_args_list]
+        assert "parts_push_success" in events
+        assert "parts_push_updated_parts" not in events
+
     def test_push_parts_aborts_on_failed_chunk(
         self, syncer: StateSyncer, tmp_path: Path, mocker: MockerFixture
     ) -> None:

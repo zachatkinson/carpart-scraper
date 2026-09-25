@@ -227,7 +227,9 @@ class CSF_Parts_Database {
 	 *
 	 * @since 2.0.0
 	 * @param array $data Part data.
-	 * @return array{id: int|false, status: string} Part ID and status ('created', 'updated', 'unchanged').
+	 * @return array{id: int|false, status: string, changed_fields: string[]} Part ID, status
+	 *                ('created', 'updated', 'unchanged') and, for 'updated', the content fields
+	 *                whose stored value differed from the incoming one.
 	 */
 	public function upsert_part( array $data ) {
 		$existing = $this->get_part_by_sku( $data['sku'] );
@@ -253,8 +255,10 @@ class CSF_Parts_Database {
 		);
 
 		if ( $existing ) {
-			// Compare content fields to detect actual changes.
-			$has_changes = false;
+			// Compare content fields to detect actual changes. Every differing
+			// field is collected (not just the first) so the import report can
+			// say what changed, not only that something did.
+			$changed_fields = array();
 			foreach ( $content_data as $key => $new_value ) {
 				$existing_value = $existing->$key ?? '';
 
@@ -269,12 +273,11 @@ class CSF_Parts_Database {
 				}
 
 				if ( $existing_str !== $new_str ) {
-					$has_changes = true;
-					break;
+					$changed_fields[] = $key;
 				}
 			}
 
-			if ( ! $has_changes ) {
+			if ( empty( $changed_fields ) ) {
 				// Nothing changed — update only last_synced without touching updated_at.
 				$this->wpdb->query(
 					$this->wpdb->prepare(
@@ -284,8 +287,9 @@ class CSF_Parts_Database {
 					)
 				);
 				return array(
-					'id'     => $existing->id,
-					'status' => 'unchanged',
+					'id'             => $existing->id,
+					'status'         => 'unchanged',
+					'changed_fields' => array(),
 				);
 			}
 
@@ -320,8 +324,9 @@ class CSF_Parts_Database {
 			);
 
 			return array(
-				'id'     => false !== $result ? $existing->id : false,
-				'status' => 'updated',
+				'id'             => false !== $result ? $existing->id : false,
+				'status'         => 'updated',
+				'changed_fields' => $changed_fields,
 			);
 		} else {
 			// Insert new part.
@@ -353,8 +358,9 @@ class CSF_Parts_Database {
 			);
 
 			return array(
-				'id'     => false !== $result ? $this->wpdb->insert_id : false,
-				'status' => 'created',
+				'id'             => false !== $result ? $this->wpdb->insert_id : false,
+				'status'         => 'created',
+				'changed_fields' => array(),
 			);
 		}
 	}

@@ -139,13 +139,15 @@ class CSF_Parts_Auto_Import {
 		delete_option( 'csf_parts_auto_import_last_error' );
 
 		// Log success.
+		$changed_fields = $results['changed_fields'] ?? array();
 		error_log(
 			sprintf(
-				'CSF Parts Auto Import Success: Created %d, Updated %d, Unchanged %d, Skipped %d',
+				'CSF Parts Auto Import Success: Created %d, Updated %d, Unchanged %d, Skipped %d%s',
 				$results['created'],
 				$results['updated'],
 				$results['unchanged'] ?? 0,
-				$results['skipped']
+				$results['skipped'],
+				empty( $changed_fields ) ? '' : ', Changed fields ' . wp_json_encode( $changed_fields )
 			)
 		);
 	}

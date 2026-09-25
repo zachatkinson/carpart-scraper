@@ -288,6 +288,7 @@ final class DatabaseTest extends TestCase {
 		// Assert.
 		$this->assertEquals( 42, $result['id'] );
 		$this->assertEquals( 'unchanged', $result['status'] );
+		$this->assertSame( array(), $result['changed_fields'] );
 	}
 
 	/**
@@ -365,6 +366,11 @@ final class DatabaseTest extends TestCase {
 		// Assert.
 		$this->assertEquals( 99, $result['id'] );
 		$this->assertEquals( 'updated', $result['status'] );
+		$this->assertEqualsCanonicalizing(
+			array( 'name', 'price', 'description' ),
+			$result['changed_fields'],
+			'Every differing content field is reported, not just the first'
+		);
 	}
 
 	/**

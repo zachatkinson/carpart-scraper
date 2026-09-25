@@ -10,6 +10,7 @@ so this module is only needed for remote mode.
 
 import json
 from pathlib import Path
+from typing import Any
 
 import httpx
 import structlog
@@ -28,6 +29,10 @@ PARTS_CHUNK_SIZE = 200
 # Importing a chunk creates/updates posts server-side, which is slower than a
 # state-file write — allow more time than the default client timeout.
 PARTS_PUSH_TIMEOUT_SECONDS = 300
+
+# Maximum number of updated SKUs named individually in the push log line.
+# The per-field histogram is always complete; this only bounds the sample.
+PARTS_PUSH_MAX_LOGGED_CHANGES = 50
 
 # Only these keys are allowed — prevents arbitrary file writes on the server
 ALLOWED_KEYS = frozenset({"etags", "detail_etags", "manifest"})
@@ -183,6 +188,8 @@ class StateSyncer:
         endpoint = f"{self.wp_url}/wp-json/csf/v1/import"
         chunks = [parts[i : i + chunk_size] for i in range(0, len(parts), chunk_size)]
         totals = {"created": 0, "updated": 0, "unchanged": 0, "skipped": 0}
+        changed_fields: dict[str, int] = {}
+        changed_samples: dict[str, list[str]] = {}
 
         for chunk_num, chunk in enumerate(chunks, start=1):
             try:
@@ -206,6 +213,7 @@ class StateSyncer:
 
             for key in totals:
                 totals[key] += int(results.get(key, 0))
+            self._merge_change_report(results, changed_fields, changed_samples)
 
             logger.info(
                 "parts_push_chunk_complete",
@@ -220,10 +228,49 @@ class StateSyncer:
             updated=totals["updated"],
             unchanged=totals["unchanged"],
             skipped=totals["skipped"],
+            changed_fields=changed_fields,
             total_chunks=len(chunks),
             path=str(parts_file),
         )
+        if changed_samples:
+            logger.info(
+                "parts_push_updated_parts",
+                sample_size=len(changed_samples),
+                updated=totals["updated"],
+                parts=changed_samples,
+            )
         return True
+
+    @staticmethod
+    def _merge_change_report(
+        results: dict[str, Any],
+        changed_fields: dict[str, int],
+        changed_samples: dict[str, list[str]],
+    ) -> None:
+        """Fold one chunk's change report into the running totals.
+
+        The WordPress importer reports ``changed_fields`` (field -> count of
+        updated parts where that field differed) and ``changes`` (SKU -> list
+        of differing fields, capped per request). Both are merged in place;
+        the sample is capped again here so the log line stays bounded no
+        matter how many chunks were pushed.
+
+        Args:
+            results: ``results`` object from one import response
+            changed_fields: Running per-field histogram to update
+            changed_samples: Running SKU -> fields sample to update
+        """
+        fields = results.get("changed_fields")
+        if isinstance(fields, dict):
+            for field, count in fields.items():
+                changed_fields[str(field)] = changed_fields.get(str(field), 0) + int(count)
+
+        changes = results.get("changes")
+        if isinstance(changes, dict):
+            for sku, sku_fields in changes.items():
+                if len(changed_samples) >= PARTS_PUSH_MAX_LOGGED_CHANGES:
+                    break
+                changed_samples[str(sku)] = [str(f) for f in sku_fields]
 
     def close(self) -> None:
         """Close the HTTP client."""

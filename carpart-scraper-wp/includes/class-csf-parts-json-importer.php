@@ -27,13 +27,26 @@ class CSF_Parts_JSON_Importer {
 	 * @var array
 	 */
 	private $results = array(
-		'created'   => 0,
-		'updated'   => 0,
-		'unchanged' => 0,
-		'skipped'   => 0,
-		'errors'    => array(),
-		'warnings'  => array(),
+		'created'        => 0,
+		'updated'        => 0,
+		'unchanged'      => 0,
+		'skipped'        => 0,
+		'errors'         => array(),
+		'warnings'       => array(),
+		'changed_fields' => array(),
+		'changes'        => array(),
 	);
+
+	/**
+	 * Maximum number of updated parts listed individually in results.
+	 *
+	 * The per-field histogram in results['changed_fields'] is always complete;
+	 * this only caps results['changes'] so a full-catalog import doesn't bloat
+	 * the stored option or the REST response.
+	 *
+	 * @var int
+	 */
+	const MAX_LOGGED_CHANGES = 50;
 
 	/**
 	 * Batch size for processing.
@@ -208,6 +221,31 @@ class CSF_Parts_JSON_Importer {
 
 		// Track results using status from upsert.
 		$this->results[ $result['status'] ]++;
+
+		if ( 'updated' === $result['status'] ) {
+			$this->record_changed_fields( $part_data['sku'], $result['changed_fields'] ?? array() );
+		}
+	}
+
+	/**
+	 * Record which fields changed for an updated part.
+	 *
+	 * Maintains a per-field histogram across the whole import plus a capped
+	 * list of SKU => fields so a report can say both "1709 parts changed in
+	 * compatibility" and name a few of them.
+	 *
+	 * @since 1.19.1
+	 * @param string   $sku            Part SKU.
+	 * @param string[] $changed_fields Content fields whose value differed.
+	 */
+	private function record_changed_fields( string $sku, array $changed_fields ): void {
+		foreach ( $changed_fields as $field ) {
+			$this->results['changed_fields'][ $field ] = ( $this->results['changed_fields'][ $field ] ?? 0 ) + 1;
+		}
+
+		if ( count( $this->results['changes'] ) < self::MAX_LOGGED_CHANGES ) {
+			$this->results['changes'][ $sku ] = $changed_fields;
+		}
 	}
 
 	/**
