@@ -16,6 +16,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Get import logs.
 $logs = CSF_Parts_Import_Manager::get_import_logs();
 
+// Recent catalog changes (parts the import created or whose content changed).
+require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-database.php';
+$csf_database    = new CSF_Parts_Database();
+$recent_changes  = $csf_database->get_recent_changes( 50 );
+
 // Handle clear logs action.
 if ( isset( $_POST['csf_clear_logs'] ) && check_admin_referer( 'csf_clear_logs_nonce' ) ) {
 	CSF_Parts_Import_Manager::clear_import_logs();
@@ -163,6 +168,38 @@ $cleared = isset( $_GET['cleared'] ) && '1' === $_GET['cleared'];
 			);
 			?>
 		</p>
+	<?php endif; ?>
+
+	<h2><?php esc_html_e( 'Recent Catalog Changes', 'csf-parts' ); ?></h2>
+	<p class="description">
+		<?php esc_html_e( 'Parts the import added, or whose CSF data differed from what was stored. Re-imports of identical parts are not listed.', 'csf-parts' ); ?>
+	</p>
+
+	<?php if ( empty( $recent_changes ) ) : ?>
+		<div class="notice notice-info inline">
+			<p><?php esc_html_e( 'No catalog changes recorded yet.', 'csf-parts' ); ?></p>
+		</div>
+	<?php else : ?>
+		<table class="wp-list-table widefat fixed striped">
+			<thead>
+				<tr>
+					<th><?php esc_html_e( 'Observed', 'csf-parts' ); ?></th>
+					<th><?php esc_html_e( 'Part', 'csf-parts' ); ?></th>
+					<th><?php esc_html_e( 'Change', 'csf-parts' ); ?></th>
+					<th><?php esc_html_e( 'Fields', 'csf-parts' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $recent_changes as $change ) : ?>
+					<tr>
+						<td><?php echo esc_html( (string) $change->observed_at ); ?></td>
+						<td><?php echo esc_html( csf_format_sku_display( (string) $change->sku ) ); ?></td>
+						<td><?php echo esc_html( 'created' === $change->change_type ? __( 'Added', 'csf-parts' ) : __( 'Updated', 'csf-parts' ) ); ?></td>
+						<td><?php echo esc_html( implode( ', ', $change->changed_fields ) ); ?></td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
 	<?php endif; ?>
 </div>
 

@@ -25,11 +25,21 @@ final class CSF_Parts_Catalog_Sort {
 	/**
 	 * Sort options in display order.
 	 *
-	 * @return array<string, array{label: string, orderby: string, order: string}>
+	 * "Newest first" orders by the later of created_at and updated_at, i.e. the
+	 * last import in which CSF added the part or changed its content. Its
+	 * aliases let a block whose default sort is one of those columns still
+	 * pre-select the control.
+	 *
+	 * @return array<string, array{label: string, orderby: string, order: string, aliases?: string[]}>
 	 */
 	public static function options(): array {
 		return array(
-			'newest'   => array( 'label' => 'Newest first', 'orderby' => 'updated_at', 'order' => 'desc' ),
+			'newest'   => array(
+				'label'   => 'Newest first',
+				'orderby' => 'latest',
+				'order'   => 'desc',
+				'aliases' => array( 'updated_at', 'created_at' ),
+			),
 			'name'     => array( 'label' => 'Name A–Z', 'orderby' => 'name', 'order' => 'asc' ),
 			'sku'      => array( 'label' => 'Part number', 'orderby' => 'sku', 'order' => 'asc' ),
 			'category' => array( 'label' => 'Part type', 'orderby' => 'category', 'order' => 'asc' ),
@@ -71,7 +81,8 @@ final class CSF_Parts_Catalog_Sort {
 	 */
 	public static function key_for( string $orderby, string $order ): string {
 		foreach ( self::options() as $key => $option ) {
-			if ( $option['orderby'] === $orderby && $option['order'] === strtolower( $order ) ) {
+			$columns = array_merge( array( $option['orderby'] ), $option['aliases'] ?? array() );
+			if ( in_array( $orderby, $columns, true ) && $option['order'] === strtolower( $order ) ) {
 				return $key;
 			}
 		}

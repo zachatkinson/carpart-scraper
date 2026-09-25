@@ -19,11 +19,47 @@ if ( ! defined( 'ABSPATH' ) ) {
 class CSF_Parts_Database {
 
 	/**
+	 * Schema version written on activation and reached by maybe_migrate().
+	 */
+	const DB_VERSION = '2.3.0';
+
+	/**
+	 * Content fields that define a part for change detection, in storage form.
+	 *
+	 * These are what CSF publishes. scraped_at, last_synced and the timestamps
+	 * describe when we looked and are deliberately absent, so re-importing an
+	 * identical part never counts as a change.
+	 */
+	const CONTENT_FIELDS = array(
+		'name',
+		'description',
+		'short_description',
+		'category',
+		'price',
+		'manufacturer',
+		'in_stock',
+		'position',
+		'specifications',
+		'features',
+		'tech_notes',
+		'compatibility',
+		'images',
+		'interchange_numbers',
+	);
+
+	/**
 	 * Table name for parts.
 	 *
 	 * @var string
 	 */
 	private $table_parts;
+
+	/**
+	 * Change-log table name: one row per part per import that created or changed it.
+	 *
+	 * @var string
+	 */
+	private $table_changes;
 
 	/**
 	 * WordPress database object.
@@ -38,7 +74,8 @@ class CSF_Parts_Database {
 	public function __construct() {
 		global $wpdb;
 		$this->wpdb        = $wpdb;
-		$this->table_parts = $wpdb->prefix . 'csf_parts';
+		$this->table_parts   = $wpdb->prefix . 'csf_parts';
+		$this->table_changes = $wpdb->prefix . 'csf_part_changes';
 	}
 
 	/**
@@ -70,20 +107,43 @@ class CSF_Parts_Database {
 			images longtext,
 			interchange_numbers longtext,
 			scraped_at varchar(50),
+			content_hash char(32) DEFAULT NULL,
 			last_synced datetime DEFAULT NULL,
 			created_at datetime DEFAULT CURRENT_TIMESTAMP,
-			updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			updated_at datetime DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY  (id),
 			UNIQUE KEY sku (sku),
 			KEY category (category),
 			KEY manufacturer (manufacturer),
-			KEY in_stock (in_stock)
+			KEY in_stock (in_stock),
+			KEY updated_at (updated_at)
 		) $charset_collate;";
 
+		// Timestamp semantics (all set by upsert_part, never by MySQL triggers):
+		//   created_at  - first import that saw the SKU
+		//   updated_at  - last import in which a content field differed (see CONTENT_FIELDS)
+		//   last_synced - last import that saw the SKU at all
+		// content_hash is the MD5 of the stored content fields so an unchanged
+		// part costs one string comparison, not fourteen.
 		dbDelta( $sql_parts );
 
+		// Change log: what each import created or changed, queryable after CI logs expire.
+		$sql_changes = "CREATE TABLE {$this->table_changes} (
+			id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+			part_id bigint(20) UNSIGNED NOT NULL,
+			sku varchar(50) NOT NULL,
+			change_type varchar(10) NOT NULL,
+			changed_fields text,
+			observed_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY sku (sku),
+			KEY observed_at (observed_at)
+		) $charset_collate;";
+
+		dbDelta( $sql_changes );
+
 		// Store schema version for future migrations.
-		update_option( 'csf_parts_db_version', '2.2.0' );
+		update_option( 'csf_parts_db_version', self::DB_VERSION );
 	}
 
 	/**
@@ -104,6 +164,12 @@ class CSF_Parts_Database {
 		if ( version_compare( $current_version, '2.2.0', '<' ) ) {
 			$this->migrate_to_2_2_0();
 			update_option( 'csf_parts_db_version', '2.2.0' );
+		}
+
+		// Migration for 2.3.0: content hash, explicit updated_at, change log.
+		if ( version_compare( $current_version, '2.3.0', '<' ) ) {
+			$this->migrate_to_2_3_0();
+			update_option( 'csf_parts_db_version', '2.3.0' );
 		}
 	}
 
@@ -152,11 +218,70 @@ class CSF_Parts_Database {
 	}
 
 	/**
+	 * Migration to version 2.3.0: content_hash column, updated_at without the
+	 * MySQL ON UPDATE trigger, and the change-log table.
+	 *
+	 * Existing rows keep their updated_at; the first import after upgrading
+	 * compares fields (no hash yet), stores the hash, and only bumps updated_at
+	 * for parts whose content really differs.
+	 *
+	 * @since 2.3.0
+	 */
+	private function migrate_to_2_3_0(): void {
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$column_exists = $this->wpdb->get_results(
+			"SHOW COLUMNS FROM {$this->table_parts} LIKE 'content_hash'"
+		);
+
+		if ( empty( $column_exists ) ) {
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$this->wpdb->query(
+				"ALTER TABLE {$this->table_parts}
+				ADD COLUMN content_hash char(32) DEFAULT NULL AFTER scraped_at"
+			);
+		}
+
+		// updated_at becomes application-managed: only a content change sets it.
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$this->wpdb->query(
+			"ALTER TABLE {$this->table_parts}
+			MODIFY updated_at datetime DEFAULT CURRENT_TIMESTAMP"
+		);
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$index_exists = $this->wpdb->get_results(
+			"SHOW INDEX FROM {$this->table_parts} WHERE Key_name = 'updated_at'"
+		);
+
+		if ( empty( $index_exists ) ) {
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$this->wpdb->query( "ALTER TABLE {$this->table_parts} ADD KEY updated_at (updated_at)" );
+		}
+
+		$charset_collate = $this->wpdb->get_charset_collate();
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$this->wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$this->table_changes} (
+				id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+				part_id bigint(20) UNSIGNED NOT NULL,
+				sku varchar(50) NOT NULL,
+				change_type varchar(10) NOT NULL,
+				changed_fields text,
+				observed_at datetime NOT NULL,
+				PRIMARY KEY  (id),
+				KEY sku (sku),
+				KEY observed_at (observed_at)
+			) $charset_collate"
+		);
+	}
+
+	/**
 	 * Drop custom tables on plugin uninstall.
 	 *
 	 * @since 2.0.0
 	 */
 	public function drop_tables(): void {
+		$this->wpdb->query( "DROP TABLE IF EXISTS {$this->table_changes}" );
 		$this->wpdb->query( "DROP TABLE IF EXISTS {$this->table_parts}" );
 		delete_option( 'csf_parts_db_version' );
 	}
@@ -225,6 +350,13 @@ class CSF_Parts_Database {
 	/**
 	 * Insert or update part.
 	 *
+	 * A part is "changed" when any CONTENT_FIELDS value differs from what is
+	 * stored. The stored content_hash short-circuits the common case; rows
+	 * without one (imported before 2.3.0) fall back to a field comparison so
+	 * upgrading never marks the whole catalog as changed. Only a real change
+	 * moves updated_at; every import moves last_synced. Created and updated
+	 * parts are appended to the change log.
+	 *
 	 * @since 2.0.0
 	 * @param array $data Part data.
 	 * @return array{id: int|false, status: string, changed_fields: string[]} Part ID, status
@@ -232,11 +364,109 @@ class CSF_Parts_Database {
 	 *                whose stored value differed from the incoming one.
 	 */
 	public function upsert_part( array $data ) {
-		$existing = $this->get_part_by_sku( $data['sku'] );
+		$sku      = (string) $data['sku'];
+		$existing = $this->get_part_by_sku( $sku );
+		$content  = self::content_data( $data );
+		$hash     = self::content_hash( $content );
+		$now      = current_time( 'mysql' );
+		$scraped  = (string) ( $data['scraped_at'] ?? '' );
 
-		// Prepare content data for database (excludes timestamps for comparison).
-		$content_data = array(
-			'sku'                 => $data['sku'],
+		if ( ! $existing ) {
+			$row = array_merge(
+				array( 'sku' => $sku ),
+				$content,
+				array(
+					'scraped_at'   => $scraped,
+					'content_hash' => $hash,
+					'last_synced'  => $now,
+					'created_at'   => $now,
+					'updated_at'   => $now,
+				)
+			);
+
+			$result = $this->wpdb->insert( $this->table_parts, $row, self::row_formats( $row ) );
+			$id     = false !== $result ? (int) $this->wpdb->insert_id : false;
+
+			if ( false !== $id ) {
+				$this->record_change( $id, $sku, 'created', array(), $now );
+			}
+
+			return array(
+				'id'             => $id,
+				'status'         => 'created',
+				'changed_fields' => array(),
+			);
+		}
+
+		$changed_fields = (string) ( $existing->content_hash ?? '' ) === $hash
+			? array()
+			: self::diff_content( $existing, $content );
+
+		if ( empty( $changed_fields ) ) {
+			// Nothing CSF publishes differs: note that we saw it, store the hash
+			// (fills in rows from before hashing) and leave updated_at alone.
+			$this->wpdb->query(
+				$this->wpdb->prepare(
+					"UPDATE {$this->table_parts}
+					SET last_synced = %s, scraped_at = %s, content_hash = %s, updated_at = updated_at
+					WHERE id = %d",
+					$now,
+					$scraped,
+					$hash,
+					$existing->id
+				)
+			);
+
+			return array(
+				'id'             => $existing->id,
+				'status'         => 'unchanged',
+				'changed_fields' => array(),
+			);
+		}
+
+		$row = array_merge(
+			$content,
+			array(
+				'scraped_at'   => $scraped,
+				'content_hash' => $hash,
+				'last_synced'  => $now,
+				'updated_at'   => $now,
+			)
+		);
+
+		$result = $this->wpdb->update(
+			$this->table_parts,
+			$row,
+			array( 'id' => $existing->id ),
+			self::row_formats( $row ),
+			array( '%d' )
+		);
+
+		if ( false !== $result ) {
+			$this->record_change( (int) $existing->id, $sku, 'updated', $changed_fields, $now );
+		}
+
+		return array(
+			'id'             => false !== $result ? $existing->id : false,
+			'status'         => 'updated',
+			'changed_fields' => $changed_fields,
+		);
+	}
+
+	/**
+	 * Content fields of an incoming part in the form they are stored.
+	 *
+	 * @since 2.3.0
+	 * @param array $data Part data as pushed by the scraper.
+	 * @return array<string, mixed> CONTENT_FIELDS keyed values.
+	 */
+	public static function content_data( array $data ): array {
+		$compatibility = $data['compatibility'] ?? null;
+		if ( is_array( $compatibility ) ) {
+			$compatibility = self::sort_compatibility( $compatibility );
+		}
+
+		return array(
 			'name'                => $data['name'] ?? '',
 			'description'         => $data['description'] ?? '',
 			'short_description'   => $data['short_description'] ?? '',
@@ -248,121 +478,158 @@ class CSF_Parts_Database {
 			'specifications'      => isset( $data['specifications'] ) ? wp_json_encode( $data['specifications'] ) : '',
 			'features'            => isset( $data['features'] ) ? wp_json_encode( $data['features'] ) : '',
 			'tech_notes'          => $data['tech_notes'] ?? '',
-			'compatibility'       => isset( $data['compatibility'] ) ? wp_json_encode( is_array( $data['compatibility'] ) ? self::sort_compatibility( $data['compatibility'] ) : $data['compatibility'] ) : '',
+			'compatibility'       => null !== $compatibility ? wp_json_encode( $compatibility ) : '',
 			'images'              => isset( $data['images'] ) ? wp_json_encode( $data['images'] ) : '',
 			'interchange_numbers' => isset( $data['interchange_numbers'] ) ? wp_json_encode( $data['interchange_numbers'] ) : '',
-			'scraped_at'          => $data['scraped_at'] ?? '',
+		);
+	}
+
+	/**
+	 * Hash of a part's content fields in comparison form.
+	 *
+	 * Two parts hash alike exactly when diff_content() would find no
+	 * differing field, so the hash can stand in for the comparison.
+	 *
+	 * @since 2.3.0
+	 * @param array<string, mixed> $content Output of content_data().
+	 * @return string 32-character MD5 hex digest.
+	 */
+	public static function content_hash( array $content ): string {
+		$normalized = array();
+		foreach ( self::CONTENT_FIELDS as $field ) {
+			$normalized[ $field ] = self::comparable( $field, $content[ $field ] ?? '' );
+		}
+		return md5( (string) wp_json_encode( $normalized ) );
+	}
+
+	/**
+	 * Content fields whose stored value differs from the incoming one.
+	 *
+	 * @since 2.3.0
+	 * @param object               $existing Stored row.
+	 * @param array<string, mixed> $content  Output of content_data().
+	 * @return string[] Differing field names in CONTENT_FIELDS order.
+	 */
+	public static function diff_content( object $existing, array $content ): array {
+		$changed = array();
+		foreach ( self::CONTENT_FIELDS as $field ) {
+			$stored   = self::comparable( $field, $existing->$field ?? '' );
+			$incoming = self::comparable( $field, $content[ $field ] ?? '' );
+			if ( $stored !== $incoming ) {
+				$changed[] = $field;
+			}
+		}
+		return $changed;
+	}
+
+	/**
+	 * A field value in the form used for comparison and hashing.
+	 *
+	 * Everything compares as a string. Price compares to two decimals so
+	 * 199.99 and "199.990000" agree; a null price stays distinct from 0.
+	 *
+	 * @param string $field Field name.
+	 * @param mixed  $value Stored or incoming value.
+	 * @return string
+	 */
+	private static function comparable( string $field, $value ): string {
+		if ( 'price' === $field ) {
+			return null === $value || '' === $value ? '' : number_format( (float) $value, 2, '.', '' );
+		}
+		return (string) $value;
+	}
+
+	/**
+	 * wpdb format specifiers for a row, keyed like the row.
+	 *
+	 * @param array<string, mixed> $row Column => value.
+	 * @return string[] One specifier per column, in row order.
+	 */
+	private static function row_formats( array $row ): array {
+		$formats = array();
+		foreach ( array_keys( $row ) as $column ) {
+			if ( 'price' === $column ) {
+				$formats[] = '%f';
+			} elseif ( 'in_stock' === $column ) {
+				$formats[] = '%d';
+			} else {
+				$formats[] = '%s';
+			}
+		}
+		return $formats;
+	}
+
+	/**
+	 * Append a row to the change log.
+	 *
+	 * @since 2.3.0
+	 * @param int      $part_id        Part row ID.
+	 * @param string   $sku            Part SKU.
+	 * @param string   $change_type    'created' or 'updated'.
+	 * @param string[] $changed_fields Differing fields ('updated' only).
+	 * @param string   $observed_at    MySQL datetime of the import.
+	 */
+	private function record_change( int $part_id, string $sku, string $change_type, array $changed_fields, string $observed_at ): void {
+		$this->wpdb->insert(
+			$this->table_changes,
+			array(
+				'part_id'        => $part_id,
+				'sku'            => $sku,
+				'change_type'    => $change_type,
+				'changed_fields' => wp_json_encode( array_values( $changed_fields ) ),
+				'observed_at'    => $observed_at,
+			),
+			array( '%d', '%s', '%s', '%s', '%s' )
+		);
+	}
+
+	/**
+	 * Most recent change-log entries, newest first.
+	 *
+	 * @since 2.3.0
+	 * @param int $limit Maximum rows (1-500).
+	 * @return array<int, object> Rows with sku, change_type, changed_fields (string[]) and observed_at.
+	 */
+	public function get_recent_changes( int $limit = 20 ): array {
+		$limit = max( 1, min( 500, $limit ) );
+
+		$rows = $this->wpdb->get_results(
+			$this->wpdb->prepare(
+				"SELECT sku, change_type, changed_fields, observed_at
+				FROM {$this->table_changes}
+				ORDER BY observed_at DESC, id DESC
+				LIMIT %d",
+				$limit
+			)
 		);
 
-		if ( $existing ) {
-			// Compare content fields to detect actual changes. Every differing
-			// field is collected (not just the first) so the import report can
-			// say what changed, not only that something did.
-			$changed_fields = array();
-			foreach ( $content_data as $key => $new_value ) {
-				$existing_value = $existing->$key ?? '';
-
-				// Normalize for comparison: cast both to string.
-				$existing_str = (string) $existing_value;
-				$new_str      = (string) $new_value;
-
-				// Normalize numeric comparison for price.
-				if ( 'price' === $key && null !== $new_value ) {
-					$existing_str = number_format( (float) $existing_value, 2, '.', '' );
-					$new_str      = number_format( (float) $new_value, 2, '.', '' );
-				}
-
-				if ( $existing_str !== $new_str ) {
-					$changed_fields[] = $key;
-				}
-			}
-
-			if ( empty( $changed_fields ) ) {
-				// Nothing changed — update only last_synced without touching updated_at.
-				$this->wpdb->query(
-					$this->wpdb->prepare(
-						"UPDATE {$this->table_parts} SET last_synced = %s, updated_at = updated_at WHERE id = %d",
-						current_time( 'mysql' ),
-						$existing->id
-					)
-				);
-				return array(
-					'id'             => $existing->id,
-					'status'         => 'unchanged',
-					'changed_fields' => array(),
-				);
-			}
-
-			// Content changed — do full update.
-			$db_data                = $content_data;
-			$db_data['last_synced'] = current_time( 'mysql' );
-
-			$result = $this->wpdb->update(
-				$this->table_parts,
-				$db_data,
-				array( 'id' => $existing->id ),
-				array(
-					'%s', // sku.
-					'%s', // name.
-					'%s', // description.
-					'%s', // short_description.
-					'%s', // category.
-					'%f', // price.
-					'%s', // manufacturer.
-					'%d', // in_stock.
-					'%s', // position.
-					'%s', // specifications.
-					'%s', // features.
-					'%s', // tech_notes.
-					'%s', // compatibility.
-					'%s', // images.
-					'%s', // interchange_numbers.
-					'%s', // scraped_at.
-					'%s', // last_synced.
-				),
-				array( '%d' )
-			);
-
-			return array(
-				'id'             => false !== $result ? $existing->id : false,
-				'status'         => 'updated',
-				'changed_fields' => $changed_fields,
-			);
-		} else {
-			// Insert new part.
-			$db_data                = $content_data;
-			$db_data['last_synced'] = current_time( 'mysql' );
-
-			$result = $this->wpdb->insert(
-				$this->table_parts,
-				$db_data,
-				array(
-					'%s', // sku.
-					'%s', // name.
-					'%s', // description.
-					'%s', // short_description.
-					'%s', // category.
-					'%f', // price.
-					'%s', // manufacturer.
-					'%d', // in_stock.
-					'%s', // position.
-					'%s', // specifications.
-					'%s', // features.
-					'%s', // tech_notes.
-					'%s', // compatibility.
-					'%s', // images.
-					'%s', // interchange_numbers.
-					'%s', // scraped_at.
-					'%s', // last_synced.
-				)
-			);
-
-			return array(
-				'id'             => false !== $result ? $this->wpdb->insert_id : false,
-				'status'         => 'created',
-				'changed_fields' => array(),
-			);
+		foreach ( (array) $rows as $row ) {
+			$decoded             = json_decode( (string) ( $row->changed_fields ?? '' ), true );
+			$row->changed_fields = is_array( $decoded ) ? array_map( 'strval', $decoded ) : array();
 		}
+
+		return (array) $rows;
+	}
+
+	/**
+	 * Delete change-log rows older than a retention window.
+	 *
+	 * @since 2.3.0
+	 * @param int $days Rows observed more than this many days ago are removed.
+	 * @return int Rows deleted.
+	 */
+	public function prune_changes( int $days = 365 ): int {
+		$days   = max( 1, $days );
+		$cutoff = gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS );
+
+		$deleted = $this->wpdb->query(
+			$this->wpdb->prepare(
+				"DELETE FROM {$this->table_changes} WHERE observed_at < %s",
+				$cutoff
+			)
+		);
+
+		return false === $deleted ? 0 : (int) $deleted;
 	}
 
 	/**

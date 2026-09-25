@@ -15,11 +15,6 @@ on:
         required: false
         type: boolean
         default: false
-      push_full:
-        description: "Push the complete catalog to WordPress instead of the delta (recovery after a failed import)."
-        required: false
-        type: boolean
-        default: false
 
 concurrency:
   group: scrape-catalog
@@ -77,15 +72,9 @@ jobs:
             MAKE_FLAG="--make ${{ inputs.make }}"
           fi
 
-          PUSH_FLAG=""
-          if [ "${{ inputs.push_full }}" = "true" ]; then
-            PUSH_FLAG="--push-full"
-          fi
-
           uv run carpart scrape \
             $MAKE_FLAG \
             $FORCE_FLAG \
-            $PUSH_FLAG \
             --resume \
             --time-budget 350 \
             --sync-images \

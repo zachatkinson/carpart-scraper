@@ -49,6 +49,13 @@ class CSF_Parts_JSON_Importer {
 	const MAX_LOGGED_CHANGES = 50;
 
 	/**
+	 * Days of change-log history kept after each import.
+	 *
+	 * @var int
+	 */
+	const CHANGE_LOG_RETENTION_DAYS = 365;
+
+	/**
 	 * Batch size for processing.
 	 *
 	 * @var int
@@ -116,6 +123,9 @@ class CSF_Parts_JSON_Importer {
 		// Process parts in batches.
 		$parts = $data['parts'] ?? array();
 		$this->import_parts( $parts );
+
+		// Keep the change log to a year so it answers "what changed" without growing unbounded.
+		$this->database->prune_changes( self::CHANGE_LOG_RETENTION_DAYS );
 
 		return $this->results;
 	}

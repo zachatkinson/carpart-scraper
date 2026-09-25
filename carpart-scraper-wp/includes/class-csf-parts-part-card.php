@@ -98,7 +98,7 @@ final class CSF_Parts_Part_Card {
 		$primary_image = self::primary_image( (string) ( $part->images ?? '' ) );
 		$makes         = self::makes( (string) ( $part->compatibility ?? '' ) );
 		$category      = (string) ( $part->category ?? '' );
-		$is_new        = self::is_new( (string) ( $part->created_at ?? '' ), $options['new_badge_days'] );
+		$badge         = self::activity_badge( $part, $options['new_badge_days'] );
 		$fitment       = $options['show_fitment_line'] ? self::fitment_summary( (string) ( $part->compatibility ?? '' ), $options['fitment_context'] ) : '';
 		$meta          = $options['show_meta_line'] ? self::meta_line( $part ) : '';
 
@@ -108,8 +108,10 @@ final class CSF_Parts_Part_Card {
 			<a href="<?php echo esc_url( $part_url ); ?>" class="csf-part-card__link">
 				<?php if ( $primary_image ) : ?>
 					<div class="csf-part-card__image">
-						<?php if ( $is_new ) : ?>
+						<?php if ( 'new' === $badge ) : ?>
 							<span class="csf-part-card__new"><?php esc_html_e( 'New', 'csf-parts' ); ?></span>
+						<?php elseif ( 'updated' === $badge ) : ?>
+							<span class="csf-part-card__new csf-part-card__new--updated"><?php esc_html_e( 'Updated', 'csf-parts' ); ?></span>
 						<?php endif; ?>
 						<img
 							src="<?php echo esc_url( $primary_image ); ?>"
@@ -119,8 +121,10 @@ final class CSF_Parts_Part_Card {
 					</div>
 				<?php else : ?>
 					<div class="csf-part-card__image csf-part-card__image--placeholder">
-						<?php if ( $is_new ) : ?>
+						<?php if ( 'new' === $badge ) : ?>
 							<span class="csf-part-card__new"><?php esc_html_e( 'New', 'csf-parts' ); ?></span>
+						<?php elseif ( 'updated' === $badge ) : ?>
+							<span class="csf-part-card__new csf-part-card__new--updated"><?php esc_html_e( 'Updated', 'csf-parts' ); ?></span>
 						<?php endif; ?>
 						<svg width="48" height="48" viewBox="0 0 20 20" fill="currentColor" opacity="0.2" aria-hidden="true">
 							<path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/>
@@ -205,6 +209,29 @@ final class CSF_Parts_Part_Card {
 	}
 
 	/**
+	 * Which activity badge a card shows.
+	 *
+	 * 'new' when the import first saw the part within the window, 'updated'
+	 * when its content last changed within it, '' otherwise. Both timestamps
+	 * are set by the import only when CSF's data differs, so the badge tracks
+	 * catalog activity rather than database writes.
+	 *
+	 * @since 1.20.0
+	 * @param object $part Part row with created_at and updated_at.
+	 * @param int    $days Window in days; 0 disables the badge.
+	 * @return string 'new', 'updated' or ''.
+	 */
+	public static function activity_badge( object $part, int $days ): string {
+		if ( self::is_new( (string) ( $part->created_at ?? '' ), $days ) ) {
+			return 'new';
+		}
+		if ( self::is_recent( (string) ( $part->updated_at ?? '' ), $days ) ) {
+			return 'updated';
+		}
+		return '';
+	}
+
+	/**
 	 * Whether the part was added within the badge window.
 	 *
 	 * @param string $created_at MySQL datetime.
@@ -212,11 +239,23 @@ final class CSF_Parts_Part_Card {
 	 * @return bool
 	 */
 	public static function is_new( string $created_at, int $days ): bool {
-		if ( $days <= 0 || '' === $created_at ) {
+		return self::is_recent( $created_at, $days );
+	}
+
+	/**
+	 * Whether a timestamp falls within the last N days.
+	 *
+	 * @since 1.20.0
+	 * @param string $datetime MySQL datetime.
+	 * @param int    $days     Window in days; 0 always returns false.
+	 * @return bool
+	 */
+	public static function is_recent( string $datetime, int $days ): bool {
+		if ( $days <= 0 || '' === $datetime ) {
 			return false;
 		}
-		$created = strtotime( $created_at );
-		return false !== $created && ( time() - $created ) <= $days * DAY_IN_SECONDS;
+		$timestamp = strtotime( $datetime );
+		return false !== $timestamp && ( time() - $timestamp ) <= $days * DAY_IN_SECONDS;
 	}
 
 	/**

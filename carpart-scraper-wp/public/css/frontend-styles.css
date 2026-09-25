@@ -368,6 +368,12 @@
 	text-transform: uppercase;
 }
 
+/* "Updated" badge: same slot as New, muted so New still stands out */
+.csf-part-card__new--updated {
+	background: var(--csf-inverse-bg);
+	color: var(--csf-surface);
+}
+
 /* Fitment summary and meta lines */
 .csf-part-card__fitment {
 	margin: 0;

@@ -28,6 +28,7 @@ final class JsonImporterTest extends TestCase {
 
 		$this->importer      = new CSF_Parts_JSON_Importer();
 		$this->database_mock = Mockery::mock( 'CSF_Parts_Database' );
+		$this->database_mock->shouldReceive( 'prune_changes' )->andReturn( 0 );
 
 		$reflection = new ReflectionClass( $this->importer );
 		$property   = $reflection->getProperty( 'database' );

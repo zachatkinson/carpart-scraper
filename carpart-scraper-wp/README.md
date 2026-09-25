@@ -208,9 +208,17 @@ Parts data is stored in a dedicated MySQL table for performance and flexibility,
 - `compatibility`: JSON vehicle compatibility data (longtext)
 - `images`: JSON images array (longtext)
 - `interchange_numbers`: JSON interchange part numbers (longtext)
-- `scraped_at`: Last scrape timestamp (varchar 50)
-- `created_at`: Record creation timestamp (datetime, auto)
-- `updated_at`: Last update timestamp (datetime, auto-update)
+- `scraped_at`: When the scraper last read the part (varchar 50; informational, not compared)
+- `content_hash`: MD5 of the content fields above, so an unchanged part costs one comparison (char 32)
+- `last_synced`: Last import that saw the SKU at all (datetime)
+- `created_at`: First import that saw the SKU (datetime)
+- `updated_at`: Last import in which a content field differed from what was stored (datetime)
+
+All three timestamps are set by the importer, never by MySQL triggers, so they track CSF's catalog as observed by the nightly scrape rather than database writes. "Newest first" sorts, the **New** / **Updated** card badges and the homepage "new this season" block all key off `created_at` and `updated_at`.
+
+### Change Log Table: `wp_csf_part_changes`
+
+One row per part per import that added it or changed its content: `sku`, `change_type` (`created` / `updated`), `changed_fields` (JSON list of the differing content fields) and `observed_at`. The **Import Log** admin page lists the most recent entries, and the push endpoint returns the same information per import (`results.changed_fields` histogram and a capped `results.changes` sample) so the scraper's CI log can say which fields moved. Rows older than a year are pruned after each import.
 
 **Why Custom Table:**
 - Better performance for large datasets (10k+ parts)

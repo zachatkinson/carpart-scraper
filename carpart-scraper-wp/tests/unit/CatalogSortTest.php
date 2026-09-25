@@ -29,6 +29,8 @@ final class CatalogSortTest extends TestCase {
 		$this->assertNull( CSF_Parts_Catalog_Sort::resolve( 'bogus' ) );
 		$this->assertFalse( CSF_Parts_Catalog_Sort::is_valid( 'bogus' ) );
 		$this->assertSame( '', CSF_Parts_Catalog_Sort::key_for( 'created_at', 'asc' ) );
+		$this->assertSame( 'newest', CSF_Parts_Catalog_Sort::key_for( 'updated_at', 'desc' ), 'Blocks defaulting to updated_at still pre-select Newest first' );
+		$this->assertSame( 'newest', CSF_Parts_Catalog_Sort::key_for( 'created_at', 'desc' ) );
 	}
 
 	/**

@@ -74,7 +74,7 @@ final class CSF_Parts_Part_Context {
 			return null;
 		}
 		$database = new CSF_Parts_Database();
-		$result   = $database->query_parts( array( 'orderby' => 'updated_at', 'order' => 'desc' ), 8, 1 );
+		$result   = $database->query_parts( array( 'orderby' => 'latest', 'order' => 'desc' ), 8, 1 );
 		$parts    = $result['parts'] ?? array();
 		if ( empty( $parts ) ) {
 			self::$sample = false;

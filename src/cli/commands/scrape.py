@@ -104,13 +104,6 @@ FAILURE_RATE_THRESHOLD = 0.05
     envvar="CSF_TIME_BUDGET",
     help="Max minutes to run before saving checkpoint and exiting (env: CSF_TIME_BUDGET)",
 )
-@click.option(
-    "--push-full",
-    is_flag=True,
-    default=False,
-    help="Push the complete catalog to WordPress instead of the delta "
-    "(recovery after a failed import)",
-)
 def scrape(  # noqa: PLR0912, PLR0913, PLR0915
     make: str | None,
     year: int | None,
@@ -123,7 +116,6 @@ def scrape(  # noqa: PLR0912, PLR0913, PLR0915
     wp_url: str | None,
     wp_api_key: str | None,
     time_budget: float | None,
-    push_full: bool,
 ) -> None:
     r"""Scrape automotive parts data from CSF MyCarParts.
 
@@ -225,28 +217,24 @@ def scrape(  # noqa: PLR0912, PLR0913, PLR0915
             if orchestrator.image_syncer is not None:
                 sync_result = orchestrator.image_syncer.cumulative_result
 
-            # Push parts data to WordPress for remote mode
-            # Prefer delta (new+changed only) over full export to avoid
-            # unnecessary updates on the WordPress side. --push-full forces
-            # the complete catalog (recovery after a failed import).
+            # Push the complete catalog to WordPress. The plugin compares every
+            # part against what it stores (content hash, then field diff) and
+            # reports created/updated/unchanged with the fields that moved, so
+            # the import is the single place that decides what changed and a
+            # full push is idempotent. The delta export is still written as an
+            # artifact but is not what gets pushed.
             if state_syncer is not None:
-                if push_full:
-                    push_path = export_paths.get("complete")
-                else:
-                    push_path = export_paths.get("delta") or export_paths.get("complete")
+                push_path = export_paths.get("complete")
                 if push_path is not None:
-                    delta_count = len(orchestrator.new_skus) + len(orchestrator.changed_skus)
                     total_count = len(orchestrator.unique_parts)
-                    push_count = total_count if push_full else delta_count
                     console.print(
-                        f"[bold]Importing parts to WordPress...[/bold] "
-                        f"({push_count} of {total_count} total)"
+                        f"[bold]Importing parts to WordPress...[/bold] ({total_count} parts)"
                     )
                     if not state_syncer.push_parts(push_path):
                         push_failed = True
                         console.print(
                             "[red]WordPress import failed.[/red] "
-                            "Recover with: carpart scrape --resume --push-full"
+                            "Recover with: carpart scrape --resume"
                         )
 
         # Print summary

@@ -55,7 +55,7 @@ $gap = wp_parse_args(
 	)
 );
 
-$order_by            = $attributes['orderBy'] ?? 'updated_at';
+$order_by            = $attributes['orderBy'] ?? 'latest';
 $order_direction     = $attributes['orderDirection'] ?? 'desc';
 
 // Visitor sort (csf_sort) overrides the block default when valid.

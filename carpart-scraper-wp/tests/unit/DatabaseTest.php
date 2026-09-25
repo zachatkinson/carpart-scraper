@@ -75,6 +75,9 @@ final class DatabaseTest extends TestCase {
 		// Fix table_parts property to use mock prefix.
 		$table_property = $reflection->getProperty( 'table_parts' );
 		$table_property->setValue( $this->database, 'wp_csf_parts' );
+
+		$changes_property = $reflection->getProperty( 'table_changes' );
+		$changes_property->setValue( $this->database, 'wp_csf_part_changes' );
 	}
 
 	/**
@@ -195,7 +198,27 @@ final class DatabaseTest extends TestCase {
 			->once()
 			->with(
 				'wp_csf_parts',
-				Mockery::type( 'array' ),
+				Mockery::on(
+					function ( array $row ) {
+						return '2025-10-28 12:00:00' === $row['created_at']
+							&& '2025-10-28 12:00:00' === $row['updated_at']
+							&& 32 === strlen( $row['content_hash'] );
+					}
+				),
+				Mockery::type( 'array' )
+			)
+			->andReturn( 1 );
+
+		// The change log records the addition.
+		$this->wpdb_mock->shouldReceive( 'insert' )
+			->once()
+			->with(
+				'wp_csf_part_changes',
+				Mockery::on(
+					function ( array $row ) {
+						return 'CSF-4000' === $row['sku'] && 'created' === $row['change_type'];
+					}
+				),
 				Mockery::type( 'array' )
 			)
 			->andReturn( 1 );
@@ -348,14 +371,35 @@ final class DatabaseTest extends TestCase {
 			->once()
 			->andReturn( $existing );
 
-		// Expect a full update call (data changed).
+		// Expect a full update call (data changed) that moves updated_at itself.
 		$this->wpdb_mock->shouldReceive( 'update' )
 			->once()
 			->with(
 				'wp_csf_parts',
+				Mockery::on(
+					function ( array $row ) {
+						return '2025-10-28 12:00:00' === $row['updated_at']
+							&& ! array_key_exists( 'created_at', $row )
+							&& 32 === strlen( $row['content_hash'] );
+					}
+				),
+				array( 'id' => 99 ),
 				Mockery::type( 'array' ),
-				Mockery::type( 'array' ),
-				Mockery::type( 'array' ),
+				array( '%d' )
+			)
+			->andReturn( 1 );
+
+		// The change log records which fields moved.
+		$this->wpdb_mock->shouldReceive( 'insert' )
+			->once()
+			->with(
+				'wp_csf_part_changes',
+				Mockery::on(
+					function ( array $row ) {
+						return 'updated' === $row['change_type']
+							&& json_decode( $row['changed_fields'], true ) === array( 'name', 'description', 'price' );
+					}
+				),
 				Mockery::type( 'array' )
 			)
 			->andReturn( 1 );
@@ -795,6 +839,11 @@ final class DatabaseTest extends TestCase {
 			)
 			->andReturn( 1 );
 
+		$this->wpdb_mock->shouldReceive( 'insert' )
+			->once()
+			->with( 'wp_csf_part_changes', Mockery::type( 'array' ), Mockery::type( 'array' ) )
+			->andReturn( 1 );
+
 		// Act.
 		$result = $this->database->upsert_part( $part_data );
 
@@ -851,5 +900,182 @@ final class DatabaseTest extends TestCase {
 			array( 'chevrolet|Colorado|2004', 'Chevrolet|Colorado|2005', 'Chevrolet|Silverado 1500|2004', 'Chevrolet|Silverado 2500|2004', 'Gmc|Canyon|2006' ),
 			array_map( static fn( array $r ): string => $r['make'] . '|' . $r['model'] . '|' . $r['year'], $sorted )
 		);
+	}
+
+	/**
+	 * A stored row for hash/diff tests: identical content to incoming_data(), in storage form.
+	 *
+	 * @param array $overrides Column overrides.
+	 * @return object
+	 */
+	private function stored_row( array $overrides = array() ): object {
+		return (object) array_merge(
+			array(
+				'id'                  => 7,
+				'sku'                 => 'CSF-7000',
+				'name'                => 'Radiator',
+				'price'               => '199.990000',
+				'category'            => 'Radiators',
+				'manufacturer'        => 'CSF',
+				'in_stock'            => 1,
+				'description'         => 'Desc',
+				'short_description'   => '',
+				'position'            => '',
+				'tech_notes'          => '',
+				'compatibility'       => '[{"year":2020,"make":"Honda","model":"Civic"}]',
+				'specifications'      => '{"Rows":"2"}',
+				'features'            => '[]',
+				'images'              => '[]',
+				'interchange_numbers' => '[]',
+				'scraped_at'          => '2025-01-01T00:00:00',
+				'content_hash'        => null,
+				'updated_at'          => '2025-01-01 00:00:00',
+			),
+			$overrides
+		);
+	}
+
+	/**
+	 * Incoming part data whose storage form equals stored_row().
+	 *
+	 * @param array $overrides Field overrides.
+	 * @return array
+	 */
+	private function incoming_data( array $overrides = array() ): array {
+		return array_merge(
+			array(
+				'sku'                 => 'CSF-7000',
+				'name'                => 'Radiator',
+				'price'               => 199.99,
+				'category'            => 'Radiators',
+				'manufacturer'        => 'CSF',
+				'in_stock'            => true,
+				'description'         => 'Desc',
+				'compatibility'       => array( array( 'year' => 2020, 'make' => 'Honda', 'model' => 'Civic' ) ),
+				'specifications'      => array( 'Rows' => '2' ),
+				'features'            => array(),
+				'images'              => array(),
+				'interchange_numbers' => array(),
+				'scraped_at'          => '2025-09-25T03:30:00',
+			),
+			$overrides
+		);
+	}
+
+	/**
+	 * Test: a newer scraped_at alone never counts as a change.
+	 */
+	public function test_upsert_part_ignores_scraped_at_when_content_identical(): void {
+		// Arrange.
+		Functions\when( 'current_time' )->justReturn( '2025-10-28 12:00:00' );
+		$this->wpdb_mock->shouldReceive( 'prepare' )->once()->andReturn( 'SELECT ...' );
+		$this->wpdb_mock->shouldReceive( 'get_row' )->once()->andReturn( $this->stored_row() );
+		$this->wpdb_mock->shouldReceive( 'prepare' )
+			->once()
+			->withArgs(
+				function ( $sql, ...$args ) {
+					return strpos( $sql, 'content_hash = %s' ) !== false
+						&& strpos( $sql, 'updated_at = updated_at' ) !== false
+						&& '2025-09-25T03:30:00' === $args[1];
+				}
+			)
+			->andReturn( 'UPDATE ...' );
+		$this->wpdb_mock->shouldReceive( 'query' )->once()->andReturn( 1 );
+		$this->wpdb_mock->shouldNotReceive( 'update' );
+		$this->wpdb_mock->shouldNotReceive( 'insert' );
+
+		// Act.
+		$result = $this->database->upsert_part( $this->incoming_data() );
+
+		// Assert.
+		$this->assertSame( 'unchanged', $result['status'] );
+	}
+
+	/**
+	 * Test: a matching stored hash short-circuits the field comparison.
+	 */
+	public function test_upsert_part_trusts_matching_content_hash(): void {
+		// Arrange: stored fields deliberately stale, hash current — the hash wins.
+		$hash   = CSF_Parts_Database::content_hash( CSF_Parts_Database::content_data( $this->incoming_data() ) );
+		$stored = $this->stored_row( array( 'name' => 'Stale name', 'content_hash' => $hash ) );
+
+		Functions\when( 'current_time' )->justReturn( '2025-10-28 12:00:00' );
+		$this->wpdb_mock->shouldReceive( 'prepare' )->once()->andReturn( 'SELECT ...' );
+		$this->wpdb_mock->shouldReceive( 'get_row' )->once()->andReturn( $stored );
+		$this->wpdb_mock->shouldReceive( 'prepare' )->once()->andReturn( 'UPDATE ...' );
+		$this->wpdb_mock->shouldReceive( 'query' )->once()->andReturn( 1 );
+		$this->wpdb_mock->shouldNotReceive( 'update' );
+
+		// Act.
+		$result = $this->database->upsert_part( $this->incoming_data() );
+
+		// Assert.
+		$this->assertSame( 'unchanged', $result['status'] );
+	}
+
+	/**
+	 * Test: hash and field diff agree on what counts as a change.
+	 */
+	public function test_content_hash_matches_diff_content_semantics(): void {
+		// Arrange.
+		$base    = CSF_Parts_Database::content_data( $this->incoming_data() );
+		$same    = CSF_Parts_Database::content_data( $this->incoming_data( array( 'price' => '199.990', 'scraped_at' => 'later' ) ) );
+		$changed = CSF_Parts_Database::content_data( $this->incoming_data( array( 'price' => 209.99, 'images' => array( array( 'url' => 'images/a.avif' ) ) ) ) );
+
+		// Act & Assert.
+		$this->assertSame( CSF_Parts_Database::content_hash( $base ), CSF_Parts_Database::content_hash( $same ) );
+		$this->assertNotSame( CSF_Parts_Database::content_hash( $base ), CSF_Parts_Database::content_hash( $changed ) );
+		$this->assertSame( array(), CSF_Parts_Database::diff_content( $this->stored_row(), $same ) );
+		$this->assertSame( array( 'price', 'images' ), CSF_Parts_Database::diff_content( $this->stored_row(), $changed ) );
+	}
+
+	/**
+	 * Test: compatibility row order does not affect the hash or the diff.
+	 */
+	public function test_content_hash_is_order_independent_for_compatibility(): void {
+		// Arrange.
+		$rows     = array(
+			array( 'year' => 2021, 'make' => 'Toyota', 'model' => 'Camry' ),
+			array( 'year' => 2020, 'make' => 'Honda', 'model' => 'Civic' ),
+		);
+		$forward  = CSF_Parts_Database::content_data( $this->incoming_data( array( 'compatibility' => $rows ) ) );
+		$backward = CSF_Parts_Database::content_data( $this->incoming_data( array( 'compatibility' => array_reverse( $rows ) ) ) );
+
+		// Act & Assert.
+		$this->assertSame( $forward['compatibility'], $backward['compatibility'] );
+		$this->assertSame( CSF_Parts_Database::content_hash( $forward ), CSF_Parts_Database::content_hash( $backward ) );
+	}
+
+	/**
+	 * Test: recent changes come back newest first with decoded field lists.
+	 */
+	public function test_get_recent_changes_decodes_fields(): void {
+		// Arrange.
+		$this->wpdb_mock->shouldReceive( 'prepare' )
+			->once()
+			->withArgs(
+				function ( $sql, $limit ) {
+					return strpos( $sql, 'wp_csf_part_changes' ) !== false
+						&& strpos( $sql, 'ORDER BY observed_at DESC' ) !== false
+						&& 20 === $limit;
+				}
+			)
+			->andReturn( 'SELECT ...' );
+		$this->wpdb_mock->shouldReceive( 'get_results' )
+			->once()
+			->andReturn(
+				array(
+					(object) array( 'sku' => 'CSF-1', 'change_type' => 'updated', 'changed_fields' => '["compatibility"]', 'observed_at' => '2025-10-28 03:38:00' ),
+					(object) array( 'sku' => 'CSF-2', 'change_type' => 'created', 'changed_fields' => 'not json', 'observed_at' => '2025-10-27 03:38:00' ),
+				)
+			);
+
+		// Act.
+		$changes = $this->database->get_recent_changes();
+
+		// Assert.
+		$this->assertCount( 2, $changes );
+		$this->assertSame( array( 'compatibility' ), $changes[0]->changed_fields );
+		$this->assertSame( array(), $changes[1]->changed_fields );
 	}
 }

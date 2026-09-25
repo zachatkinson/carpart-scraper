@@ -176,7 +176,7 @@
 		},
 		"orderBy": {
 			"type": "string",
-			"default": "updated_at",
+			"default": "latest",
 			"enum": [
 				"name",
 				"sku",

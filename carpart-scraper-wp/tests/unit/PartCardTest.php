@@ -176,6 +176,25 @@ final class PartCardTest extends TestCase {
 	}
 
 	/**
+	 * Updated parts get an Updated badge; New wins when both apply; old parts get none.
+	 */
+	public function test_activity_badge_distinguishes_new_from_updated(): void {
+		// Arrange
+		$recent = gmdate( 'Y-m-d H:i:s', time() - 5 * DAY_IN_SECONDS );
+		$old    = gmdate( 'Y-m-d H:i:s', time() - 90 * DAY_IN_SECONDS );
+
+		// Act & Assert
+		$this->assertSame( 'new', CSF_Parts_Part_Card::activity_badge( $this->part( array( 'created_at' => $recent, 'updated_at' => $recent ) ), 30 ) );
+		$this->assertSame( 'updated', CSF_Parts_Part_Card::activity_badge( $this->part( array( 'created_at' => $old, 'updated_at' => $recent ) ), 30 ) );
+		$this->assertSame( '', CSF_Parts_Part_Card::activity_badge( $this->part( array( 'created_at' => $old, 'updated_at' => $old ) ), 30 ) );
+		$this->assertSame( '', CSF_Parts_Part_Card::activity_badge( $this->part( array( 'created_at' => $recent, 'updated_at' => $recent ) ), 0 ) );
+
+		$html = CSF_Parts_Part_Card::render( $this->part( array( 'created_at' => $old, 'updated_at' => $recent ) ), '/p' );
+		$this->assertStringContainsString( 'csf-part-card__new--updated', $html );
+		$this->assertStringContainsString( '>Updated<', $html );
+	}
+
+	/**
 	 * Render options control the badge and summary lines.
 	 */
 	public function test_render_honours_options(): void {
