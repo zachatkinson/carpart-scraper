@@ -1407,6 +1407,83 @@ class TestScrapeAllPhase3:
 class TestScrapeAllResume:
     """Test scrape_all with resume=True."""
 
+    def test_resume_reprocesses_application_whose_page_changed(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """Incremental resume re-scrapes a checkpointed application whose page changed."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = Mock()
+        orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
+        orchestrator.html_parser = Mock()
+        orchestrator.validator = Mock()
+        orchestrator.exporter = Mock()
+        orchestrator.image_processor = Mock()
+        orchestrator.output_dir = tmp_path / "exports"
+        orchestrator.checkpoint_dir = tmp_path / "checkpoints"
+        orchestrator.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        orchestrator.incremental = True
+        orchestrator.unique_parts = {}
+        orchestrator.vehicle_compat = {}
+        orchestrator.parts_scraped = 0
+        orchestrator.processed_application_ids = {8000, 9000}
+        orchestrator.new_skus = set()
+        orchestrator.changed_skus = set()
+        orchestrator.failure_tracker = FailureTracker()
+        orchestrator.delay_override = None
+        orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.detail_etag_store = ETagStore(tmp_path / "detail_etags.json")
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+        url_8000 = "https://csf.mycarparts.com/applications/8000"
+        url_9000 = "https://csf.mycarparts.com/applications/9000"
+        orchestrator.etag_store.set(url_8000, "old_hash")
+        orchestrator.etag_store.set(url_9000, "same_hash")
+        orchestrator.etag_store.save()
+
+        hierarchy = [
+            {
+                "make_id": 3,
+                "make": "Honda",
+                "year_id": 100,
+                "year": "2024",
+                "application_id": 8000,
+                "model": "Civic",
+            },
+            {
+                "make_id": 4,
+                "make": "Toyota",
+                "year_id": 200,
+                "year": "2024",
+                "application_id": 9000,
+                "model": "Camry",
+            },
+        ]
+        mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
+        mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
+        mocker.patch.object(orchestrator, "_get_latest_checkpoint", return_value=None)
+        # 8000 changed since last run, 9000 did not
+        orchestrator.fetcher.async_check_etags = AsyncMock(
+            return_value=[(True, "new_hash"), (False, "same_hash")]
+        )
+        orchestrator.fetcher.async_scrape_application_pages = AsyncMock(
+            return_value=["<html>parts</html>"]
+        )
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = [
+            {"sku": "CSF-3001", "name": "Radiator", "vehicle_qualifiers": {}}
+        ]
+        orchestrator.validator.validate_batch.return_value = [
+            Part(sku="CSF-3001", name="Radiator", category="Radiator")
+        ]
+
+        # Act
+        result = orchestrator.scrape_all(resume=True, fetch_details=False)
+
+        # Assert — the changed page was re-scraped despite the checkpoint, and
+        # its new hash is only stored now that it has been processed
+        assert result["applications_processed"] == 1
+        orchestrator.fetcher.async_scrape_application_pages.assert_called_once_with([url_8000])
+        assert ETagStore(tmp_path / "etags.json").get(url_8000) == "new_hash"
+
     def test_resume_loads_checkpoint_and_filters(
         self, mocker: MockerFixture, tmp_path: Path
     ) -> None:
@@ -2103,5 +2180,41 @@ class TestETagFilteringUnprocessedApps:
         # Act
         result = orchestrator._filter_by_etags(hierarchy)  # noqa: SLF001
 
-        # Assert — kept because content changed
+        # Assert — kept because content changed, and the store still holds the
+        # old hash until the page's parts are actually processed
         assert len(result) == 1
+        assert (
+            orchestrator.etag_store.get("https://csf.mycarparts.com/applications/100") == "old_hash"
+        )
+
+    def test_etag_hash_committed_only_after_processing(self, tmp_path: Path) -> None:
+        """A changed page's hash reaches the store via _commit_etag, not the filter."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.processed_application_ids = {"100", "200"}
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+        orchestrator.fetcher = Mock()
+        url_100 = "https://csf.mycarparts.com/applications/100"
+        url_200 = "https://csf.mycarparts.com/applications/200"
+        orchestrator.etag_store.set(url_100, "old_a")
+        orchestrator.etag_store.set(url_200, "old_b")
+        orchestrator.etag_store.save()
+        orchestrator.fetcher.async_check_etags = AsyncMock(
+            return_value=[(True, "new_a"), (False, "old_b")]
+        )
+        hierarchy = [
+            {"application_id": "100", "make": "Honda", "year": 2020, "model": "Civic"},
+            {"application_id": "200", "make": "Toyota", "year": 2020, "model": "Camry"},
+        ]
+
+        # Act
+        orchestrator._filter_by_etags(hierarchy)  # noqa: SLF001
+        orchestrator._commit_etag("200")  # noqa: SLF001  (unchanged: no-op)
+        before_commit = orchestrator.etag_store.get(url_100)
+        orchestrator._commit_etag("100")  # noqa: SLF001
+
+        # Assert
+        assert before_commit == "old_a"
+        assert orchestrator.etag_store.get(url_100) == "new_a"
+        assert orchestrator.etag_store.get(url_200) == "old_b"

@@ -361,6 +361,11 @@ class ScraperOrchestrator:
         self.new_skus: set[str] = set()
         self.changed_skus: set[str] = set()
 
+        # Application-page hashes seen by the ETag filter but not yet committed
+        # to etag_store: committed only once that page's parts are processed,
+        # so a page whose run fails or times out is re-examined next time.
+        self._pending_etags: dict[str, str] = {}
+
         # Failure tracking
         self.failure_tracker = FailureTracker()
 
@@ -973,6 +978,13 @@ class ScraperOrchestrator:
         This prevents time-budget cutoffs from permanently losing unprocessed
         applications.
 
+        A changed page's new hash is NOT written to the store here. It is held
+        in ``_pending_etags`` and committed by ``_commit_etag`` after the page's
+        parts have been processed, so a change is never marked as seen unless
+        it was actually scraped. This filter already accounts for processed
+        state, so callers must not apply a further "already processed" filter
+        to its result: that would drop every changed page on a resumed run.
+
         Args:
             hierarchy: Full vehicle hierarchy from _build_hierarchy
 
@@ -1000,12 +1012,13 @@ class ScraperOrchestrator:
         skipped = 0
         kept_unprocessed = 0
 
+        self._pending_etags = {}
         for config, (is_changed, current_hash) in zip(hierarchy, results, strict=True):
             application_id = config["application_id"]
             url = f"https://csf.mycarparts.com/applications/{application_id}"
-            self.etag_store.set(url, current_hash)
 
             if is_changed:
+                self._pending_etags[url] = current_hash
                 changed.append(config)
             elif application_id not in self.processed_application_ids:
                 # Never processed (e.g. time-budget cutoff) — must not skip
@@ -1013,8 +1026,6 @@ class ScraperOrchestrator:
                 kept_unprocessed += 1
             else:
                 skipped += 1
-
-        self.etag_store.save()
 
         logger.info(
             "etag_filtering_results",
@@ -1029,6 +1040,21 @@ class ScraperOrchestrator:
             return hierarchy
 
         return changed
+
+    def _commit_etag(self, application_id: int | str) -> None:
+        """Record a processed application page's hash so the next run can skip it.
+
+        No-op for pages the ETag filter did not flag as changed (their stored
+        hash already matches).
+
+        Args:
+            application_id: Application whose parts were just processed
+        """
+        url = f"https://csf.mycarparts.com/applications/{application_id}"
+        pending = getattr(self, "_pending_etags", {})
+        current_hash = pending.pop(url, None)
+        if current_hash is not None:
+            self.etag_store.set(url, current_hash)
 
     def _save_checkpoint(self, make_filter: str | None, year_filter: int | None) -> Path:
         """Save current scraping state to checkpoint file.
@@ -1301,7 +1327,8 @@ class ScraperOrchestrator:
 
         # Phase 1.5: ETag-based filtering (skip unchanged application pages)
         etag_skipped = 0
-        if self.incremental and not force_full:
+        etag_filtered = self.incremental and not force_full
+        if etag_filtered:
             pre_filter_count = len(hierarchy)
             hierarchy = self._filter_by_etags(hierarchy)
             etag_skipped = pre_filter_count - len(hierarchy)
@@ -1311,8 +1338,11 @@ class ScraperOrchestrator:
                 skipped=etag_skipped,
             )
 
-        # Filter out already processed applications
-        if resume and self.processed_application_ids:
+        # Filter out already processed applications. The ETag filter has already
+        # kept changed pages and dropped unchanged processed ones, and a page
+        # whose content changed must be re-scraped even though a checkpoint
+        # lists it, so this only applies when the ETag filter did not run.
+        if resume and self.processed_application_ids and not etag_filtered:
             hierarchy = [
                 config
                 for config in hierarchy
@@ -1399,13 +1429,15 @@ class ScraperOrchestrator:
                     new_skus_found.update(result.new_skus)
                     changed_skus_found.update(result.changed_skus)
 
-                # Mark as processed
+                # Mark as processed; only now does its page hash count as seen
                 self.processed_application_ids.add(application_id)
+                self._commit_etag(application_id)
                 applications_processed += 1
 
                 # Save checkpoint periodically
                 if applications_processed % checkpoint_interval == 0:
                     self._save_checkpoint(make_filter, year_filter)
+                    self.etag_store.save()
 
                     # Export incrementally if configured
                     if self.incremental:
@@ -1461,8 +1493,9 @@ class ScraperOrchestrator:
                 preserved=len(preserved_skus),
             )
 
-        # Save final checkpoint
+        # Save final checkpoint and the hashes of every page processed this run
         self._save_checkpoint(make_filter, year_filter)
+        self.etag_store.save()
 
         # Check time budget before starting Phase 3
         if budget.is_expired:
