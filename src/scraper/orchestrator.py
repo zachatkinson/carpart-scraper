@@ -253,6 +253,11 @@ class TimeBudget:
         return (time.monotonic() - self._start) / 60.0
 
 
+# Detail pages per fetch batch.  Presigned S3 image URLs on those pages expire
+# 10 minutes after the fetch, so a batch must finish processing well inside that.
+DETAIL_BATCH_SIZE = 60
+
+
 class DeduplicationResult(NamedTuple):
     """Result of deduplication with change detection.
 
@@ -796,12 +801,23 @@ class ScraperOrchestrator:
             # Add interchange numbers (convert dict to ReferenceNumber objects)
             updated_data["interchange_numbers"] = detail_data["interchange_data"]
 
-        # Process gallery images (parser already filters for large images only)
-        if detail_data.get("additional_images"):
-            processed_images = self.image_processor.process_images(
-                sku, detail_data["additional_images"]
-            )
-            updated_data["images"] = processed_images
+        # Process gallery images (parser already filters for large images only).
+        # A download failure (expired presigned URL, transient error) drops that
+        # image from the processed list; never let that erase images we already
+        # have for the part, or the next push would wipe them from the site.
+        source_images = detail_data.get("additional_images") or []
+        if source_images:
+            processed_images = self.image_processor.process_images(sku, source_images)
+            if len(processed_images) < len(source_images) and part.images:
+                logger.warning(
+                    "images_kept_after_processing_failure",
+                    sku=sku,
+                    expected=len(source_images),
+                    processed=len(processed_images),
+                    kept=len(part.images),
+                )
+            else:
+                updated_data["images"] = processed_images
 
         # Create new Part with enriched data
         enriched_part = Part(**updated_data)
@@ -1539,10 +1555,11 @@ class ScraperOrchestrator:
                 sku_list = sorted(skus_to_fetch)
 
                 # Fetch and process in batches to avoid S3 presigned URL
-                # expiry.  CSF's S3 URLs expire after 10 minutes; processing
-                # ~1.8 s/SKU (incl. image download + AVIF conversion) means
-                # a batch of 200 finishes in ~6 min.
-                detail_batch_size = 200
+                # expiry.  CSF's S3 URLs expire after 10 minutes; a full
+                # re-enrichment (image download + AVIF conversion) measured
+                # ~3.1 s/SKU in CI, so 60 per batch finishes in ~3 min with
+                # margin.  200 took ~10.3 min and expired the tail of every batch.
+                detail_batch_size = DETAIL_BATCH_SIZE
                 for batch_start in range(0, len(sku_list), detail_batch_size):
                     batch_skus = sku_list[batch_start : batch_start + detail_batch_size]
                     batch_urls = [

@@ -983,6 +983,56 @@ class TestEnrichPartWithDetails:
             ],
         )
 
+    def test_enrich_part_keeps_existing_images_when_processing_fails(self) -> None:
+        """Image download failures must not erase images the part already has."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.image_processor = Mock()
+        existing = [{"url": "images/avif/1001_0.avif", "alt_text": None, "is_primary": True}]
+        orchestrator.unique_parts = {
+            "CSF-1001": Part(sku="CSF-1001", name="Radiator", category="Radiator", images=existing)
+        }
+        detail_data = {
+            "additional_images": [
+                {"url": "https://s3.example.com/a.jpg?X-Amz-Expires=600", "size": "large"},
+                {"url": "https://s3.example.com/b.jpg?X-Amz-Expires=600", "size": "large"},
+            ],
+        }
+        # Expired presigned URLs: the processor returns nothing for this SKU
+        orchestrator.image_processor.process_images.return_value = []
+
+        # Act
+        orchestrator._enrich_part_with_details("CSF-1001", detail_data)  # noqa: SLF001
+
+        # Assert
+        assert [
+            img.model_dump() for img in orchestrator.unique_parts["CSF-1001"].images
+        ] == existing
+
+    def test_enrich_part_uses_partial_images_when_part_had_none(self) -> None:
+        """With nothing to protect, whatever was processed is better than no images."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.image_processor = Mock()
+        orchestrator.unique_parts = {
+            "CSF-1002": Part(sku="CSF-1002", name="Condenser", category="Condenser")
+        }
+        detail_data = {
+            "additional_images": [
+                {"url": "https://s3.example.com/a.jpg", "size": "large"},
+                {"url": "https://s3.example.com/b.jpg", "size": "large"},
+            ],
+        }
+        orchestrator.image_processor.process_images.return_value = [
+            {"url": "images/avif/1002_0.avif", "alt_text": None, "is_primary": True}
+        ]
+
+        # Act
+        orchestrator._enrich_part_with_details("CSF-1002", detail_data)  # noqa: SLF001
+
+        # Assert
+        assert len(orchestrator.unique_parts["CSF-1002"].images) == 1
+
     def test_enrich_part_missing_sku_logs_warning(self) -> None:
         """Test enrichment with missing SKU does nothing."""
         # Arrange
