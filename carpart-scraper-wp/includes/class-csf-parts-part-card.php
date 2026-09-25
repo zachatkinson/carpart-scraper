@@ -23,28 +23,66 @@ final class CSF_Parts_Part_Card {
 	/** Maximum make badges shown before a "+N" badge. */
 	private const MAX_MAKE_BADGES = 4;
 
-	/** Maximum vehicles named in the fitment summary before "+N more". */
+	/** Maximum vehicles (or makes, in the breadth form) named in the fitment summary before "and others". */
 	private const MAX_SUMMARY_VEHICLES = 3;
+
+	/** Dimensions a fitment context can narrow on; each is a list of stored values. */
+	private const CONTEXT_KEYS = array( 'makes', 'models', 'years' );
 
 	/** Render options and their defaults. */
 	private const DEFAULT_OPTIONS = array(
 		'new_badge_days'    => 30,
 		'show_fitment_line' => true,
 		'show_meta_line'    => true,
+		'fitment_context'   => array(),
 	);
 
 	/**
 	 * Coerce render options (from block attributes or an AJAX payload).
 	 *
 	 * @param array<string, mixed> $options Raw options.
-	 * @return array{new_badge_days: int, show_fitment_line: bool, show_meta_line: bool}
+	 * @return array{new_badge_days: int, show_fitment_line: bool, show_meta_line: bool, fitment_context: array{makes: string[], models: string[], years: string[]}}
 	 */
 	public static function sanitize_options( array $options ): array {
 		return array(
 			'new_badge_days'    => max( 0, min( 365, (int) ( $options['new_badge_days'] ?? self::DEFAULT_OPTIONS['new_badge_days'] ) ) ),
 			'show_fitment_line' => (bool) ( $options['show_fitment_line'] ?? self::DEFAULT_OPTIONS['show_fitment_line'] ),
 			'show_meta_line'    => (bool) ( $options['show_meta_line'] ?? self::DEFAULT_OPTIONS['show_meta_line'] ),
+			'fitment_context'   => self::sanitize_context( $options['fitment_context'] ?? self::DEFAULT_OPTIONS['fitment_context'] ),
 		);
+	}
+
+	/**
+	 * Coerce a fitment context: the vehicles a page or filter is about.
+	 *
+	 * @param mixed $context Raw context, e.g. ['makes' => ['Ford'], 'models' => [], 'years' => ['2015']].
+	 * @return array{makes: string[], models: string[], years: string[]}
+	 */
+	public static function sanitize_context( $context ): array {
+		$clean = array_fill_keys( self::CONTEXT_KEYS, array() );
+		if ( ! is_array( $context ) ) {
+			return $clean;
+		}
+		foreach ( self::CONTEXT_KEYS as $key ) {
+			foreach ( (array) ( $context[ $key ] ?? array() ) as $value ) {
+				$value = is_scalar( $value ) ? trim( (string) $value ) : '';
+				if ( '' !== $value && ! in_array( $value, $clean[ $key ], true ) ) {
+					$clean[ $key ][] = $value;
+				}
+			}
+		}
+		return $clean;
+	}
+
+	/**
+	 * The fitment context implied by a catalog query's vehicle filters, so the
+	 * summary describes the same vehicles the results were narrowed to.
+	 *
+	 * @param array<string, mixed> $filters Filters as passed to CSF_Parts_Database::query_parts().
+	 * @return array{makes: string[], models: string[], years: string[]}
+	 */
+	public static function context_from_filters( array $filters ): array {
+		return self::sanitize_context( array_intersect_key( $filters, array_flip( self::CONTEXT_KEYS ) ) );
 	}
 
 	/**
@@ -61,7 +99,7 @@ final class CSF_Parts_Part_Card {
 		$makes         = self::makes( (string) ( $part->compatibility ?? '' ) );
 		$category      = (string) ( $part->category ?? '' );
 		$is_new        = self::is_new( (string) ( $part->created_at ?? '' ), $options['new_badge_days'] );
-		$fitment       = $options['show_fitment_line'] ? self::fitment_summary( (string) ( $part->compatibility ?? '' ) ) : '';
+		$fitment       = $options['show_fitment_line'] ? self::fitment_summary( (string) ( $part->compatibility ?? '' ), $options['fitment_context'] ) : '';
 		$meta          = $options['show_meta_line'] ? self::meta_line( $part ) : '';
 
 		ob_start();
@@ -182,81 +220,181 @@ final class CSF_Parts_Part_Card {
 	}
 
 	/**
-	 * One-line fitment summary, e.g. "2024 to 2026 Toyota Tacoma, 2.4L L4 turbo".
+	 * One-line fitment summary, e.g. "2024 to 2026 Toyota Tacoma, 2.4 L turbo".
 	 *
-	 * Year range, then vehicles grouped by make (capped), then the engine when
-	 * every row agrees on one.
+	 * With a context (the vehicles a page or filter is about), vehicles matching
+	 * it lead the line: the year range and engine come from their rows, and
+	 * anything else only contributes to "and others". A vehicle matches when its
+	 * make and model are in the context (empty lists match anything) and, when
+	 * years are given, it fits at least one of them; the range then spans every
+	 * year that vehicle fits, so a visitor with a 2015 van still learns the part
+	 * covers 2015 to 2019.
 	 *
-	 * @param string $compatibility_json JSON array of {year, make, model, engine} rows.
+	 * Vehicles are named by most model-years first, then alphabetically, so the
+	 * vehicle a part is mainly for comes first. When the vehicles to name span
+	 * more than MAX_SUMMARY_VEHICLES makes (no context, a context matching
+	 * nothing, or a context that wide), the part is described by breadth
+	 * instead: "Fits 18 makes including Ford, Chevrolet and Toyota, 1970 to 2014".
+	 *
+	 * @param string               $compatibility_json JSON array of {year, make, model, engine} rows.
+	 * @param array<string, mixed> $context            Optional ['makes' => [], 'models' => [], 'years' => []].
 	 * @return string Empty when there is no compatibility data.
 	 */
-	public static function fitment_summary( string $compatibility_json ): string {
+	public static function fitment_summary( string $compatibility_json, array $context = array() ): string {
 		$rows = json_decode( $compatibility_json, true );
 		if ( ! is_array( $rows ) || empty( $rows ) ) {
 			return '';
 		}
 
-		$years    = array();
-		$vehicles = array(); // make => [models]
-		$engines  = array();
+		$context  = self::sanitize_context( $context );
+		$vehicles = self::vehicles( $rows, $context );
+		if ( empty( $vehicles ) ) {
+			return '';
+		}
+
+		// Only a non-empty context can single out vehicles; an empty one is "no context", not "everything".
+		$matched = empty( array_filter( $context ) ) ? array() : array_values( array_filter( $vehicles, static fn( array $v ): bool => $v['matches'] ) );
+		$lead    = ! empty( $matched ) ? $matched : $vehicles;
+		usort( $lead, array( self::class, 'compare_vehicles' ) );
+
+		$years   = array();
+		$engines = array();
+		foreach ( $lead as $vehicle ) {
+			$years   = array_merge( $years, $vehicle['years'] );
+			$engines = array_unique( array_merge( $engines, $vehicle['engines'] ) );
+		}
+		$range = self::year_range( $years );
+
+		// Too many makes to name vehicles usefully (the make badges show them anyway): describe breadth.
+		$lead_makes = array_unique( array_map( static fn( array $v ): string => strtolower( $v['make'] ), $lead ) );
+		if ( count( $lead_makes ) > self::MAX_SUMMARY_VEHICLES ) {
+			$summary = self::breadth_summary( $vehicles, $lead, $range );
+		} else {
+			$named   = array_slice( $lead, 0, self::MAX_SUMMARY_VEHICLES );
+			$summary = trim( $range . ' ' . self::vehicle_list( $named ) . ( count( $vehicles ) > count( $named ) ? ' and others' : '' ) );
+		}
+
+		if ( 1 === count( $engines ) ) {
+			$summary .= ( '' !== $summary ? ', ' : '' ) . reset( $engines );
+		}
+
+		return $summary;
+	}
+
+	/**
+	 * Distinct vehicles (make + model) with their model-years, engines and
+	 * whether they match the context.
+	 *
+	 * @param array<int, mixed>                                        $rows    Decoded compatibility rows.
+	 * @param array{makes: string[], models: string[], years: string[]} $context Sanitised context.
+	 * @return array<int, array{make: string, model: string, years: int[], engines: string[], matches: bool}>
+	 */
+	private static function vehicles( array $rows, array $context ): array {
+		$vehicles = array();
 		foreach ( $rows as $row ) {
 			if ( ! is_array( $row ) ) {
 				continue;
 			}
-			if ( ! empty( $row['year'] ) ) {
-				$years[] = (int) $row['year'];
-			}
 			$make  = trim( (string) ( $row['make'] ?? '' ) );
 			$model = trim( (string) ( $row['model'] ?? '' ) );
-			if ( '' !== $make ) {
-				$vehicles[ $make ] = $vehicles[ $make ] ?? array();
-				if ( '' !== $model && ! in_array( $model, $vehicles[ $make ], true ) ) {
-					$vehicles[ $make ][] = $model;
-				}
-			}
-			$engine = CSF_Parts_Vehicle_Names::engine_short( (string) ( $row['engine'] ?? '' ), (string) ( $row['aspiration'] ?? '' ) );
-			if ( '' !== $engine && ! in_array( $engine, $engines, true ) ) {
-				$engines[] = $engine;
-			}
-		}
-
-		$parts = array();
-		if ( ! empty( $years ) ) {
-			$min = min( $years );
-			$max = max( $years );
-			$parts[] = $min === $max ? (string) $min : sprintf( '%d to %d', $min, $max );
-		}
-
-		// Name up to MAX_SUMMARY_VEHICLES vehicles ("Audi A3, TT, Volkswagen Golf"), then "and others".
-		$names = array();
-		$named = 0; // vehicles (make+model) already named
-		$more  = false;
-		foreach ( $vehicles as $make => $models ) {
-			if ( $named >= self::MAX_SUMMARY_VEHICLES ) {
-				$more = true;
-				break;
-			}
-			$make_name = CSF_Parts_Vehicle_Names::make( $make );
-			if ( empty( $models ) ) {
-				$names[] = $make_name;
-				$named++;
+			if ( '' === $make ) {
 				continue;
 			}
-			$shown  = array_slice( $models, 0, self::MAX_SUMMARY_VEHICLES - $named );
-			$named += count( $shown );
-			$more   = $more || count( $models ) > count( $shown );
-			$names[] = $make_name . ' ' . implode( ', ', array_map( array( CSF_Parts_Vehicle_Names::class, 'model' ), $shown ) );
-		}
-		if ( ! empty( $names ) ) {
-			$parts[] = implode( ', ', $names ) . ( $more ? ' and others' : '' );
+			$key = strtolower( $make . '|' . $model );
+			$vehicles[ $key ] = $vehicles[ $key ] ?? array( 'make' => $make, 'model' => $model, 'years' => array(), 'engines' => array(), 'matches' => false );
+
+			$year = (int) ( $row['year'] ?? 0 );
+			if ( $year > 0 && ! in_array( $year, $vehicles[ $key ]['years'], true ) ) {
+				$vehicles[ $key ]['years'][] = $year;
+			}
+			$engine = CSF_Parts_Vehicle_Names::engine_short( (string) ( $row['engine'] ?? '' ), (string) ( $row['aspiration'] ?? '' ) );
+			if ( '' !== $engine && ! in_array( $engine, $vehicles[ $key ]['engines'], true ) ) {
+				$vehicles[ $key ]['engines'][] = $engine;
+			}
 		}
 
-		$summary = implode( ' ', $parts );
-		if ( 1 === count( $engines ) ) {
-			$summary .= ( '' !== $summary ? ', ' : '' ) . $engines[0];
+		$makes  = array_map( 'strtolower', $context['makes'] );
+		$models = array_map( 'strtolower', $context['models'] );
+		$years  = array_map( 'intval', $context['years'] );
+		foreach ( $vehicles as $key => $vehicle ) {
+			$vehicles[ $key ]['matches'] = ( empty( $makes ) || in_array( strtolower( $vehicle['make'] ), $makes, true ) )
+				&& ( empty( $models ) || in_array( strtolower( $vehicle['model'] ), $models, true ) )
+				&& ( empty( $years ) || ! empty( array_intersect( $vehicle['years'], $years ) ) );
 		}
 
-		return $summary;
+		return array_values( $vehicles );
+	}
+
+	/**
+	 * Order vehicles by most model-years, then make, then model.
+	 *
+	 * @param array{make: string, model: string, years: int[]} $a First vehicle.
+	 * @param array{make: string, model: string, years: int[]} $b Second vehicle.
+	 * @return int
+	 */
+	private static function compare_vehicles( array $a, array $b ): int {
+		return ( count( $b['years'] ) <=> count( $a['years'] ) )
+			?: strcasecmp( $a['make'], $b['make'] )
+			?: strnatcasecmp( $a['model'], $b['model'] );
+	}
+
+	/**
+	 * "1992 to 1996", "2015", or '' when no years are known.
+	 *
+	 * @param int[] $years Model years, any order, duplicates allowed.
+	 * @return string
+	 */
+	private static function year_range( array $years ): string {
+		if ( empty( $years ) ) {
+			return '';
+		}
+		$min = min( $years );
+		$max = max( $years );
+		return $min === $max ? (string) $min : sprintf( '%d to %d', $min, $max );
+	}
+
+	/**
+	 * Vehicles grouped by make in the order given: "Ford E-350 Econoline, Econoline Super Duty, GMC Canyon".
+	 *
+	 * @param array<int, array{make: string, model: string}> $vehicles Vehicles to name.
+	 * @return string
+	 */
+	private static function vehicle_list( array $vehicles ): string {
+		$groups = array(); // make => [models]
+		foreach ( $vehicles as $vehicle ) {
+			$groups[ $vehicle['make'] ] = $groups[ $vehicle['make'] ] ?? array();
+			if ( '' !== $vehicle['model'] ) {
+				$groups[ $vehicle['make'] ][] = CSF_Parts_Vehicle_Names::model( $vehicle['model'] );
+			}
+		}
+		$names = array();
+		foreach ( $groups as $make => $models ) {
+			$names[] = trim( CSF_Parts_Vehicle_Names::make( (string) $make ) . ' ' . implode( ', ', $models ) );
+		}
+		return implode( ', ', $names );
+	}
+
+	/**
+	 * Breadth form for parts fitting many makes: "Fits 18 makes including Ford, Chevrolet and Toyota, 1970 to 2014".
+	 *
+	 * @param array<int, array{make: string, years: int[]}> $all   Every vehicle the part fits.
+	 * @param array<int, array{make: string, years: int[]}> $lead  Vehicles to draw the named makes from, best first.
+	 * @param string                                        $range Year range for the lead vehicles.
+	 * @return string
+	 */
+	private static function breadth_summary( array $all, array $lead, string $range ): string {
+		$total = count( array_unique( array_map( static fn( array $v ): string => strtolower( $v['make'] ), $all ) ) );
+
+		$model_years = array(); // make => model-years
+		foreach ( $lead as $vehicle ) {
+			$model_years[ $vehicle['make'] ] = ( $model_years[ $vehicle['make'] ] ?? 0 ) + count( $vehicle['years'] );
+		}
+		uksort( $model_years, static fn( string $a, string $b ): int => ( $model_years[ $b ] <=> $model_years[ $a ] ) ?: strcasecmp( $a, $b ) );
+		$named = array_map( array( CSF_Parts_Vehicle_Names::class, 'make' ), array_slice( array_keys( $model_years ), 0, self::MAX_SUMMARY_VEHICLES ) );
+		$last  = array_pop( $named );
+		$list  = empty( $named ) ? $last : implode( ', ', $named ) . ' and ' . $last;
+
+		return sprintf( 'Fits %d makes including %s', $total, $list ) . ( '' !== $range ? ', ' . $range : '' );
 	}
 
 	/**

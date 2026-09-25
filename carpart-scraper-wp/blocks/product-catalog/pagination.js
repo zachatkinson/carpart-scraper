@@ -117,10 +117,17 @@
 		const model = urlParams.get('csf_model') || '';
 		const category = urlParams.get('csf_category') || '';
 
-		// Get block settings.
+		// Get block settings, including the scope the block was configured with.
 		const perPage = parseInt(block.dataset.perPage) || 12;
 		const orderBy = block.dataset.orderBy || '';
 		const orderDirection = block.dataset.orderDirection || '';
+		const cardOptions = block.dataset.cardOptions || '';
+		const scope = {
+			default_makes: block.dataset.defaultMakes || '',
+			default_models: block.dataset.defaultModels || '',
+			default_years: block.dataset.defaultYears || '',
+			default_categories: block.dataset.defaultCategories || ''
+		};
 
 		// Make AJAX request.
 		const data = new FormData();
@@ -134,6 +141,10 @@
 		if (category) data.append('category', category);
 		if (orderBy) data.append('orderby', orderBy);
 		if (orderDirection) data.append('order', orderDirection);
+		if (cardOptions) data.append('card_options', cardOptions);
+		Object.keys(scope).forEach((key) => {
+			if (scope[key]) data.append(key, scope[key]);
+		});
 
 		fetch(csfPartsPagination.ajaxUrl, {
 			method: 'POST',

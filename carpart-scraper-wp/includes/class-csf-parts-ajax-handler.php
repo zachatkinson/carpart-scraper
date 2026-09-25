@@ -120,8 +120,8 @@ class CSF_Parts_AJAX_Handler {
 		$page     = isset( $_POST['page'] ) ? max( 1, intval( $_POST['page'] ) ) : 1;
 		$per_page = isset( $_POST['per_page'] ) ? max( 1, min( 100, intval( $_POST['per_page'] ) ) ) : 12;
 
-		// Get filter parameters.
-		$filters = array();
+		// Block scope first (default makes/models/years/categories), then the visitor's single-value filters.
+		$filters = array_filter( $this->block_scope_from_request() );
 
 		if ( ! empty( $_POST['year'] ) ) {
 			$filters['years'] = array( sanitize_text_field( wp_unslash( $_POST['year'] ) ) );
@@ -150,10 +150,12 @@ class CSF_Parts_AJAX_Handler {
 		$total_parts = $result['total'] ?? 0;
 		$total_pages = $per_page > 0 ? ceil( $total_parts / $per_page ) : 1;
 
-		// Build HTML for parts.
+		// Build HTML for parts, with the block's card options and the vehicles this page is scoped to.
+		$card_options                    = $this->card_options_from_request();
+		$card_options['fitment_context'] = CSF_Parts_Part_Card::context_from_filters( $filters );
 		ob_start();
 		foreach ( $parts as $part ) {
-			echo CSF_Parts_Part_Card::render( $part, csf_get_part_url( $part->sku ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer.
+			echo CSF_Parts_Part_Card::render( $part, csf_get_part_url( $part->sku ), $card_options ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer.
 		}
 		$html = ob_get_clean();
 
@@ -186,7 +188,7 @@ class CSF_Parts_AJAX_Handler {
 		// Get makes for year using shared database instance.
 		$makes = $this->database->get_vehicle_makes_by_year( $year );
 
-		wp_send_json_success( array( 'makes' => $makes ) );
+		wp_send_json_success( array( 'makes' => self::labelled( $makes, array( CSF_Parts_Vehicle_Names::class, 'make' ) ) ) );
 	}
 
 	/**
@@ -209,7 +211,7 @@ class CSF_Parts_AJAX_Handler {
 		// Get models for the make, narrowed by year when one was chosen.
 		$models = $this->database->get_vehicle_models( $make, $year > 0 ? $year : null );
 
-		wp_send_json_success( array( 'models' => $models ) );
+		wp_send_json_success( array( 'models' => self::labelled( $models, array( CSF_Parts_Vehicle_Names::class, 'model' ) ) ) );
 	}
 
 	/**
@@ -249,36 +251,25 @@ class CSF_Parts_AJAX_Handler {
 		$selected_model = isset( $_POST['csf_model'] ) ? sanitize_text_field( wp_unslash( $_POST['csf_model'] ) ) : '';
 		$search_query   = isset( $_POST['csf_search'] ) ? sanitize_text_field( wp_unslash( $_POST['csf_search'] ) ) : '';
 
-		// Get default categories from block attributes (passed via JS).
-		$default_categories = array();
-		if ( ! empty( $_POST['default_categories'] ) ) {
-			$decoded = json_decode( sanitize_text_field( wp_unslash( $_POST['default_categories'] ) ), true );
-			if ( is_array( $decoded ) ) {
-				$default_categories = array_map( 'sanitize_text_field', $decoded );
-			}
-		}
+		// Block scope (default makes/models/years/categories, passed via JS).
+		$scope = $this->block_scope_from_request();
 
 		// A category chosen by the visitor narrows within (or replaces) the editor defaults.
 		$selected_category = isset( $_POST['csf_category'] ) ? sanitize_text_field( wp_unslash( $_POST['csf_category'] ) ) : '';
 
 		// Card rendering options (badge window, summary lines) come from the block.
-		$card_options = array();
-		if ( ! empty( $_POST['card_options'] ) ) {
-			$decoded_options = json_decode( sanitize_text_field( wp_unslash( $_POST['card_options'] ) ), true );
-			if ( is_array( $decoded_options ) ) {
-				$card_options = $decoded_options;
-			}
-		}
+		$card_options = $this->card_options_from_request();
 
 		$selected_type = isset( $_POST[ CSF_Parts_Part_Types::PARAM ] ) ? sanitize_key( wp_unslash( $_POST[ CSF_Parts_Part_Types::PARAM ] ) ) : '';
 
-		$filters = array();
+		// Start within the block's vehicle scope; a visitor's choice replaces that dimension.
+		$filters = array_filter( array_intersect_key( $scope, array_flip( array( 'makes', 'models', 'years' ) ) ) );
 		if ( '' !== $selected_type && CSF_Parts_Part_Types::is_valid( $selected_type ) ) {
 			$filters['categories'] = CSF_Parts_Part_Types::categories_for_line( $selected_type, $this->database->get_all_categories() );
 		} elseif ( '' !== $selected_category ) {
 			$filters['categories'] = array( $selected_category );
-		} elseif ( ! empty( $default_categories ) ) {
-			$filters['categories'] = $default_categories;
+		} elseif ( ! empty( $scope['categories'] ) ) {
+			$filters['categories'] = $scope['categories'];
 		}
 		if ( ! empty( $selected_year ) ) {
 			$filters['years'] = array( $selected_year );
@@ -329,6 +320,9 @@ class CSF_Parts_AJAX_Handler {
 
 			return ! empty( $params ) ? add_query_arg( $params, $base_url ) : $base_url;
 		};
+
+		// Cards describe the vehicles the results were narrowed to.
+		$card_options['fitment_context'] = CSF_Parts_Part_Card::context_from_filters( $filters );
 
 		// Build HTML for parts matching render.php structure.
 		ob_start();
@@ -447,6 +441,67 @@ class CSF_Parts_AJAX_Handler {
 				'sku'            => $part->sku,
 			)
 		);
+	}
+
+	/**
+	 * Multi-value scope a Product Catalog block was configured with (default
+	 * makes, models, years and categories), posted as JSON by the block's
+	 * filter and load-more scripts so AJAX pages stay within it.
+	 *
+	 * Callers verify the nonce before reading the request.
+	 *
+	 * @since 1.19.0
+	 * @return array{makes: string[], models: string[], years: string[], categories: string[]}
+	 */
+	private function block_scope_from_request(): array {
+		$scope = array();
+		foreach ( array( 'makes', 'models', 'years', 'categories' ) as $key ) {
+			$scope[ $key ] = array();
+			$field         = 'default_' . $key;
+			if ( empty( $_POST[ $field ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified by the caller.
+				continue;
+			}
+			$decoded = json_decode( sanitize_text_field( wp_unslash( $_POST[ $field ] ) ), true ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified by the caller.
+			if ( is_array( $decoded ) ) {
+				$scope[ $key ] = array_values( array_filter( array_map( 'sanitize_text_field', array_filter( $decoded, 'is_scalar' ) ), 'strlen' ) );
+			}
+		}
+		return $scope;
+	}
+
+	/**
+	 * Card rendering options (badge window, summary lines) posted from the block.
+	 *
+	 * Callers verify the nonce before reading the request.
+	 *
+	 * @since 1.19.0
+	 * @return array<string, mixed>
+	 */
+	private function card_options_from_request(): array {
+		if ( empty( $_POST['card_options'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified by the caller.
+			return array();
+		}
+		$decoded = json_decode( sanitize_text_field( wp_unslash( $_POST['card_options'] ) ), true ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified by the caller.
+		return is_array( $decoded ) ? $decoded : array();
+	}
+
+	/**
+	 * Pair stored values with their display names for a select list.
+	 *
+	 * @since 1.19.0
+	 * @param array<int, mixed> $values Stored values (strings, or rows carrying one).
+	 * @param callable          $label  Maps a stored value to its display form.
+	 * @return array<int, array{value: string, label: string}>
+	 */
+	private static function labelled( array $values, callable $label ): array {
+		$options = array();
+		foreach ( $values as $value ) {
+			$value = is_scalar( $value ) ? (string) $value : '';
+			if ( '' !== $value ) {
+				$options[] = array( 'value' => $value, 'label' => (string) $label( $value ) );
+			}
+		}
+		return $options;
 	}
 
 	/**

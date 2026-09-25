@@ -823,4 +823,27 @@ final class DatabaseTest extends TestCase {
 		// Assert.
 		$this->assertIsArray( $result );
 	}
+
+	/**
+	 * Compatibility rows are stored in make, model, year order whatever the scraper emitted.
+	 */
+	public function test_sort_compatibility_orders_by_make_model_year(): void {
+		// Arrange
+		$rows = array(
+			array( 'make' => 'Gmc', 'model' => 'Canyon', 'year' => 2006 ),
+			array( 'make' => 'Chevrolet', 'model' => 'Colorado', 'year' => 2005 ),
+			array( 'make' => 'chevrolet', 'model' => 'Colorado', 'year' => 2004 ),
+			array( 'make' => 'Chevrolet', 'model' => 'Silverado 1500', 'year' => 2004 ),
+			array( 'make' => 'Chevrolet', 'model' => 'Silverado 2500', 'year' => 2004 ),
+		);
+
+		// Act
+		$sorted = CSF_Parts_Database::sort_compatibility( $rows );
+
+		// Assert
+		$this->assertSame(
+			array( 'chevrolet|Colorado|2004', 'Chevrolet|Colorado|2005', 'Chevrolet|Silverado 1500|2004', 'Chevrolet|Silverado 2500|2004', 'Gmc|Canyon|2006' ),
+			array_map( static fn( array $r ): string => $r['make'] . '|' . $r['model'] . '|' . $r['year'], $sorted )
+		);
+	}
 }

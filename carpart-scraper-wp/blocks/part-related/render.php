@@ -41,7 +41,7 @@ $block_attrs = $attributes ?? array();
 			</div>
 			<div class="csf-related__grid csf-grid-items">
 				<?php foreach ( $related_list as $related ) : ?>
-					<?php echo CSF_Parts_Part_Card::render( $related, csf_get_part_url( (string) $related->sku ), array( 'show_fitment_line' => true ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer. ?>
+					<?php echo CSF_Parts_Part_Card::render( $related, csf_get_part_url( (string) $related->sku ), array( 'show_fitment_line' => true, 'fitment_context' => $related_parts['context'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer. ?>
 				<?php endforeach; ?>
 			</div>
 		</section>

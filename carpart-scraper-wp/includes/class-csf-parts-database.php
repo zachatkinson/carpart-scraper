@@ -198,6 +198,31 @@ class CSF_Parts_Database {
 	}
 
 	/**
+	 * Order compatibility rows by make, model, year (then engine) so the stored
+	 * JSON, and anything that summarises it without a vehicle context, is
+	 * deterministic regardless of the order the scraper emitted rows.
+	 *
+	 * @since 1.19.0
+	 * @param array<int, mixed> $rows Compatibility rows.
+	 * @return array<int, mixed> Sorted rows, re-indexed; non-array rows sort last.
+	 */
+	public static function sort_compatibility( array $rows ): array {
+		usort(
+			$rows,
+			static function ( $a, $b ): int {
+				if ( ! is_array( $a ) || ! is_array( $b ) ) {
+					return is_array( $b ) <=> is_array( $a );
+				}
+				return strcasecmp( (string) ( $a['make'] ?? '' ), (string) ( $b['make'] ?? '' ) )
+					?: strnatcasecmp( (string) ( $a['model'] ?? '' ), (string) ( $b['model'] ?? '' ) )
+					?: ( (int) ( $a['year'] ?? 0 ) <=> (int) ( $b['year'] ?? 0 ) )
+					?: strnatcasecmp( (string) ( $a['engine'] ?? '' ), (string) ( $b['engine'] ?? '' ) );
+			}
+		);
+		return array_values( $rows );
+	}
+
+	/**
 	 * Insert or update part.
 	 *
 	 * @since 2.0.0
@@ -221,7 +246,7 @@ class CSF_Parts_Database {
 			'specifications'      => isset( $data['specifications'] ) ? wp_json_encode( $data['specifications'] ) : '',
 			'features'            => isset( $data['features'] ) ? wp_json_encode( $data['features'] ) : '',
 			'tech_notes'          => $data['tech_notes'] ?? '',
-			'compatibility'       => isset( $data['compatibility'] ) ? wp_json_encode( $data['compatibility'] ) : '',
+			'compatibility'       => isset( $data['compatibility'] ) ? wp_json_encode( is_array( $data['compatibility'] ) ? self::sort_compatibility( $data['compatibility'] ) : $data['compatibility'] ) : '',
 			'images'              => isset( $data['images'] ) ? wp_json_encode( $data['images'] ) : '',
 			'interchange_numbers' => isset( $data['interchange_numbers'] ) ? wp_json_encode( $data['interchange_numbers'] ) : '',
 			'scraped_at'          => $data['scraped_at'] ?? '',

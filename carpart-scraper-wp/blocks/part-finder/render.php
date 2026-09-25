@@ -91,7 +91,7 @@ $wrapper_attributes = get_block_wrapper_attributes( array( 'class' => 'csf-part-
 						<select id="<?php echo esc_attr( $block_id ); ?>-make" name="csf_make" class="csf-select csf-part-finder__select" data-role="make">
 							<option value=""><?php esc_html_e( 'Make', 'csf-parts' ); ?></option>
 							<?php foreach ( $makes as $make ) : ?>
-								<option value="<?php echo esc_attr( $make ); ?>"><?php echo esc_html( $make ); ?></option>
+								<option value="<?php echo esc_attr( $make ); ?>"><?php echo esc_html( CSF_Parts_Vehicle_Names::make( $make ) ); ?></option>
 							<?php endforeach; ?>
 						</select>
 					</div>

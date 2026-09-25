@@ -213,6 +213,127 @@ final class PartCardTest extends TestCase {
 		$summary = CSF_Parts_Part_Card::fitment_summary( $rows );
 
 		// Assert
-		$this->assertSame( '2006 to 2018 Audi A3 Quattro, TT Quattro, Volkswagen Passat and others', $summary );
+		// Equal model-years, so makes then models are alphabetical.
+		$this->assertSame( '2006 to 2018 Audi A3 Quattro, TT Quattro, Volkswagen CC and others', $summary );
+	}
+
+	/**
+	 * The vehicle with the most model-years leads, even when stored later.
+	 */
+	public function test_fitment_summary_leads_with_most_model_years(): void {
+		// Arrange
+		$rows = json_encode( array(
+			array( 'year' => 2019, 'make' => 'Acura', 'model' => 'ILX' ),
+			array( 'year' => 2018, 'make' => 'Honda', 'model' => 'Accord' ),
+			array( 'year' => 2016, 'make' => 'Honda', 'model' => 'Civic' ),
+			array( 'year' => 2017, 'make' => 'Honda', 'model' => 'Civic' ),
+			array( 'year' => 2020, 'make' => 'Honda', 'model' => 'Civic' ),
+		) );
+
+		// Act
+		$summary = CSF_Parts_Part_Card::fitment_summary( $rows );
+
+		// Assert
+		$this->assertSame( '2016 to 2020 Honda Civic, Accord, Acura ILX', $summary );
+	}
+
+	/**
+	 * With a context, matching vehicles lead and set the year range; the rest become "and others".
+	 */
+	public function test_fitment_summary_with_context_leads_with_matching_vehicles(): void {
+		// Arrange: CSF 2276, light-duty vans stored first.
+		$rows = array();
+		foreach ( array( 'E-150 Econoline', 'E-150 Econoline Club Wagon', 'E-250 Econoline', 'E-350 Econoline' ) as $model ) {
+			foreach ( range( 1992, 1996 ) as $year ) {
+				$rows[] = array( 'year' => $year, 'make' => 'Ford', 'model' => $model, 'engine' => '5.8L V8' );
+			}
+		}
+		$rows[]  = array( 'year' => 1996, 'make' => 'Ford', 'model' => 'Econoline Super Duty', 'engine' => '5.8L V8' );
+		$json    = json_encode( $rows );
+		$context = array( 'makes' => array( 'Ford' ), 'models' => array( 'E-350 Econoline', 'Econoline Super Duty', 'F-350' ) );
+
+		// Act
+		$scoped   = CSF_Parts_Part_Card::fitment_summary( $json, $context );
+		$unscoped = CSF_Parts_Part_Card::fitment_summary( $json );
+
+		// Assert
+		$this->assertSame( '1992 to 1996 Ford E-350 Econoline, Econoline Super Duty and others, 5.8 L', $scoped );
+		$this->assertSame( '1992 to 1996 Ford E-150 Econoline, E-150 Econoline Club Wagon, E-250 Econoline and others, 5.8 L', $unscoped );
+	}
+
+	/**
+	 * A year in the context picks the vehicles that fit it, and the range spans all their years.
+	 */
+	public function test_fitment_summary_context_year_selects_vehicles_but_keeps_their_range(): void {
+		// Arrange: CSF 4013 fits three Transits 2015-2019 and the HD only from 2020.
+		$rows = array();
+		foreach ( array( 'Transit-150', 'Transit-250', 'Transit-350' ) as $model ) {
+			foreach ( range( 2015, 2019 ) as $year ) {
+				$rows[] = array( 'year' => $year, 'make' => 'Ford', 'model' => $model, 'engine' => '3.5L V6 3496cc' );
+			}
+		}
+		$rows[] = array( 'year' => 2020, 'make' => 'Ford', 'model' => 'Transit-350 Hd', 'engine' => '3.5L V6 3496cc' );
+		$json   = json_encode( $rows );
+
+		// Act
+		$summary  = CSF_Parts_Part_Card::fitment_summary( $json, array( 'makes' => array( 'ford' ), 'years' => array( '2015' ) ) );
+		$one_van  = CSF_Parts_Part_Card::fitment_summary( $json, array( 'makes' => array( 'Ford' ), 'models' => array( 'Transit-250' ), 'years' => array( 2015 ) ) );
+
+		// Assert
+		$this->assertSame( '2015 to 2019 Ford Transit-150, Transit-250, Transit-350 and others, 3.5 L', $summary );
+		$this->assertSame( '2015 to 2019 Ford Transit-250 and others, 3.5 L', $one_van );
+	}
+
+	/**
+	 * A part fitting many makes is described by breadth unless a context narrows it.
+	 */
+	public function test_fitment_summary_uses_breadth_for_many_makes(): void {
+		// Arrange: a universal cap; Ford has the most model-years.
+		$rows = array(
+			array( 'year' => 1988, 'make' => 'Acura', 'model' => 'Cl' ),
+			array( 'year' => 2014, 'make' => 'Acura', 'model' => 'Tl' ),
+			array( 'year' => 1990, 'make' => 'Chevrolet', 'model' => 'W4500 Tiltmaster' ),
+			array( 'year' => 1991, 'make' => 'Chevrolet', 'model' => 'W4500 Tiltmaster' ),
+			array( 'year' => 1992, 'make' => 'Chevrolet', 'model' => 'W5500 Tiltmaster' ),
+			array( 'year' => 1970, 'make' => 'Ford', 'model' => 'F-250' ),
+			array( 'year' => 1971, 'make' => 'Ford', 'model' => 'F-250' ),
+			array( 'year' => 1972, 'make' => 'Ford', 'model' => 'F-250' ),
+			array( 'year' => 2001, 'make' => 'Ford', 'model' => 'E-350 Super Duty' ),
+			array( 'year' => 2001, 'make' => 'Gmc', 'model' => 'W4500' ),
+			array( 'year' => 2001, 'make' => 'Toyota', 'model' => 'Tacoma' ),
+		);
+		$json = json_encode( $rows );
+
+		// Act
+		$breadth = CSF_Parts_Part_Card::fitment_summary( $json );
+		$ford    = CSF_Parts_Part_Card::fitment_summary( $json, array( 'makes' => array( 'Ford' ) ) );
+		$no_hit  = CSF_Parts_Part_Card::fitment_summary( $json, array( 'makes' => array( 'Honda' ) ) );
+
+		// Assert
+		$this->assertSame( 'Fits 5 makes including Ford, Chevrolet and Acura, 1970 to 2014', $breadth );
+		$this->assertSame( '1970 to 2001 Ford F-250, E-350 Super Duty and others', $ford );
+		$this->assertSame( $breadth, $no_hit ); // a context that matches nothing falls back
+		$this->assertSame( 'Fits 5 makes including Chevrolet, Acura and GMC, 1988 to 2014', CSF_Parts_Part_Card::fitment_summary( $json, array( 'makes' => array( 'Chevrolet', 'Acura', 'Gmc', 'Toyota' ) ) ) ); // a context this wide is breadth too
+	}
+
+	/**
+	 * The card takes the context as a render option, and it is derived from query filters.
+	 */
+	public function test_render_uses_fitment_context_option(): void {
+		// Arrange
+		$part = $this->part( array(
+			'compatibility' => json_encode( array(
+				array( 'year' => 2004, 'make' => 'Chevrolet', 'model' => 'Colorado' ),
+				array( 'year' => 2006, 'make' => 'Gmc', 'model' => 'Canyon' ),
+			) ),
+		) );
+		$context = CSF_Parts_Part_Card::context_from_filters( array( 'makes' => array( 'Gmc' ), 'years' => array( 2006, '', 2006 ), 'orderby' => 'sku' ) );
+
+		// Act
+		$html = CSF_Parts_Part_Card::render( $part, '/p', array( 'fitment_context' => $context ) );
+
+		// Assert
+		$this->assertSame( array( 'makes' => array( 'Gmc' ), 'models' => array(), 'years' => array( '2006' ) ), $context );
+		$this->assertStringContainsString( '2006 GMC Canyon and others', $html );
 	}
 }

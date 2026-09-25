@@ -31,6 +31,18 @@ final class VehicleNamesTest extends TestCase {
 		$this->assertSame( 'Escalade ESV', CSF_Parts_Vehicle_Names::model( 'Escalade Esv' ) );
 	}
 
+	public function test_make_initialisms_and_mixed_case_brands(): void {
+		$this->assertSame( 'BMW', CSF_Parts_Vehicle_Names::make( 'Bmw' ) );
+		$this->assertSame( 'GMC', CSF_Parts_Vehicle_Names::make( 'Gmc' ) );
+		$this->assertSame( 'MINI', CSF_Parts_Vehicle_Names::make( 'Mini' ) );
+		$this->assertSame( 'VW', CSF_Parts_Vehicle_Names::make( 'Vw' ) );
+		$this->assertSame( 'Mercedes-Benz', CSF_Parts_Vehicle_Names::make( 'mercedes-benz' ) );
+		$this->assertSame( 'McLaren', CSF_Parts_Vehicle_Names::make( 'Mclaren' ) );
+		$this->assertSame( 'Rolls-Royce', CSF_Parts_Vehicle_Names::make( 'Rolls-royce' ) );
+		$this->assertSame( 'Land Rover', CSF_Parts_Vehicle_Names::make( 'land rover' ) );
+		$this->assertSame( 'Alfa-Romeo', CSF_Parts_Vehicle_Names::make( 'alfa-romeo' ) ); // hyphenated fallback
+	}
+
 	public function test_engine_short_reads_like_a_sentence(): void {
 		$this->assertSame( '2.4 L turbo', CSF_Parts_Vehicle_Names::engine_short( '2.4L L4 2393cc', 'Turbocharged' ) );
 		$this->assertSame( '2.4 L turbo', CSF_Parts_Vehicle_Names::engine_short( '2.4L L4 turbo' ) );

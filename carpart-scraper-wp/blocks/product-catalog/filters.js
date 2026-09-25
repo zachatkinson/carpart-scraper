@@ -233,6 +233,11 @@
 		// Get block attributes.
 		const block = form.closest('.csf-product-catalog');
 		const defaultCategories = block ? (block.dataset.defaultCategories || '') : '';
+		const scope = {
+			default_makes: block ? (block.dataset.defaultMakes || '') : '',
+			default_models: block ? (block.dataset.defaultModels || '') : '',
+			default_years: block ? (block.dataset.defaultYears || '') : ''
+		};
 		const perPage = block ? (block.dataset.perPage || '12') : '12';
 		const cardOptions = block ? (block.dataset.cardOptions || '') : '';
 		let orderBy = block ? (block.dataset.orderBy || '') : '';
@@ -272,6 +277,11 @@
 		if (defaultCategories) {
 			data.append('default_categories', defaultCategories);
 		}
+		Object.keys(scope).forEach(function(key) {
+			if (scope[key]) {
+				data.append(key, scope[key]);
+			}
+		});
 
 		console.log('CSF Filters: Fetching filtered results...', {year, make, model, searchQuery, defaultCategories, perPage, page: requestedPage});
 
@@ -568,14 +578,18 @@
 
 	/**
 	 * Populate a select element with options.
+	 *
+	 * Each option is either a plain value or {value, label}: the value is the
+	 * stored form the query matches on, the label its display name.
 	 */
 	function populateSelect(selectElement, options, placeholderText) {
 		selectElement.innerHTML = '<option value="">' + placeholderText + '</option>';
 
 		options.forEach(function(option) {
+			const isObject = option !== null && typeof option === 'object';
 			const optionElement = document.createElement('option');
-			optionElement.value = option;
-			optionElement.textContent = option;
+			optionElement.value = isObject ? String(option.value) : String(option);
+			optionElement.textContent = isObject && option.label ? String(option.label) : optionElement.value;
 			selectElement.appendChild(optionElement);
 		});
 	}

@@ -141,6 +141,9 @@ if ( $show_filters ) {
 $filters['orderby'] = $order_by;
 $filters['order']   = $order_direction;
 
+// Cards describe the vehicles the results were narrowed to (block scope merged with the visitor's filter).
+$card_render_options = $card_options + array( 'fitment_context' => CSF_Parts_Part_Card::context_from_filters( $filters ) );
+
 // Query parts from database (V2).
 $result      = $database->query_parts( $filters, $per_page, $current_page );
 $parts       = $result['parts'] ?? array();
@@ -271,7 +274,11 @@ $wrapper_attributes = get_block_wrapper_attributes(
 		'data-order-direction'    => $order_direction,
 		'data-card-options'       => wp_json_encode( $card_options ),
 		'data-columns-desktop'    => $columns['desktop'],
-		'data-default-categories' => ! empty( $default_categories ) ? esc_attr( wp_json_encode( $default_categories ) ) : '',
+		// Block scope, re-sent by the filter and load-more scripts so AJAX pages stay within it.
+		'data-default-categories' => ! empty( $default_categories ) ? wp_json_encode( $default_categories ) : '',
+		'data-default-makes'      => ! empty( $default_makes ) ? wp_json_encode( $default_makes ) : '',
+		'data-default-models'     => ! empty( $default_models ) ? wp_json_encode( $default_models ) : '',
+		'data-default-years'      => ! empty( $default_years ) ? wp_json_encode( $default_years ) : '',
 	)
 );
 ?>
@@ -322,7 +329,7 @@ $wrapper_attributes = get_block_wrapper_attributes(
 						array(
 							'id'          => $block_id . '-make',
 							'name'        => 'csf_make',
-							'options'     => array_combine( $makes, $makes ),
+							'options'     => array_combine( $makes, array_map( array( CSF_Parts_Vehicle_Names::class, 'make' ), $makes ) ),
 							'selected'    => $selected_make,
 							'label'       => __( 'Make', 'csf-parts' ),
 							'placeholder' => __( 'Select Make', 'csf-parts' ),
@@ -338,7 +345,7 @@ $wrapper_attributes = get_block_wrapper_attributes(
 						array(
 							'id'          => $block_id . '-model',
 							'name'        => 'csf_model',
-							'options'     => array_combine( $models, $models ),
+							'options'     => array_combine( $models, array_map( array( CSF_Parts_Vehicle_Names::class, 'model' ), $models ) ),
 							'selected'    => $selected_model,
 							'label'       => __( 'Model', 'csf-parts' ),
 							'placeholder' => __( 'Select Model', 'csf-parts' ),
@@ -406,7 +413,7 @@ $wrapper_attributes = get_block_wrapper_attributes(
 					// Generate part URL.
 					$part_url = $get_part_url( $part->category, $part->sku );
 
-					echo CSF_Parts_Part_Card::render( $part, $part_url, $card_options ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer.
+					echo CSF_Parts_Part_Card::render( $part, $part_url, $card_render_options ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in the renderer.
 					?>
 				<?php endforeach; ?>
 			</div>

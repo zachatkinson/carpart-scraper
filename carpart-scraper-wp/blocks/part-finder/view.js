@@ -16,11 +16,18 @@
 		return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 	}
 
-	function setOptions(select, values, placeholder, keep) {
+	// An option is {value, label}: the value is the stored form the query matches on, the label its display name.
+	function toOption(item) {
+		if (item !== null && typeof item === 'object') {
+			return { value: String(item.value), label: item.label ? String(item.label) : String(item.value) };
+		}
+		return { value: String(item), label: String(item) };
+	}
+
+	function setOptions(select, options, placeholder, keep) {
 		var html = '<option value="">' + escapeHtml(placeholder) + '</option>';
-		values.forEach(function (value) {
-			var v = String(value);
-			html += '<option value="' + escapeHtml(v) + '"' + (v === keep ? ' selected' : '') + '>' + escapeHtml(v) + '</option>';
+		options.forEach(function (option) {
+			html += '<option value="' + escapeHtml(option.value) + '"' + (option.value === keep ? ' selected' : '') + '>' + escapeHtml(option.label) + '</option>';
 		});
 		select.innerHTML = html;
 	}
@@ -34,7 +41,7 @@
 	}
 
 	function values(res, key) {
-		return res && res.success && res.data && Array.isArray(res.data[key]) ? res.data[key].map(String) : [];
+		return res && res.success && res.data && Array.isArray(res.data[key]) ? res.data[key].map(toOption) : [];
 	}
 
 	function init(form) {
@@ -42,7 +49,7 @@
 		var make = form.querySelector('[data-role="make"]');
 		var model = form.querySelector('[data-role="model"]');
 		var optionValues = function (select) {
-			return select ? Array.prototype.map.call(select.options, function (o) { return o.value; }).filter(Boolean) : [];
+			return select ? Array.prototype.filter.call(select.options, function (o) { return o.value; }).map(function (o) { return { value: o.value, label: o.textContent }; }) : [];
 		};
 		var allYears = optionValues(year);
 		var allMakes = optionValues(make);
@@ -51,7 +58,7 @@
 		function fill(select, list, role, current) {
 			if (!select) { return; }
 			// `current` is the value before any "Loading…" placeholder replaced the options.
-			var keep = list.indexOf(current) >= 0 ? current : '';
+			var keep = list.some(function (o) { return o.value === current; }) ? current : '';
 			setOptions(select, list, list.length ? labels[role] : (cfg.none || 'None available'), keep);
 			select.disabled = list.length === 0;
 		}

@@ -97,7 +97,7 @@ final class CSF_Parts_Part_Page {
 		$heading             = sanitize_text_field( self::title( $part ) );
 		$title               = $heading . ' (' . $display_name . ')';
 		if ( $is_vehicle_specific ) {
-			$title = sprintf( '%s %s %s – %s', sanitize_text_field( $year ), sanitize_text_field( ucwords( str_replace( '-', ' ', $make ) ) ), sanitize_text_field( ucwords( str_replace( '-', ' ', $model ) ) ), $title );
+			$title = sprintf( '%s %s %s – %s', sanitize_text_field( $year ), sanitize_text_field( CSF_Parts_Vehicle_Names::make( $make ) ), sanitize_text_field( CSF_Parts_Vehicle_Names::model( $model ) ), $title );
 		}
 
 		// The visitor's vehicle: rewrite vars first, then catalog filter params.
@@ -234,10 +234,10 @@ final class CSF_Parts_Part_Page {
 	 * @param string                            $make          Visitor's make or ''.
 	 * @param string                            $model         Visitor's model or ''.
 	 * @param CSF_Parts_Database                $database      Database.
-	 * @return array{heading: string, meta: string, link_label: string, url: string, parts: object[]}
+	 * @return array{heading: string, meta: string, link_label: string, url: string, parts: object[], context: array{makes: string[], models: string[], years: string[]}}
 	 */
 	public static function related_parts( object $part, array $compatibility, string $year, string $make, string $model, CSF_Parts_Database $database ): array {
-		$empty   = array( 'heading' => '', 'meta' => '', 'link_label' => '', 'url' => '', 'parts' => array() );
+		$empty   = array( 'heading' => '', 'meta' => '', 'link_label' => '', 'url' => '', 'parts' => array(), 'context' => CSF_Parts_Part_Card::sanitize_context( array() ) );
 		$count   = min( CSF_Parts_Constants::RELATED_COUNT_MAX, max( 0, (int) get_option( CSF_Parts_Constants::OPTION_RELATED_COUNT, CSF_Parts_Constants::RELATED_COUNT_DEFAULT ) ) );
 		$context = self::related_context( $compatibility, $year, $make, $model );
 		if ( 0 === $count || 'none' === $context['mode'] ) {
@@ -252,6 +252,8 @@ final class CSF_Parts_Part_Page {
 			'link_label' => $context['link_label'],
 			'url'        => empty( $context['params'] ) ? csf_find_catalog_page_url() : add_query_arg( array_map( 'rawurlencode', $context['params'] ), csf_find_catalog_page_url() ),
 			'parts'      => array_slice( $parts, 0, $count ),
+			// The vehicle(s) this page is about, so related cards lead with them.
+			'context'    => CSF_Parts_Part_Card::context_from_filters( $context ),
 		);
 	}
 

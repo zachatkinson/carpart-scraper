@@ -108,7 +108,7 @@ A search card for hero sections: part-number box plus Year / Make / Model dropdo
 
 New catalog blocks are sorted by most recently updated first ("Latest Fitments / Updates", descending). Change it under Display Settings → Sort By.
 
-The filter card has a part-number box, Year / Make / Model, a Clear link and part-type chips with counts; the results header shows "N parts · showing a to b" and a visitor Sort control (`csf_sort`). Cards show a New badge (window in days), a fitment summary line and a dimensions · OE line, each switchable under **Card Content**. Block background, text colour, padding, margin and typography live in the editor's **Styles** tab (core block supports). Card radius, border, shadow, hover effect and colour scheme are under **Card Styling**; leave them unset to inherit the Design page.
+The filter card has a part-number box, Year / Make / Model, a Clear link and part-type chips with counts; the results header shows "N parts · showing a to b" and a visitor Sort control (`csf_sort`). Cards show a New badge (window in days), a fitment summary line and a dimensions · OE line, each switchable under **Card Content**. The fitment line describes the vehicles the block is scoped to or the visitor filtered on first (year range and engine from those rows, everything else folded into "and others"); with no vehicle context, a part that fits more than three makes reads "Fits N makes including A, B and C, YYYY to YYYY". Block background, text colour, padding, margin and typography live in the editor's **Styles** tab (core block supports). Card radius, border, shadow, hover effect and colour scheme are under **Card Styling**; leave them unset to inherit the Design page.
 
 1. Add "CSF Product Catalog" block
 2. Configure filters:

@@ -19,6 +19,26 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 final class CSF_Parts_Vehicle_Names {
 
+	/**
+	 * Lowercase stored make => display form, for names the word rules get wrong:
+	 * initialisms, mixed-case brands and hyphenated names. Extend with the
+	 * csf_parts_vehicle_make_overrides filter.
+	 */
+	private const MAKE_OVERRIDES = array(
+		'bmw'           => 'BMW',
+		'gmc'           => 'GMC',
+		'mini'          => 'MINI',
+		'vw'            => 'VW',
+		'infiniti'      => 'INFINITI',
+		'am general'    => 'AM General',
+		'mercedes-benz' => 'Mercedes-Benz',
+		'mercedes benz' => 'Mercedes-Benz',
+		'mclaren'       => 'McLaren',
+		'rolls-royce'   => 'Rolls-Royce',
+		'rolls royce'   => 'Rolls-Royce',
+		'delorean'      => 'DeLorean',
+	);
+
 	/** Lowercase token => display form. Applies to makes and model tokens. */
 	private const OVERRIDES = array(
 		'gmc'        => 'GMC',
@@ -73,7 +93,9 @@ final class CSF_Parts_Vehicle_Names {
 	 * @return string
 	 */
 	public static function make( string $make ): string {
-		return self::words( $make );
+		$key       = strtolower( trim( preg_replace( '/\s+/', ' ', $make ) ?? $make ) );
+		$overrides = self::make_overrides();
+		return $overrides[ $key ] ?? self::words( $make );
 	}
 
 	/**
@@ -182,11 +204,28 @@ final class CSF_Parts_Vehicle_Names {
 			} elseif ( preg_match( '/^[a-z]-\d{2,4}$/i', $token ) ) {
 				$token = strtoupper( $token ); // F-150, I-280
 			} else {
-				$token = ucfirst( strtolower( $token ) );
+				// Case each hyphenated segment: "mercedes-benz" → "Mercedes-Benz".
+				$token = implode( '-', array_map( static fn( string $s ): string => ucfirst( strtolower( $s ) ), explode( '-', $token ) ) );
 			}
 		}
 		unset( $token );
 		return implode( ' ', $tokens );
+	}
+
+	/**
+	 * Whole-make override map, filterable.
+	 *
+	 * @return array<string, string>
+	 */
+	private static function make_overrides(): array {
+		$map = self::MAKE_OVERRIDES;
+		if ( function_exists( 'apply_filters' ) ) {
+			$filtered = apply_filters( 'csf_parts_vehicle_make_overrides', $map );
+			if ( is_array( $filtered ) ) {
+				$map = $filtered;
+			}
+		}
+		return $map;
 	}
 
 	/**

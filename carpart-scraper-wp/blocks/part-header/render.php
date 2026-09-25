@@ -92,7 +92,7 @@ $block_attrs = $attributes ?? array();
 						<strong>Your Vehicle</strong>
 					</div>
 					<div class="your-vehicle-ymm">
-						<?php echo esc_html( "$year $make $model" ); ?>
+						<?php echo esc_html( trim( $year . ' ' . CSF_Parts_Vehicle_Names::make( $make ) . ' ' . CSF_Parts_Vehicle_Names::model( $model ) ) ); ?>
 					</div>
 					<?php if ( count( $engine_variants ) > 1 ) : ?>
 						<div class="your-vehicle-engine-selector">
