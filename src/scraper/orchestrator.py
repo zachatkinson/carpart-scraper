@@ -728,8 +728,14 @@ class ScraperOrchestrator:
                     changed_skus.add(sku)
                     logger.debug("part_changed", sku=sku, name=part.name)
 
-            # Always update with latest data (last-write-wins)
-            self.unique_parts[sku] = part
+            # Listing data wins for what the listing knows (name, price, stock,
+            # category); detail-page enrichment (description, images, interchange
+            # numbers, tech notes) is kept, because a re-processed application page
+            # says nothing about those and the detail page may not be re-fetched.
+            existing = self.unique_parts.get(sku)
+            self.unique_parts[sku] = (
+                self._merge_listing_part(existing, part) if existing is not None else part
+            )
 
             # Track vehicle compatibility (prevent duplicates)
             if sku not in self.vehicle_compat:
@@ -863,6 +869,59 @@ class ScraperOrchestrator:
             aspiration=vehicle_qualifiers.get("aspiration"),
             qualifiers=vehicle_qualifiers.get("qualifiers", []),
         )
+
+    @staticmethod
+    def _merge_listing_part(existing: Part, listing: Part) -> Part:
+        """Apply a freshly scraped listing to an already-known part.
+
+        Fields the application page carries replace the stored values.
+        Fields only the detail page provides survive when the listing has
+        nothing for them, so re-scraping a listing never strips a part.
+
+        Args:
+            existing: Part as currently known (possibly enriched)
+            listing: Part parsed from an application page
+
+        Returns:
+            Merged Part
+        """
+        data = listing.model_dump()
+        data["description"] = listing.description or existing.description
+        data["tech_notes"] = listing.tech_notes or existing.tech_notes
+        data["interchange_numbers"] = (
+            [r.model_dump() for r in listing.interchange_numbers]
+            if listing.interchange_numbers
+            else [r.model_dump() for r in existing.interchange_numbers]
+        )
+        data["images"] = (
+            [img.model_dump() for img in existing.images]
+            if existing.images
+            else [img.model_dump() for img in listing.images]
+        )
+        data["specifications"] = {**existing.specifications, **listing.specifications}
+        return Part(**data)
+
+    @staticmethod
+    def _needs_enrichment(part: Part, detail_data: dict[str, Any]) -> bool:
+        """Whether a stored part lacks detail-page content the page currently has.
+
+        Guards against a stored record that was stripped or never enriched
+        while its detail page hash still matches, which would otherwise be
+        skipped forever.
+
+        Args:
+            part: Part as currently known
+            detail_data: Output of the parser's extract_detail_page_data
+
+        Returns:
+            True if a full enrichment should run despite an unchanged page hash
+        """
+        if detail_data.get("full_description") and not part.description:
+            return True
+        page_images = detail_data.get("additional_images") or []
+        if page_images and len(part.images) < len(page_images):
+            return True
+        return bool(detail_data.get("interchange_data")) and not part.interchange_numbers
 
     @staticmethod
     def _content_hash(part: Part) -> str:
@@ -1605,15 +1664,23 @@ class ScraperOrchestrator:
                             prev_hash = self.detail_etag_store.get(detail_url)
                             self.detail_etag_store.set(detail_url, current_hash)
 
-                            if prev_hash == current_hash and not force_full:
+                            soup = self.html_parser.parse(detail_html)
+                            detail_data = self.html_parser.extract_detail_page_data(soup, sku)
+                            stored = self.unique_parts.get(sku)
+
+                            if (
+                                prev_hash == current_hash
+                                and not force_full
+                                and stored is not None
+                                and not self._needs_enrichment(stored, detail_data)
+                            ):
                                 details_skipped_unchanged += 1
                                 logger.debug("detail_page_unchanged", sku=sku, url=detail_url)
                                 # Page content unchanged, but image bytes may have
                                 # been replaced at the same URL.  Run image processor
                                 # only — it uses source-hash comparison to detect
                                 # changed content and skips unchanged images cheaply.
-                                soup = self.html_parser.parse(detail_html)
-                                images = self.html_parser.extract_gallery_images(soup)
+                                images = detail_data.get("additional_images") or []
                                 if images:
                                     self.image_processor.process_images(sku, images)
                                     image_syncer = getattr(self, "image_syncer", None)
@@ -1621,9 +1688,10 @@ class ScraperOrchestrator:
                                         image_syncer.sync_and_cleanup_for_sku(sku)
                                 continue
 
+                            if prev_hash == current_hash and not force_full:
+                                logger.info("detail_reenrich_missing_content", sku=sku)
+
                             # Parse and enrich (full processing for changed pages)
-                            soup = self.html_parser.parse(detail_html)
-                            detail_data = self.html_parser.extract_detail_page_data(soup, sku)
                             self._enrich_part_with_details(sku, detail_data)
                             details_fetched_count += 1
 

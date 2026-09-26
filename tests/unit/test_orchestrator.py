@@ -11,6 +11,7 @@ Tests cover:
 import hashlib
 import json
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 
@@ -761,6 +762,52 @@ class TestDeduplicateWithChanges:
         # Cleanup
         orchestrator.close()
 
+    def test_deduplicate_keeps_enrichment_when_listing_reprocessed(self, tmp_path: Path) -> None:
+        """Re-scraping a listing updates listing fields but never strips detail enrichment."""
+        # Arrange
+        orchestrator = ScraperOrchestrator(
+            output_dir=tmp_path / "exports",
+            checkpoint_dir=tmp_path / "checkpoints",
+        )
+        enriched = Part(
+            sku="CSF-3158",
+            name="Radiator",
+            category="Radiator",
+            price=Decimal("199.99"),
+            description="Full description",
+            tech_notes="Notes",
+            specifications={"Rows": "2", "Core Length (in)": "20"},
+            images=[{"url": "images/avif/3158_0.avif", "is_primary": True}],
+            interchange_numbers=[{"reference_number": "30048", "reference_type": "OEM"}],
+        )
+        orchestrator.unique_parts["CSF-3158"] = enriched
+        listing = Part(
+            sku="CSF-3158",
+            name="Radiator (updated name)",
+            category="Radiator",
+            price=Decimal("209.99"),
+            specifications={"Rows": "3"},
+            in_stock=False,
+        )
+        vehicle = Vehicle(make="Volvo", model="S40", year=2003)
+
+        # Act
+        orchestrator._deduplicate_and_track([listing], vehicle)  # noqa: SLF001
+
+        # Assert
+        merged = orchestrator.unique_parts["CSF-3158"]
+        assert merged.name == "Radiator (updated name)"
+        assert merged.price == Decimal("209.99")
+        assert merged.in_stock is False
+        assert merged.description == "Full description"
+        assert merged.tech_notes == "Notes"
+        assert [i.url for i in merged.images] == ["images/avif/3158_0.avif"]
+        assert merged.interchange_numbers[0].reference_number == "30048"
+        assert merged.specifications == {"Rows": "3", "Core Length (in)": "20"}
+
+        # Cleanup
+        orchestrator.close()
+
     def test_deduplicate_detects_changed_part(self, tmp_path: Path) -> None:
         """Test that a part with different content hash is flagged as changed."""
         # Arrange
@@ -1375,7 +1422,9 @@ class TestScrapeAllPhase3:
         app_html = '<html><div class="row app">parts</div></html>'
         orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=[app_html])
 
-        part = Part(sku="CSF-1001", name="Radiator", category="Radiator")
+        part = Part(
+            sku="CSF-1001", name="Radiator", category="Radiator", description="Great radiator"
+        )
         parts_data = [{"sku": "CSF-1001", "name": "Radiator", "vehicle_qualifiers": {}}]
         orchestrator.html_parser.extract_parts_from_application_page.return_value = parts_data
         orchestrator.validator.validate_batch.return_value = [part]
@@ -1396,10 +1445,57 @@ class TestScrapeAllPhase3:
         # Act
         result = orchestrator.scrape_all(fetch_details=True)
 
-        # Assert — detail page unchanged, so enrichment is skipped
+        # Assert — detail page unchanged and the stored part already has its
+        # content, so enrichment is skipped
         assert result["details_fetched_count"] == 0
         assert result["details_skipped_unchanged"] == 1
         orchestrator._enrich_part_with_details.assert_not_called()  # noqa: SLF001
+
+    def test_detail_page_unchanged_but_part_stripped_is_reenriched(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """An unchanged detail page still enriches a stored part that lacks its content."""
+        # Arrange
+        orchestrator = self._make_orchestrator(tmp_path)
+        hierarchy = [
+            {
+                "make_id": 3,
+                "make": "Honda",
+                "year_id": 100,
+                "year": "2024",
+                "application_id": 8000,
+                "model": "Civic",
+            },
+        ]
+        mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
+        mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
+        orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=["<html/>"])
+        # Listing-level part: no description, no images
+        part = Part(sku="CSF-1001", name="Radiator", category="Radiator")
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = [
+            {"sku": "CSF-1001", "name": "Radiator", "vehicle_qualifiers": {}}
+        ]
+        orchestrator.validator.validate_batch.return_value = [part]
+        detail_html = "<html>unchanged</html>"
+        orchestrator.fetcher.async_fetch_detail_pages = AsyncMock(return_value=[detail_html])
+        orchestrator.html_parser.extract_detail_page_data.return_value = {
+            "full_description": "Great radiator",
+            "specifications": {},
+            "additional_images": [{"url": "https://s3.example.com/a.jpg", "size": "large"}],
+        }
+        mocker.patch.object(orchestrator, "_enrich_part_with_details")
+        orchestrator.detail_etag_store.set(
+            "https://csf.autocaredata.com/items/1001",
+            hashlib.md5(detail_html.encode()).hexdigest(),  # noqa: S324
+        )
+
+        # Act
+        result = orchestrator.scrape_all(fetch_details=True)
+
+        # Assert — hash matched, but the part was missing content the page has
+        assert result["details_skipped_unchanged"] == 0
+        assert result["details_fetched_count"] == 1
+        orchestrator._enrich_part_with_details.assert_called_once()  # noqa: SLF001
 
     def test_detail_page_hash_enriches_changed(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Test Phase 3 enriches detail pages whose content hash has changed."""
