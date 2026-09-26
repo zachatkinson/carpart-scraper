@@ -981,6 +981,24 @@ class TestCSFParserExtractDetailPageData:
 class TestCSFParserExtractDetailSpecifications:
     """Test suite for CSFParser._extract_detail_specifications() method."""
 
+    def test_extract_detail_specifications_skips_part_number_title_row(self) -> None:
+        """The [part number, type] title row must not become a spec keyed by the SKU."""
+        # Arrange
+        parser = CSFParser()
+        html = """
+        <table><tr>
+            <td class="selling-part">3158</td><td class="item-type">Radiator</td>
+        </tr></table>
+        <table><tr><td>Core Width:</td><td>24.5 in</td></tr></table>
+        """
+        soup = parser.parse(html)
+
+        # Act
+        result = parser._extract_detail_specifications(soup)
+
+        # Assert
+        assert result == {"Core Width": "24.5 in"}
+
     def test_extract_detail_specifications_handles_3_cell_triplet_format(self) -> None:
         """Test _extract_detail_specifications() handles 3-cell triplet format."""
         # Arrange

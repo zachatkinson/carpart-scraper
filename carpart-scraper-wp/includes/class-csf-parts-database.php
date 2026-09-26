@@ -574,7 +574,34 @@ class CSF_Parts_Database {
 			// Rows from before the column existed compare as "not discontinued".
 			return ! empty( $value ) ? '1' : '0';
 		}
+		if ( 'specifications' === $field ) {
+			return self::comparable_specifications( (string) $value );
+		}
 		return (string) $value;
+	}
+
+	/**
+	 * Specifications JSON in comparison form.
+	 *
+	 * Scrapes before 2026-09-26 stored the detail page's title row as a spec
+	 * keyed by the bare part number (e.g. "3592" => "Radiator"). Those keys are
+	 * dropped on both sides of the comparison so their disappearance from new
+	 * scrapes never counts as a content change.
+	 *
+	 * @param string $json Stored or incoming specifications JSON.
+	 * @return string
+	 */
+	private static function comparable_specifications( string $json ): string {
+		$specs = json_decode( $json, true );
+		if ( ! is_array( $specs ) ) {
+			return $json;
+		}
+		foreach ( array_keys( $specs ) as $key ) {
+			if ( ctype_digit( (string) $key ) ) {
+				unset( $specs[ $key ] );
+			}
+		}
+		return (string) wp_json_encode( $specs );
 	}
 
 	/**

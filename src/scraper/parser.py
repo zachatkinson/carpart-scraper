@@ -977,6 +977,9 @@ class CSFParser(HTMLParser):
             # Extract data from table rows
             rows = table.find_all("tr")
             for row in rows:
+                # The title row [part number, part type] is not a specification
+                if row.find("td", class_="selling-part") is not None:
+                    continue
                 cells = row.find_all(["td", "th"])
                 self._extract_spec_from_row(cells, specs)
 

@@ -1141,4 +1141,20 @@ final class DatabaseTest extends TestCase {
 		$this->assertSame( 'updated', $result['status'] );
 		$this->assertSame( array( 'discontinued' ), $result['changed_fields'] );
 	}
+
+	/**
+	 * Test: a stored part-number spec key vanishing from a new scrape is not a change.
+	 */
+	public function test_diff_ignores_part_number_specification_keys(): void {
+		// Arrange
+		$stored   = $this->stored_row( array( 'specifications' => '{"3158":"Radiator","Rows":"2"}' ) );
+		$incoming = CSF_Parts_Database::content_data( $this->incoming_data() );
+
+		// Act & Assert
+		$this->assertSame( array(), CSF_Parts_Database::diff_content( $stored, $incoming ) );
+		$this->assertSame(
+			CSF_Parts_Database::content_hash( CSF_Parts_Database::content_data( $this->incoming_data( array( 'specifications' => array( '3158' => 'Radiator', 'Rows' => '2' ) ) ) ) ),
+			CSF_Parts_Database::content_hash( $incoming )
+		);
+	}
 }
