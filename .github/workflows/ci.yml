@@ -66,6 +66,7 @@ jobs:
         with:
           version: "latest"
           enable-cache: true
+          save-cache: false
 
       - name: Set up Python
         run: uv python install 3.13
@@ -87,6 +88,7 @@ jobs:
         with:
           version: "latest"
           enable-cache: true
+          save-cache: false
 
       - name: Set up Python
         run: uv python install 3.13
@@ -114,6 +116,7 @@ jobs:
         with:
           version: "latest"
           enable-cache: true
+          save-cache: false
 
       - name: Set up Python
         run: uv python install 3.13
