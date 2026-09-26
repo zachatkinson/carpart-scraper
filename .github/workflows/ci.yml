@@ -3,53 +3,29 @@ name: CI
 on:
   push:
     branches: [master, main, develop]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   pull_request:
     branches: [master, main, develop]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+
+# A newer push to the same branch supersedes a running CI for it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
-    name: Tests - ${{ matrix.test-group.name }}
+    name: Tests
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        test-group:
-          - name: "Unit 1/4"
-            id: "unit1"
-            splits: 4
-            group: 1
-            path: "tests/unit/"
-          - name: "Unit 2/4"
-            id: "unit2"
-            splits: 4
-            group: 2
-            path: "tests/unit/"
-          - name: "Unit 3/4"
-            id: "unit3"
-            splits: 4
-            group: 3
-            path: "tests/unit/"
-          - name: "Unit 4/4"
-            id: "unit4"
-            splits: 4
-            group: 4
-            path: "tests/unit/"
-          - name: "Integration"
-            id: "integration"
-            splits: 1
-            group: 1
-            path: "tests/integration/"
-          - name: "Performance"
-            id: "performance"
-            splits: 1
-            group: 1
-            path: "tests/performance/"
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v10
         with:
           version: "latest"
           enable-cache: true
@@ -60,37 +36,54 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Install pytest-split
-        run: uv pip install pytest-split
-
-      - name: Run tests with coverage
+      # The whole unit + integration suite runs in under 30 seconds, so one job
+      # beats a matrix whose setup dwarfs its tests. The coverage floor is the
+      # measured figure at the time of writing; raise it, never lower it.
+      - name: Run unit and integration tests with coverage
         run: |
-          uv run pytest ${{ matrix.test-group.path }} \
-            --splits ${{ matrix.test-group.splits }} \
-            --group ${{ matrix.test-group.group }} \
+          uv run pytest tests/unit tests/integration \
             --cov=src \
             --cov-report=xml \
-            --cov-fail-under=0 \
-            -v
+            --cov-report=term-missing:skip-covered \
+            --cov-fail-under=88
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
-          flags: ${{ matrix.test-group.id }}
-          name: ${{ matrix.test-group.name }}
+          flags: tests
           fail_ci_if_error: false
+
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run performance tests
+        run: uv run pytest tests/performance -q
 
   lint:
     name: Lint and Type Check
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v10
         with:
           version: "latest"
           enable-cache: true
@@ -101,22 +94,26 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
+      - name: Cache pre-commit environments
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
       - name: Run pre-commit hooks
-        run: |
-          uv pip install pre-commit
-          uv run pre-commit run --all-files --show-diff-on-failure
+        run: uv run pre-commit run --all-files --show-diff-on-failure
 
-  security:
-    name: Security Checks
+  audit:
+    name: Dependency Audit
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v10
         with:
           version: "latest"
+          enable-cache: true
 
       - name: Set up Python
         run: uv python install 3.13
@@ -124,12 +121,50 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Run safety check
-        run: |
-          uv pip install safety
-          uv run safety check --json || true
+      # Fails on any known vulnerability in the locked environment. Static
+      # security linting is covered by ruff's flake8-bandit (S) rules in lint.
+      - name: Audit locked dependencies
+        run: uv run --with pip-audit pip-audit --progress-spinner off
 
-      - name: Run bandit security linter
+  plugin:
+    name: WordPress Plugin
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: carpart-scraper-wp
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@v4
+        with:
+          working-directory: carpart-scraper-wp
+
+      - name: Run PHP unit tests
+        run: vendor/bin/phpunit -c tests/phpunit.xml --testsuite='Unit Tests' --no-coverage
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: carpart-scraper-wp/package-lock.json
+
+      - name: Install npm dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build blocks
+        run: npm run build
+
+      - name: Verify every block bundle was built
         run: |
-          uv pip install bandit
-          uv run bandit -r src/ -f json || true
+          for block in part-finder part-blocks product-catalog single-product; do
+            test -s "blocks/build/$block/index.js" || { echo "::error::missing bundle for $block"; exit 1; }
+            test -s "blocks/build/$block/index.asset.php" || { echo "::error::missing asset manifest for $block"; exit 1; }
+          done

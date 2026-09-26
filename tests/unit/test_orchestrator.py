@@ -25,7 +25,13 @@ from src.scraper.ajax_parser import AJAXParsingError, AJAXResponseParser
 from src.scraper.etag_store import ETagStore
 from src.scraper.fetcher import DetailPageNotFound
 from src.scraper.hierarchy_cache import HierarchyCache
-from src.scraper.orchestrator import MAKES, DeduplicationResult, FailureTracker, ScraperOrchestrator
+from src.scraper.orchestrator import (
+    CHECKPOINTS_TO_KEEP,
+    MAKES,
+    DeduplicationResult,
+    FailureTracker,
+    ScraperOrchestrator,
+)
 
 
 class TestFailureTracker:
@@ -1168,6 +1174,35 @@ class TestLoadCheckpointErrors:
         # Act & Assert
         with pytest.raises(FileNotFoundError, match="Checkpoint file not found"):
             orchestrator._load_checkpoint(non_existent)  # noqa: SLF001
+
+
+class TestCheckpointPruning:
+    """Saving a checkpoint keeps only the newest few for that filter."""
+
+    def test_save_checkpoint_prunes_older_files(self, tmp_path: Path) -> None:
+        """Older checkpoints beyond CHECKPOINTS_TO_KEEP are removed; other filters untouched."""
+        # Arrange
+        orchestrator = ScraperOrchestrator(
+            output_dir=tmp_path / "exports", checkpoint_dir=tmp_path / "checkpoints"
+        )
+        for stamp in ("20260101_000000", "20260102_000000", "20260103_000000", "20260104_000000"):
+            (orchestrator.checkpoint_dir / f"checkpoint_all_{stamp}.json").write_text("{}")
+        (orchestrator.checkpoint_dir / "checkpoint_honda_20260101_000000.json").write_text("{}")
+
+        # Act
+        newest = orchestrator._save_checkpoint(None, None)  # noqa: SLF001
+
+        # Assert
+        remaining = sorted(
+            p.name for p in orchestrator.checkpoint_dir.glob("checkpoint_all_*.json")
+        )
+        assert len(remaining) == CHECKPOINTS_TO_KEEP
+        assert remaining[-1] == newest.name
+        assert "checkpoint_all_20260101_000000.json" not in remaining
+        assert (orchestrator.checkpoint_dir / "checkpoint_honda_20260101_000000.json").exists()
+
+        # Cleanup
+        orchestrator.close()
 
 
 class TestGetLatestCheckpoint:

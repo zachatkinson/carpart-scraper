@@ -265,6 +265,11 @@ VEHICLE_REMOVAL_MAX_FRACTION = 0.10
 DISCONTINUED_MAX_FRACTION = 0.05
 DISCONTINUED_OUTAGE_MIN_COUNT = 20
 
+# Checkpoints kept per filter after each save. Each is a full snapshot of the
+# catalog (~3 MB); the CI cache restores the whole directory every night, so an
+# unbounded history costs restore time for nothing.
+CHECKPOINTS_TO_KEEP = 3
+
 # Detail pages per fetch batch.  Presigned S3 image URLs on those pages expire
 # 10 minutes after the fetch, so a batch must finish processing well inside that.
 DETAIL_BATCH_SIZE = 60
@@ -1359,6 +1364,7 @@ class ScraperOrchestrator:
             unique_parts_count=len(self.unique_parts),
             parts_scraped=self.parts_scraped,
         )
+        self._prune_checkpoints(filter_str, keep=CHECKPOINTS_TO_KEEP)
         return checkpoint_path
 
     @staticmethod
@@ -1450,6 +1456,24 @@ class ScraperOrchestrator:
         )
 
         return checkpoint_data
+
+    def _prune_checkpoints(self, filter_str: str, keep: int) -> int:
+        """Delete all but the newest ``keep`` checkpoints for a filter.
+
+        Args:
+            filter_str: Filter segment of the checkpoint file name ("all", "honda", ...)
+            keep: Number of newest checkpoints to retain
+
+        Returns:
+            Number of files removed
+        """
+        checkpoints = sorted(self.checkpoint_dir.glob(f"checkpoint_{filter_str}_*.json"))
+        stale = checkpoints[:-keep] if keep > 0 else checkpoints
+        for path in stale:
+            path.unlink(missing_ok=True)
+        if stale:
+            logger.info("checkpoints_pruned", removed=len(stale), kept=keep, filter=filter_str)
+        return len(stale)
 
     def _get_latest_checkpoint(
         self, make_filter: str | None = None, year_filter: int | None = None

@@ -1,0 +1,34 @@
+version: 2
+updates:
+  # Keep workflow action versions current so they never drift between files again.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      python:
+        patterns: ["*"]
+
+  - package-ecosystem: "npm"
+    directory: "/carpart-scraper-wp"
+    schedule:
+      interval: "weekly"
+    groups:
+      wordpress-tooling:
+        patterns: ["*"]
+
+  - package-ecosystem: "composer"
+    directory: "/carpart-scraper-wp"
+    schedule:
+      interval: "weekly"
+    groups:
+      php-tooling:
+        patterns: ["*"]
