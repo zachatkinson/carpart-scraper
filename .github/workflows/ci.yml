@@ -37,7 +37,7 @@ jobs:
         run: uv sync --all-extras --dev
 
       # The whole unit + integration suite runs in under 30 seconds, so one job
-      # beats a matrix whose setup dwarfs its tests. The coverage floor is the
+      # beats a matrix whose setup dwarfs its tests. The coverage floor is the project
       # measured figure at the time of writing; raise it, never lower it.
       - name: Run unit and integration tests with coverage
         run: |
@@ -45,7 +45,7 @@ jobs:
             --cov=src \
             --cov-report=xml \
             --cov-report=term-missing:skip-covered \
-            --cov-fail-under=88
+            --cov-fail-under=90
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
