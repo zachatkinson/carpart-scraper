@@ -2315,6 +2315,163 @@ class TestHierarchyCaching:
         mock_ajax.parse_model_response.assert_called_once()
 
 
+class TestFitmentReconciliation:
+    """Fitments are removed when CSF's pages or hierarchy no longer carry them."""
+
+    @staticmethod
+    def _orchestrator(tmp_path: Path) -> ScraperOrchestrator:
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.failure_tracker = FailureTracker()
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+        orchestrator.vehicle_compat = {
+            "CSF-1": [
+                Vehicle(make="Honda", model="Civic", year=2020, engine="2.0L"),
+                Vehicle(make="Honda", model="Civic", year=2021),
+            ],
+            "CSF-2": [Vehicle(make="Honda", model="Civic", year=2020)],
+            "CSF-3": [Vehicle(make="Toyota", model="Camry", year=2020)],
+            # Enough known vehicles that dropping one stays under the safety fraction
+            "CSF-4": [Vehicle(make="Ford", model="F-150", year=y) for y in range(2010, 2018)],
+        }
+        return orchestrator
+
+    @staticmethod
+    def _hierarchy_for(orchestrator: ScraperOrchestrator) -> list[dict[str, object]]:
+        seen: dict[tuple[str, str, int], dict[str, object]] = {}
+        for vehicles in orchestrator.vehicle_compat.values():
+            for v in vehicles:
+                seen.setdefault(
+                    (v.make, v.model, v.year),
+                    {"make": v.make, "model": v.model, "year": str(v.year), "application_id": 0},
+                )
+        return list(seen.values())
+
+    def test_page_reconcile_removes_only_that_vehicle_from_unlisted_parts(
+        self, tmp_path: Path
+    ) -> None:
+        """A re-scraped 2020 Civic page listing only CSF-2 drops CSF-1's 2020 Civic fitment."""
+        # Arrange
+        orchestrator = self._orchestrator(tmp_path)
+        config = {"make": "Honda", "model": "Civic", "year": "2020", "application_id": 1}
+
+        # Act
+        removed = orchestrator._reconcile_page_fitments(config, {"CSF-2"})  # noqa: SLF001
+
+        # Assert
+        assert removed == {"CSF-1"}
+        assert [v.year for v in orchestrator.vehicle_compat["CSF-1"]] == [2021]
+        assert len(orchestrator.vehicle_compat["CSF-2"]) == 1
+        assert len(orchestrator.vehicle_compat["CSF-3"]) == 1
+
+    def test_hierarchy_reconcile_removes_vehicles_csf_dropped(self, tmp_path: Path) -> None:
+        """Vehicles absent from a complete hierarchy lose their fitments."""
+        # Arrange
+        orchestrator = self._orchestrator(tmp_path)
+        hierarchy = self._hierarchy_for(orchestrator)
+        without_civic_2021 = [
+            c for c in hierarchy if not (c["model"] == "Civic" and c["year"] == "2021")
+        ]
+
+        # Act — nothing missing
+        untouched = orchestrator._reconcile_vehicles_with_hierarchy(hierarchy)  # noqa: SLF001
+        # Act — the 2021 Civic is gone from CSF
+        removed = orchestrator._reconcile_vehicles_with_hierarchy(without_civic_2021)  # noqa: SLF001
+
+        # Assert
+        assert untouched == set()
+        assert removed == {"CSF-1"}
+        assert [v.year for v in orchestrator.vehicle_compat["CSF-1"]] == [2020]
+
+    def test_hierarchy_reconcile_refuses_unsafe_enumerations(self, tmp_path: Path) -> None:
+        """A failed or truncated hierarchy must not delete fitments."""
+        # Arrange
+        orchestrator = self._orchestrator(tmp_path)
+        only_camry = [{"make": "Toyota", "model": "Camry", "year": "2020", "application_id": 3}]
+        failed = self._orchestrator(tmp_path)
+        failed.failure_tracker.record(
+            phase="hierarchy", identifier="Honda", error_type="HTTPError", error_message="500"
+        )
+        full = [c for c in self._hierarchy_for(failed) if c["model"] != "Camry"]
+
+        # Act
+        truncated = orchestrator._reconcile_vehicles_with_hierarchy(only_camry)  # noqa: SLF001
+        after_failure = failed._reconcile_vehicles_with_hierarchy(full)  # noqa: SLF001
+
+        # Assert — most known vehicles missing is a truncation; failures skip outright
+        assert truncated == set()
+        assert after_failure == set()
+        assert len(orchestrator.vehicle_compat["CSF-1"]) == 2
+        assert len(failed.vehicle_compat["CSF-3"]) == 1
+
+    def test_reprocessed_page_removes_fitment_and_marks_part_changed(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """End to end: a changed page that dropped a part removes its fitment."""
+        # Arrange
+        orchestrator = ScraperOrchestrator.__new__(ScraperOrchestrator)
+        orchestrator.fetcher = Mock()
+        orchestrator.ajax_parser = Mock(spec=AJAXResponseParser)
+        orchestrator.html_parser = Mock()
+        orchestrator.validator = Mock()
+        orchestrator.exporter = Mock()
+        orchestrator.image_processor = Mock()
+        orchestrator.output_dir = tmp_path / "exports"
+        orchestrator.checkpoint_dir = tmp_path / "checkpoints"
+        orchestrator.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        orchestrator.incremental = True
+        orchestrator.unique_parts = {
+            "CSF-1": Part(sku="CSF-1", name="A", category="Radiator"),
+            "CSF-2": Part(sku="CSF-2", name="B", category="Radiator"),
+        }
+        orchestrator.vehicle_compat = {
+            "CSF-1": [Vehicle(make="Honda", model="Civic", year=2024)],
+            "CSF-2": [Vehicle(make="Honda", model="Civic", year=2024)],
+        }
+        orchestrator.parts_scraped = 0
+        orchestrator.processed_application_ids = {8000}
+        orchestrator.new_skus = set()
+        orchestrator.changed_skus = set()
+        orchestrator.failure_tracker = FailureTracker()
+        orchestrator.delay_override = None
+        orchestrator.etag_store = ETagStore(tmp_path / "etags.json")
+        orchestrator.detail_etag_store = ETagStore(tmp_path / "detail_etags.json")
+        orchestrator.hierarchy_cache = HierarchyCache(tmp_path / "hc.json")
+        url = "https://csf.mycarparts.com/applications/8000"
+        orchestrator.etag_store.set(url, "old")
+        orchestrator.etag_store.save()
+        hierarchy = [
+            {
+                "make_id": 3,
+                "make": "Honda",
+                "year_id": 100,
+                "year": "2024",
+                "application_id": 8000,
+                "model": "Civic",
+            },
+        ]
+        mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
+        mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
+        mocker.patch.object(orchestrator, "_get_latest_checkpoint", return_value=None)
+        orchestrator.fetcher.async_check_etags = AsyncMock(return_value=[(True, "new")])
+        orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=["<html/>"])
+        # The page now lists only CSF-2
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = [
+            {"sku": "CSF-2", "name": "B", "vehicle_qualifiers": {}}
+        ]
+        orchestrator.validator.validate_batch.return_value = [
+            Part(sku="CSF-2", name="B", category="Radiator")
+        ]
+
+        # Act
+        result = orchestrator.scrape_all(resume=True, fetch_details=False)
+
+        # Assert
+        assert orchestrator.vehicle_compat["CSF-1"] == []
+        assert len(orchestrator.vehicle_compat["CSF-2"]) == 1
+        assert "CSF-1" in orchestrator.changed_skus
+        assert result["parts_with_fitments_removed"] == 1
+
+
 class TestETagFilteringUnprocessedApps:
     """Test that _filter_by_etags keeps unprocessed applications."""
 

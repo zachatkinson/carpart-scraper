@@ -88,6 +88,26 @@ IMAGE_ENTRY = {
 class TestProcessImagesManifest:
     """Test manifest-based staleness detection in process_images."""
 
+    def test_manifest_records_source_last_modified(
+        self, images_dir: Path, mock_client: Mock
+    ) -> None:
+        """CSF's own Last-Modified for the image is kept alongside the hash."""
+        # Arrange
+        mock_client.get.return_value.headers = {
+            "etag": '"abc123"',
+            "last-modified": "Tue, 02 Sep 2026 14:03:11 GMT",
+        }
+        processor = _make_processor(images_dir, mock_client)
+
+        # Act
+        processor.process_images("CSF-100", [IMAGE_ENTRY])
+
+        # Assert
+        entry = processor._manifest["CSF-100_0.avif"]  # noqa: SLF001
+        assert entry["source_modified"] == "Tue, 02 Sep 2026 14:03:11 GMT"
+
+        processor.close()
+
     def test_first_run_downloads_encodes_and_stores_entry(
         self, images_dir: Path, mock_client: Mock
     ) -> None:

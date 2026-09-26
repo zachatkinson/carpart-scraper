@@ -149,6 +149,7 @@ class ImageProcessor:
 
                 # Capture ETag from response
                 new_etag = response.headers.get("etag")
+                last_modified = response.headers.get("last-modified")
 
                 source_hash = hashlib.md5(response.content).hexdigest()  # noqa: S324
 
@@ -157,13 +158,13 @@ class ImageProcessor:
                 if avif_path.exists() and stored_hash == source_hash:
                     logger.debug("image_unchanged_skipping", sku=sku, index=idx)
                     # Update ETag in manifest even if hash matches (ETag may be new)
-                    self._set_entry(avif_filename, source_hash, new_etag)
+                    self._set_entry(avif_filename, source_hash, new_etag, last_modified)
                     processed_images.append(image_ref)
                     continue
 
                 # New or changed image — encode to AVIF
                 self._encode_avif(response.content, avif_path)
-                self._set_entry(avif_filename, source_hash, new_etag)
+                self._set_entry(avif_filename, source_hash, new_etag, last_modified)
 
                 logger.debug(
                     "image_processed",
@@ -194,17 +195,26 @@ class ImageProcessor:
     # Manifest helpers
     # ------------------------------------------------------------------
 
-    def _set_entry(self, filename: str, source_hash: str, etag: str | None = None) -> None:
+    def _set_entry(
+        self,
+        filename: str,
+        source_hash: str,
+        etag: str | None = None,
+        last_modified: str | None = None,
+    ) -> None:
         """Update a manifest entry, marking it as unsynced.
 
         Args:
             filename: AVIF filename key
             source_hash: MD5 hex digest of source image bytes
             etag: HTTP ETag from server response (optional)
+            last_modified: HTTP Last-Modified from the source (S3) response, i.e.
+                when CSF itself last replaced the image (optional)
         """
         self._manifest[filename] = {
             "source_hash": source_hash,
             "etag": etag,
+            "source_modified": last_modified,
             "synced": False,
         }
 

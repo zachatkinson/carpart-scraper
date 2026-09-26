@@ -253,6 +253,11 @@ class TimeBudget:
         return (time.monotonic() - self._start) / 60.0
 
 
+# Largest share of known vehicles a single run may drop from the catalog when
+# reconciling against CSF's hierarchy; more than this looks like a truncated
+# enumeration, not a real removal, and the reconciliation is skipped.
+VEHICLE_REMOVAL_MAX_FRACTION = 0.10
+
 # Detail pages per fetch batch.  Presigned S3 image URLs on those pages expire
 # 10 minutes after the fetch, so a batch must finish processing well inside that.
 DETAIL_BATCH_SIZE = 60
@@ -871,6 +876,99 @@ class ScraperOrchestrator:
         )
 
     @staticmethod
+    def _vehicle_key(vehicle: Vehicle) -> tuple[str, str, int]:
+        """The application-page identity of a fitment row: make, model, year."""
+        return (vehicle.make.casefold(), vehicle.model.casefold(), vehicle.year)
+
+    @staticmethod
+    def _config_key(config: dict[str, Any]) -> tuple[str, str, int]:
+        """The application-page identity of a hierarchy config: make, model, year."""
+        return (
+            str(config["make"]).casefold(),
+            str(config["model"]).casefold(),
+            int(config["year"]),
+        )
+
+    def _reconcile_page_fitments(self, config: dict[str, Any], listed_skus: set[str]) -> set[str]:
+        """Drop fitments for this page's vehicle from parts the page no longer lists.
+
+        An application page is the complete list of parts for one vehicle, so
+        once it has been re-scraped, any stored fitment for that vehicle on a
+        part absent from the page is a removal CSF made.
+
+        Args:
+            config: Hierarchy config of the page just processed (make, model, year)
+            listed_skus: SKUs the page listed
+
+        Returns:
+            SKUs that lost a fitment
+        """
+        key = self._config_key(config)
+        removed: set[str] = set()
+        for sku, vehicles in self.vehicle_compat.items():
+            if sku in listed_skus:
+                continue
+            kept = [v for v in vehicles if self._vehicle_key(v) != key]
+            if len(kept) != len(vehicles):
+                self.vehicle_compat[sku] = kept
+                removed.add(sku)
+                logger.info(
+                    "fitment_removed",
+                    sku=sku,
+                    vehicle=f"{config['year']} {config['make']} {config['model']}",
+                    reason="not_listed_on_page",
+                )
+        return removed
+
+    def _reconcile_vehicles_with_hierarchy(self, hierarchy: list[dict[str, Any]]) -> set[str]:
+        """Drop fitments for vehicles that no longer exist in CSF's hierarchy.
+
+        Only safe on a complete, successful enumeration, so this is a no-op
+        when any hierarchy step failed this run or the enumeration looks
+        truncated relative to what we already know.
+
+        Args:
+            hierarchy: Full vehicle hierarchy for this run (no make/year filter)
+
+        Returns:
+            SKUs that lost a fitment
+        """
+        known_keys = {self._config_key(c) for c in hierarchy}
+        stored_keys = {self._vehicle_key(v) for vs in self.vehicle_compat.values() for v in vs}
+        if not known_keys or not stored_keys:
+            return set()
+
+        if self.failure_tracker.get_failed_identifiers("hierarchy"):
+            logger.warning("vehicle_reconcile_skipped", reason="hierarchy_failures_this_run")
+            return set()
+
+        missing = stored_keys - known_keys
+        if len(missing) > len(stored_keys) * VEHICLE_REMOVAL_MAX_FRACTION:
+            logger.warning(
+                "vehicle_reconcile_skipped",
+                reason="too_many_missing",
+                missing=len(missing),
+                stored=len(stored_keys),
+            )
+            return set()
+
+        removed: set[str] = set()
+        for sku, vehicles in self.vehicle_compat.items():
+            kept = [v for v in vehicles if self._vehicle_key(v) in known_keys]
+            if len(kept) != len(vehicles):
+                for v in vehicles:
+                    if self._vehicle_key(v) not in known_keys:
+                        logger.info(
+                            "fitment_removed",
+                            sku=sku,
+                            vehicle=f"{v.year} {v.make} {v.model}",
+                            reason="vehicle_gone_from_hierarchy",
+                        )
+                self.vehicle_compat[sku] = kept
+                removed.add(sku)
+        return removed
+
+    @staticmethod
     def _merge_listing_part(existing: Part, listing: Part) -> Part:
         """Apply a freshly scraped listing to an already-known part.
 
@@ -1414,6 +1512,12 @@ class ScraperOrchestrator:
         )
         total_applications = len(hierarchy)
 
+        # Vehicles CSF dropped since we last looked: only judged from a complete
+        # enumeration, so never under a make or year filter.
+        fitments_removed_skus: set[str] = set()
+        if make_filter is None and year_filter is None and self.vehicle_compat:
+            fitments_removed_skus |= self._reconcile_vehicles_with_hierarchy(hierarchy)
+
         # Phase 1.5: ETag-based filtering (skip unchanged application pages).
         # A forced full run still hashes every page so the store is refreshed
         # as pages are processed, but keeps them all.
@@ -1520,6 +1624,13 @@ class ScraperOrchestrator:
                     new_skus_found.update(result.new_skus)
                     changed_skus_found.update(result.changed_skus)
 
+                # The page is the complete part list for this vehicle: anything we
+                # stored for it that the page no longer lists was removed by CSF.
+                # An empty parse is treated as suspect, not as "everything removed".
+                if parts:
+                    listed_skus = {p.sku for p in parts}
+                    fitments_removed_skus |= self._reconcile_page_fitments(config, listed_skus)
+
                 # Mark as processed; only now does its page hash count as seen
                 self.processed_application_ids.add(application_id)
                 self._commit_etag(application_id)
@@ -1568,7 +1679,11 @@ class ScraperOrchestrator:
             unique_parts=len(self.unique_parts),
             new_skus=len(new_skus_found),
             changed_skus=len(changed_skus_found),
+            parts_with_fitments_removed=len(fitments_removed_skus),
         )
+
+        # A lost fitment is a content change for that part
+        changed_skus_found.update(fitments_removed_skus)
 
         # Store change tracking on instance for delta exports
         self.new_skus.update(new_skus_found)
@@ -1739,6 +1854,7 @@ class ScraperOrchestrator:
             "parts_scraped": self.parts_scraped,
             "new_parts": len(new_skus_found),
             "changed_parts": len(changed_skus_found),
+            "parts_with_fitments_removed": len(fitments_removed_skus),
             "vehicles_tracked": sum(len(v) for v in self.vehicle_compat.values()),
             "make_filter": make_filter,
             "year_filter": year_filter,
