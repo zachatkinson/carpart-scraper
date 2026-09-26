@@ -21,7 +21,7 @@ class CSF_Parts_Database {
 	/**
 	 * Schema version written on activation and reached by maybe_migrate().
 	 */
-	const DB_VERSION = '2.3.0';
+	const DB_VERSION = '2.4.0';
 
 	/**
 	 * Content fields that define a part for change detection, in storage form.
@@ -45,6 +45,7 @@ class CSF_Parts_Database {
 		'compatibility',
 		'images',
 		'interchange_numbers',
+		'discontinued',
 	);
 
 	/**
@@ -106,6 +107,7 @@ class CSF_Parts_Database {
 			compatibility longtext NOT NULL,
 			images longtext,
 			interchange_numbers longtext,
+			discontinued tinyint(1) NOT NULL DEFAULT 0,
 			scraped_at varchar(50),
 			content_hash char(32) DEFAULT NULL,
 			last_synced datetime DEFAULT NULL,
@@ -116,6 +118,7 @@ class CSF_Parts_Database {
 			KEY category (category),
 			KEY manufacturer (manufacturer),
 			KEY in_stock (in_stock),
+			KEY discontinued (discontinued),
 			KEY updated_at (updated_at)
 		) $charset_collate;";
 
@@ -170,6 +173,36 @@ class CSF_Parts_Database {
 		if ( version_compare( $current_version, '2.3.0', '<' ) ) {
 			$this->migrate_to_2_3_0();
 			update_option( 'csf_parts_db_version', '2.3.0' );
+		}
+
+		// Migration for 2.4.0: discontinued flag.
+		if ( version_compare( $current_version, '2.4.0', '<' ) ) {
+			$this->migrate_to_2_4_0();
+			update_option( 'csf_parts_db_version', '2.4.0' );
+		}
+	}
+
+	/**
+	 * Migration to version 2.4.0: discontinued flag, set by the importer when
+	 * CSF's detail page for a part returns 404. Discontinued parts stay in the
+	 * table (their pages still resolve, with a badge) but leave the catalog,
+	 * filters, counts and sitemap.
+	 *
+	 * @since 2.4.0
+	 */
+	private function migrate_to_2_4_0(): void {
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$column_exists = $this->wpdb->get_results(
+			"SHOW COLUMNS FROM {$this->table_parts} LIKE 'discontinued'"
+		);
+
+		if ( empty( $column_exists ) ) {
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$this->wpdb->query(
+				"ALTER TABLE {$this->table_parts}
+				ADD COLUMN discontinued tinyint(1) NOT NULL DEFAULT 0 AFTER interchange_numbers,
+				ADD KEY discontinued (discontinued)"
+			);
 		}
 	}
 
@@ -481,6 +514,7 @@ class CSF_Parts_Database {
 			'compatibility'       => null !== $compatibility ? wp_json_encode( $compatibility ) : '',
 			'images'              => isset( $data['images'] ) ? wp_json_encode( $data['images'] ) : '',
 			'interchange_numbers' => isset( $data['interchange_numbers'] ) ? wp_json_encode( $data['interchange_numbers'] ) : '',
+			'discontinued'        => ! empty( $data['discontinued'] ) ? 1 : 0,
 		);
 	}
 
@@ -536,6 +570,10 @@ class CSF_Parts_Database {
 		if ( 'price' === $field ) {
 			return null === $value || '' === $value ? '' : number_format( (float) $value, 2, '.', '' );
 		}
+		if ( 'discontinued' === $field ) {
+			// Rows from before the column existed compare as "not discontinued".
+			return ! empty( $value ) ? '1' : '0';
+		}
 		return (string) $value;
 	}
 
@@ -550,7 +588,7 @@ class CSF_Parts_Database {
 		foreach ( array_keys( $row ) as $column ) {
 			if ( 'price' === $column ) {
 				$formats[] = '%f';
-			} elseif ( 'in_stock' === $column ) {
+			} elseif ( 'in_stock' === $column || 'discontinued' === $column ) {
 				$formats[] = '%d';
 			} else {
 				$formats[] = '%s';
@@ -645,7 +683,7 @@ class CSF_Parts_Database {
 
 		$results = $this->wpdb->get_results(
 			$this->wpdb->prepare(
-				"SELECT * FROM {$this->table_parts} ORDER BY id DESC LIMIT %d OFFSET %d",
+				"SELECT * FROM {$this->table_parts} WHERE discontinued = 0 ORDER BY id DESC LIMIT %d OFFSET %d",
 				$per_page,
 				$offset
 			)
@@ -661,7 +699,7 @@ class CSF_Parts_Database {
 	 * @return int Total number of parts.
 	 */
 	public function get_total_parts(): int {
-		return (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->table_parts}" );
+		return (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->table_parts} WHERE discontinued = 0" );
 	}
 
 	/**
@@ -676,10 +714,11 @@ class CSF_Parts_Database {
 		$results = $this->wpdb->get_results(
 			$this->wpdb->prepare(
 				"SELECT * FROM {$this->table_parts}
-				WHERE sku LIKE %s
+				WHERE discontinued = 0
+				  AND ( sku LIKE %s
 				   OR name LIKE %s
 				   OR description LIKE %s
-				   OR manufacturer LIKE %s
+				   OR manufacturer LIKE %s )
 				ORDER BY sku ASC
 				LIMIT %d",
 				'%' . $this->wpdb->esc_like( $keyword ) . '%',
@@ -708,7 +747,7 @@ class CSF_Parts_Database {
 		$results = $this->wpdb->get_results(
 			$this->wpdb->prepare(
 				"SELECT * FROM {$this->table_parts}
-				WHERE category = %s
+				WHERE category = %s AND discontinued = 0
 				ORDER BY name ASC
 				LIMIT %d OFFSET %d",
 				$category,
@@ -728,7 +767,7 @@ class CSF_Parts_Database {
 	 */
 	public function get_categories(): array {
 		$results = $this->wpdb->get_col(
-			"SELECT DISTINCT category FROM {$this->table_parts} WHERE category != '' ORDER BY category ASC"
+			"SELECT DISTINCT category FROM {$this->table_parts} WHERE category != '' AND discontinued = 0 ORDER BY category ASC"
 		);
 
 		return $results ?: array();
@@ -743,7 +782,7 @@ class CSF_Parts_Database {
 	public function get_category_counts(): array {
 		$rows = $this->wpdb->get_results(
 			"SELECT category, COUNT(*) AS count FROM {$this->table_parts}
-			 WHERE category IS NOT NULL AND category != ''
+			 WHERE category IS NOT NULL AND category != '' AND discontinued = 0
 			 GROUP BY category ORDER BY category ASC"
 		);
 
@@ -772,7 +811,7 @@ class CSF_Parts_Database {
 			             value JSON PATH '$'
 			         )
 			     ) v
-			WHERE p.compatibility IS NOT NULL
+			WHERE p.discontinued = 0 AND p.compatibility IS NOT NULL
 			  AND p.compatibility != ''
 			  AND p.compatibility != '[]'
 			  AND JSON_VALID(p.compatibility)
@@ -803,7 +842,7 @@ class CSF_Parts_Database {
 			             value JSON PATH '$'
 			         )
 			     ) v
-			WHERE p.compatibility IS NOT NULL
+			WHERE p.discontinued = 0 AND p.compatibility IS NOT NULL
 			  AND JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.year')) = %s
 			  AND JSON_EXTRACT(v.value, '$.make') IS NOT NULL
 			ORDER BY make ASC",
@@ -843,7 +882,7 @@ class CSF_Parts_Database {
 			             value JSON PATH '$'
 			         )
 			     ) v
-			WHERE p.compatibility IS NOT NULL
+			WHERE p.discontinued = 0 AND p.compatibility IS NOT NULL
 			  AND JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.make')) = %s
 			  {$model_clause}
 			  AND JSON_EXTRACT(v.value, '$.year') IS NOT NULL
@@ -875,7 +914,7 @@ class CSF_Parts_Database {
 				             value JSON PATH '$'
 				         )
 				     ) v
-				WHERE p.compatibility IS NOT NULL
+				WHERE p.discontinued = 0 AND p.compatibility IS NOT NULL
 				  AND p.compatibility != ''
 				  AND p.compatibility != '[]'
 				  AND JSON_VALID(p.compatibility)
@@ -895,7 +934,7 @@ class CSF_Parts_Database {
 				             value JSON PATH '$'
 				         )
 				     ) v
-				WHERE p.compatibility IS NOT NULL
+				WHERE p.discontinued = 0 AND p.compatibility IS NOT NULL
 				  AND JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.make')) = %s
 				  AND JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.year')) = %s
 				  AND JSON_EXTRACT(v.value, '$.model') IS NOT NULL
@@ -913,7 +952,7 @@ class CSF_Parts_Database {
 				             value JSON PATH '$'
 				         )
 				     ) v
-				WHERE p.compatibility IS NOT NULL
+				WHERE p.discontinued = 0 AND p.compatibility IS NOT NULL
 				  AND JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.make')) = %s
 				  AND JSON_EXTRACT(v.value, '$.model') IS NOT NULL
 				ORDER BY model ASC",
@@ -944,7 +983,7 @@ class CSF_Parts_Database {
 			             value JSON PATH '$'
 			         )
 			     ) v
-			WHERE p.compatibility IS NOT NULL
+			WHERE p.discontinued = 0 AND p.compatibility IS NOT NULL
 			  AND p.compatibility != ''
 			  AND p.compatibility != '[]'
 			  AND JSON_VALID(p.compatibility)
@@ -967,7 +1006,7 @@ class CSF_Parts_Database {
 	 * @return array Array of category names.
 	 */
 	public function get_all_categories(): array {
-		$query = "SELECT DISTINCT category FROM {$this->table_parts} WHERE category IS NOT NULL AND category != '' ORDER BY category ASC";
+		$query = "SELECT DISTINCT category FROM {$this->table_parts} WHERE category IS NOT NULL AND category != '' AND discontinued = 0 ORDER BY category ASC";
 
 		$results = $this->wpdb->get_col( $query );
 
@@ -993,7 +1032,7 @@ class CSF_Parts_Database {
 			             value JSON PATH '$'
 			         )
 			     ) v
-			WHERE p.compatibility IS NOT NULL
+			WHERE p.discontinued = 0 AND p.compatibility IS NOT NULL
 			  AND JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.make')) = %s
 			  AND JSON_UNQUOTE(JSON_EXTRACT(v.value, '$.model')) = %s
 			  AND JSON_EXTRACT(v.value, '$.year') = %d
@@ -1059,9 +1098,12 @@ class CSF_Parts_Database {
 
 		$offset = ( $page - 1 ) * $per_page;
 
-		// Build WHERE clauses.
+		// Build WHERE clauses. Discontinued parts leave the catalog unless asked for.
 		$where_clauses = array( '1=1' );
 		$prepare_args  = array();
+		if ( empty( $filters['include_discontinued'] ) ) {
+			$where_clauses[] = 'p.discontinued = 0';
+		}
 
 		// Search keyword (includes SKU, name, description, manufacturer, and interchange numbers).
 		if ( ! empty( $search ) ) {

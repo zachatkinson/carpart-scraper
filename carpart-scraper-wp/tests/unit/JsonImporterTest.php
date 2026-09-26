@@ -23,6 +23,8 @@ final class JsonImporterTest extends TestCase {
 		Monkey\setUp();
 
 		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
+		Functions\when( 'get_option' )->justReturn( 1 );
+		Functions\when( 'update_option' )->justReturn( true );
 
 		require_once CSF_PARTS_PLUGIN_DIR . 'includes/class-csf-parts-json-importer.php';
 
@@ -86,6 +88,16 @@ final class JsonImporterTest extends TestCase {
 				}
 			);
 
+		$bumped = false;
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$bumped ) {
+				if ( CSF_Parts_Constants::OPTION_CACHE_GENERATION === $name && 2 === $value ) {
+					$bumped = true;
+				}
+				return true;
+			}
+		);
+
 		// Act.
 		$results = $this->importer->import_from_file( $file );
 		unlink( $file );
@@ -94,6 +106,7 @@ final class JsonImporterTest extends TestCase {
 		$this->assertSame( 2, $results['updated'] );
 		$this->assertSame( 1, $results['unchanged'] );
 		$this->assertSame( 1, $results['created'] );
+		$this->assertTrue( $bumped, 'REST cache generation is bumped after an import that changed parts' );
 		$this->assertSame(
 			array(
 				'compatibility' => 2,

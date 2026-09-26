@@ -1078,4 +1078,67 @@ final class DatabaseTest extends TestCase {
 		$this->assertSame( array( 'compatibility' ), $changes[0]->changed_fields );
 		$this->assertSame( array(), $changes[1]->changed_fields );
 	}
+
+	/**
+	 * Test: discontinued parts leave the catalog unless explicitly included.
+	 */
+	public function test_query_parts_excludes_discontinued_unless_asked(): void {
+		// Arrange.
+		$seen = array();
+		$this->wpdb_mock->shouldReceive( 'prepare' )
+			->andReturnUsing(
+				function ( $sql ) use ( &$seen ) {
+					$seen[] = $sql;
+					return $sql;
+				}
+			);
+		$this->wpdb_mock->shouldReceive( 'get_var' )->andReturn( '0' );
+		$this->wpdb_mock->shouldReceive( 'get_results' )->andReturn( array() );
+
+		// Act.
+		$this->database->query_parts( array() );
+		$default_sql = implode( "\n", $seen );
+		$seen        = array();
+		$this->database->query_parts( array( 'include_discontinued' => true ) );
+		$inclusive_sql = implode( "\n", $seen );
+
+		// Assert.
+		$this->assertStringContainsString( 'p.discontinued = 0', $default_sql );
+		$this->assertStringNotContainsString( 'p.discontinued = 0', $inclusive_sql );
+	}
+
+	/**
+	 * Test: a part CSF dropped is recorded as a discontinued change, and only that.
+	 */
+	public function test_upsert_part_records_discontinued_as_the_changed_field(): void {
+		// Arrange: stored row predates the column entirely.
+		Functions\when( 'current_time' )->justReturn( '2025-10-28 12:00:00' );
+		$this->wpdb_mock->shouldReceive( 'prepare' )->once()->andReturn( 'SELECT ...' );
+		$this->wpdb_mock->shouldReceive( 'get_row' )->once()->andReturn( $this->stored_row() );
+		$this->wpdb_mock->shouldReceive( 'update' )
+			->once()
+			->with(
+				'wp_csf_parts',
+				Mockery::on(
+					function ( array $row ) {
+						return 1 === $row['discontinued'];
+					}
+				),
+				array( 'id' => 7 ),
+				Mockery::type( 'array' ),
+				array( '%d' )
+			)
+			->andReturn( 1 );
+		$this->wpdb_mock->shouldReceive( 'insert' )
+			->once()
+			->with( 'wp_csf_part_changes', Mockery::type( 'array' ), Mockery::type( 'array' ) )
+			->andReturn( 1 );
+
+		// Act.
+		$result = $this->database->upsert_part( $this->incoming_data( array( 'discontinued' => true ) ) );
+
+		// Assert.
+		$this->assertSame( 'updated', $result['status'] );
+		$this->assertSame( array( 'discontinued' ), $result['changed_fields'] );
+	}
 }

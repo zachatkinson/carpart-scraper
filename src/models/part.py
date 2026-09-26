@@ -88,6 +88,10 @@ class Part(BaseModel):
     interchange_numbers: list[ReferenceNumber] = Field(
         default_factory=list, description="OEM and interchange reference numbers"
     )
+    discontinued: bool = Field(
+        default=False,
+        description="CSF no longer lists this part (its detail page returns 404)",
+    )
     scraped_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         description="Timestamp when part data was scraped",

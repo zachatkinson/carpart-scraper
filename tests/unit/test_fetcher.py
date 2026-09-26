@@ -27,6 +27,7 @@ from pytest_mock import MockerFixture
 
 from src.scraper.fetcher import (
     BROWSER_MAX_RETRIES,
+    DetailPageNotFound,
     RespectfulFetcher,
     _is_retryable_browser_error,
     _is_retryable_http_error,
@@ -1689,6 +1690,36 @@ class TestAsyncFetchDetailPages:
 
         # Assert
         assert results == [None]
+
+        # Cleanup
+        fetcher.close()
+
+    async def test_returns_not_found_sentinel_on_404(self, mocker: MockerFixture) -> None:
+        """A 404 is reported as DetailPageNotFound, not as a transient None."""
+        # Arrange
+        mocker.patch("src.scraper.fetcher.asyncio.sleep", return_value=None)
+        mock_response = httpx.Response(
+            404, text="<html>Not Found</html>", request=httpx.Request("GET", "http://a")
+        )
+
+        async def mock_get(url: str, **kwargs: object) -> httpx.Response:
+            return mock_response
+
+        mock_client = mocker.AsyncMock()
+        mock_client.get = mock_get
+        mock_client.__aenter__ = mocker.AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = mocker.AsyncMock(return_value=False)
+        mocker.patch("src.scraper.fetcher.httpx.AsyncClient", return_value=mock_client)
+        fetcher = RespectfulFetcher()
+
+        # Act
+        results = await fetcher.async_fetch_detail_pages(
+            ["https://csf.autocaredata.com/items/3158"], progress_every=100
+        )
+
+        # Assert
+        assert len(results) == 1
+        assert isinstance(results[0], DetailPageNotFound)
 
         # Cleanup
         fetcher.close()

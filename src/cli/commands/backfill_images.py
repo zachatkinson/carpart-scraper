@@ -16,7 +16,7 @@ import httpx
 import structlog
 from rich.console import Console
 
-from src.scraper.fetcher import RespectfulFetcher
+from src.scraper.fetcher import DetailPageNotFound, RespectfulFetcher
 from src.scraper.image_processor import ImageProcessor
 from src.scraper.image_syncer import (
     ImageSyncer,
@@ -274,7 +274,7 @@ def _run_backfill(  # noqa: PLR0913
 def _process_batch(  # noqa: PLR0913
     skus: list[str],
     urls: list[str],
-    html_results: list[str | None],
+    html_results: list[str | DetailPageNotFound | None],
     fetcher: RespectfulFetcher,
     parser: CSFParser,
     image_processor: ImageProcessor,
@@ -285,7 +285,8 @@ def _process_batch(  # noqa: PLR0913
     Args:
         skus: SKUs in this batch
         urls: Corresponding detail page URLs
-        html_results: Fetched HTML (None means browser fallback needed)
+        html_results: Fetched HTML (None means browser fallback needed; a
+            DetailPageNotFound marks a part CSF no longer lists)
         fetcher: Fetcher for browser fallback
         parser: HTML parser
         image_processor: AVIF image processor
@@ -299,6 +300,10 @@ def _process_batch(  # noqa: PLR0913
 
     for sku, url, fetched_html in zip(skus, urls, html_results, strict=True):
         try:
+            if isinstance(fetched_html, DetailPageNotFound):
+                fail += 1
+                logger.warning("backfill_sku_not_found", sku=sku, url=url)
+                continue
             html = fetched_html if fetched_html is not None else fetcher.fetch_with_browser(url)
             soup = parser.parse(html)
             detail_data = parser.extract_detail_page_data(soup, sku)

@@ -215,7 +215,7 @@ class CSF_Parts_REST_API {
 		);
 
 		// Check cache.
-		$cache_key = 'csf_parts_' . md5( wp_json_encode( $filters ) );
+		$cache_key = 'csf_parts_' . $this->cache_generation() . '_' . md5( wp_json_encode( $filters ) );
 		$cached    = $this->get_cached_response( $cache_key );
 
 		if ( false !== $cached ) {
@@ -256,7 +256,7 @@ class CSF_Parts_REST_API {
 		$sku = sanitize_text_field( $request->get_param( 'sku' ) );
 
 		// Check cache.
-		$cache_key = 'csf_part_sku_' . $sku;
+		$cache_key = 'csf_part_sku_' . $this->cache_generation() . '_' . $sku;
 		$cached    = $this->get_cached_response( $cache_key );
 
 		if ( false !== $cached ) {
@@ -290,7 +290,7 @@ class CSF_Parts_REST_API {
 	 * @return WP_REST_Response Response object.
 	 */
 	public function get_vehicle_makes( WP_REST_Request $request ) {
-		$cache_key = 'csf_vehicle_makes';
+		$cache_key = 'csf_vehicle_makes_' . $this->cache_generation();
 		$cached    = $this->get_cached_response( $cache_key );
 
 		if ( false !== $cached ) {
@@ -327,7 +327,7 @@ class CSF_Parts_REST_API {
 		$make = sanitize_text_field( $request->get_param( 'make' ) );
 		$year = $request->get_param( 'year' ) ? intval( $request->get_param( 'year' ) ) : null;
 
-		$cache_key = 'csf_vehicle_models_' . $make . ( $year ? '_' . $year : '' );
+		$cache_key = 'csf_vehicle_models_' . $this->cache_generation() . '_' . $make . ( $year ? '_' . $year : '' );
 		$cached    = $this->get_cached_response( $cache_key );
 
 		if ( false !== $cached ) {
@@ -498,6 +498,7 @@ class CSF_Parts_REST_API {
 			$formatted['tech_notes']     = $part->tech_notes;
 			$formatted['images']         = $images;
 			$formatted['compatibility']  = $compatibility;
+			$formatted['discontinued']   = ! empty( $part->discontinued );
 			$formatted['created_at']     = $part->created_at;
 			$formatted['updated_at']     = $part->updated_at;
 		}
@@ -554,6 +555,18 @@ class CSF_Parts_REST_API {
 	 * @param string $key Cache key.
 	 * @return mixed|false Cached data or false.
 	 */
+	/**
+	 * Cache generation, bumped by the importer whenever a part is created or
+	 * updated, so every REST transient written before an import is orphaned
+	 * rather than served stale for up to the cache duration.
+	 *
+	 * @since 1.21.0
+	 * @return string
+	 */
+	private function cache_generation(): string {
+		return (string) (int) get_option( CSF_Parts_Constants::OPTION_CACHE_GENERATION, 1 );
+	}
+
 	private function get_cached_response( string $key ) {
 		if ( ! get_option( 'csf_parts_enable_cache', 1 ) ) {
 			return false;

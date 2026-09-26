@@ -86,7 +86,7 @@ class CSF_Parts_Sitemap_Provider extends WP_Sitemaps_Provider {
 		$table = $wpdb->prefix . 'csf_parts';
 
 		// Get part count.
-		$part_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
+		$part_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE discontinued = 0" );
 
 		if ( $part_count === 0 ) {
 			return 0;
@@ -96,7 +96,8 @@ class CSF_Parts_Sitemap_Provider extends WP_Sitemaps_Provider {
 		$vehicle_count = (int) $wpdb->get_var(
 			"SELECT SUM(JSON_LENGTH(compatibility))
 			FROM {$table}
-			WHERE compatibility IS NOT NULL
+			WHERE discontinued = 0
+			AND compatibility IS NOT NULL
 			AND compatibility != ''"
 		);
 

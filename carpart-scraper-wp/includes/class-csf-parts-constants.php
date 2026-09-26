@@ -63,6 +63,9 @@ final class CSF_Parts_Constants {
 	 * Cache settings.
 	 */
 	public const CACHE_DURATION_DEFAULT = 3600; // 1 hour in seconds
+
+	/** Option holding the REST cache generation; bumped after any import that changed a part. */
+	public const OPTION_CACHE_GENERATION = 'csf_parts_cache_generation';
 	public const CACHE_DURATION_MIN     = 60;   // 1 minute
 	public const CACHE_DURATION_MAX     = 86400; // 24 hours
 

@@ -24,7 +24,7 @@ from src.models.part import Part
 from src.models.vehicle import Vehicle, VehicleCompatibility
 from src.scraper.ajax_parser import AJAXResponseParser
 from src.scraper.etag_store import ETagStore
-from src.scraper.fetcher import RespectfulFetcher
+from src.scraper.fetcher import DetailPageNotFound, RespectfulFetcher
 from src.scraper.hierarchy_cache import HierarchyCache
 from src.scraper.image_processor import ImageProcessor
 from src.scraper.parser import CSFParser
@@ -997,7 +997,27 @@ class ScraperOrchestrator:
             else [img.model_dump() for img in listing.images]
         )
         data["specifications"] = {**existing.specifications, **listing.specifications}
+        # Only the detail page (phase 3) decides discontinued status: a listing
+        # can lag CSF's own catalog, and a 404 is the stronger signal.
+        data["discontinued"] = existing.discontinued
         return Part(**data)
+
+    def _set_discontinued(self, sku: str, *, discontinued: bool) -> bool:
+        """Flag or unflag a part as discontinued.
+
+        Args:
+            sku: Part SKU
+            discontinued: True when CSF's detail page returns 404
+
+        Returns:
+            True if the flag changed, False if it already had that value
+        """
+        part = self.unique_parts.get(sku)
+        if part is None or part.discontinued == discontinued:
+            return False
+        self.unique_parts[sku] = part.model_copy(update={"discontinued": discontinued})
+        logger.info("part_discontinued" if discontinued else "part_restored", sku=sku)
+        return True
 
     @staticmethod
     def _needs_enrichment(part: Part, detail_data: dict[str, Any]) -> bool:
@@ -1715,6 +1735,8 @@ class ScraperOrchestrator:
         details_fetched_count = 0
         details_skipped_unchanged = 0
         details_failed = 0
+        parts_discontinued = 0
+        parts_restored = 0
         detail_browser_fallback_count = 0
         if fetch_details:
             # Always fetch all SKUs — content hashing detects which ones
@@ -1753,20 +1775,32 @@ class ScraperOrchestrator:
                         self.fetcher.async_fetch_detail_pages(batch_urls)
                     )
 
-                    for sku, detail_url, fetched_html in zip(
+                    for sku, detail_url, detail_result in zip(
                         batch_skus, batch_urls, batch_html_results, strict=True
                     ):
                         try:
+                            # CSF answered 404: the part is gone from the catalog.
+                            # Keep its record, flag it, and leave its page hash so
+                            # a restored page is detected as a change.
+                            if isinstance(detail_result, DetailPageNotFound):
+                                if self._set_discontinued(sku, discontinued=True):
+                                    parts_discontinued += 1
+                                continue
+
                             # Browser fallback for pages where HTTP returned no content
                             detail_html: str
-                            if fetched_html is None:
+                            if detail_result is None:
                                 logger.info("detail_browser_fallback", sku=sku)
                                 detail_html = self.fetcher.fetch_with_browser(detail_url)
                                 # Release Playwright so the next batch's asyncio.run() works
                                 self.fetcher.close_browser()
                                 detail_browser_fallback_count += 1
                             else:
-                                detail_html = fetched_html
+                                detail_html = detail_result
+
+                            # The page exists again: a part we had written off is back
+                            if self._set_discontinued(sku, discontinued=False):
+                                parts_restored += 1
 
                             # Content-hash change detection: skip enrichment
                             # for detail pages that haven't changed since last run.
@@ -1843,6 +1877,8 @@ class ScraperOrchestrator:
                     details_skipped_unchanged=details_skipped_unchanged,
                     details_failed=details_failed,
                     detail_browser_fallback_count=detail_browser_fallback_count,
+                    parts_discontinued=parts_discontinued,
+                    parts_restored=parts_restored,
                 )
 
         # Compile statistics
@@ -1865,6 +1901,8 @@ class ScraperOrchestrator:
             "applications_failed": applications_failed,
             "browser_fallback_count": browser_fallback_count,
             "details_failed": details_failed,
+            "parts_discontinued": parts_discontinued,
+            "parts_restored": parts_restored,
             "failure_summary": self.failure_tracker.get_summary(),
         }
 

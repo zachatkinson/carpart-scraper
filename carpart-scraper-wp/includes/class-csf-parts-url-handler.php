@@ -367,7 +367,7 @@ class CSF_Parts_URL_Handler {
 		global $wpdb;
 		$table = $wpdb->prefix . 'csf_parts';
 
-		$parts = $wpdb->get_results( "SELECT sku, category, compatibility FROM {$table}" );
+		$parts = $wpdb->get_results( "SELECT sku, category, compatibility FROM {$table} WHERE discontinued = 0" );
 
 		$urls = array();
 

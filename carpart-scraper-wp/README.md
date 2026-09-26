@@ -208,6 +208,7 @@ Parts data is stored in a dedicated MySQL table for performance and flexibility,
 - `compatibility`: JSON vehicle compatibility data (longtext)
 - `images`: JSON images array (longtext)
 - `interchange_numbers`: JSON interchange part numbers (longtext)
+- `discontinued`: 1 when CSF's detail page for the part returns 404 (tinyint, indexed). Discontinued parts keep their row and their part page (with a Discontinued badge) but leave the catalog, filters, counts, related parts and sitemap. The flag clears automatically if the page comes back. Pass `include_discontinued` to `query_parts()` to see them.
 - `scraped_at`: When the scraper last read the part (varchar 50; informational, not compared)
 - `content_hash`: MD5 of the content fields above, so an unchanged part costs one comparison (char 32)
 - `last_synced`: Last import that saw the SKU at all (datetime)

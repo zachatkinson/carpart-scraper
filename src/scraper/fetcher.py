@@ -80,6 +80,20 @@ def _is_retryable_browser_error(error: BaseException) -> bool:
     return any(pattern in error_str for pattern in retryable_patterns)
 
 
+HTTP_NOT_FOUND = 404
+
+
+class DetailPageNotFound:
+    """Sentinel result: the server says the part no longer exists (HTTP 404).
+
+    Distinct from ``None`` (transient failure or page without content, which
+    warrants a browser fallback) so callers can mark the part discontinued.
+    """
+
+
+DETAIL_PAGE_NOT_FOUND = DetailPageNotFound()
+
+
 class RespectfulFetcher:
     """HTTP fetcher with built-in respectful scraping practices.
 
@@ -465,7 +479,7 @@ class RespectfulFetcher:
         urls: list[str],
         concurrency: int = 10,
         progress_every: int = 100,
-    ) -> list[str | None]:
+    ) -> list[str | DetailPageNotFound | None]:
         """Fetch multiple detail pages concurrently using async HTTP.
 
         Runs up to ``concurrency`` GET requests in parallel, each with a
@@ -493,7 +507,7 @@ class RespectfulFetcher:
             follow_redirects=True,
         ) as async_client:
 
-            async def _fetch_one(url: str) -> str | None:
+            async def _fetch_one(url: str) -> str | DetailPageNotFound | None:
                 nonlocal completed_count
 
                 async with semaphore:
@@ -502,12 +516,20 @@ class RespectfulFetcher:
                     )
                     await asyncio.sleep(delay)
 
+                    html: str | DetailPageNotFound | None
                     try:
                         response = await async_client.get(
                             url,
                             headers={"Accept": "text/html,application/xhtml+xml"},
                         )
                         response.raise_for_status()
+                    except httpx.HTTPStatusError as e:
+                        if e.response.status_code == HTTP_NOT_FOUND:
+                            logger.info("async_detail_not_found", url=url)
+                            html = DETAIL_PAGE_NOT_FOUND
+                        else:
+                            logger.warning("async_detail_http_failed", url=url)
+                            html = None
                     except httpx.HTTPError:
                         logger.warning("async_detail_http_failed", url=url)
                         html = None

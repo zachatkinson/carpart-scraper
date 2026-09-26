@@ -127,6 +127,12 @@ class CSF_Parts_JSON_Importer {
 		// Keep the change log to a year so it answers "what changed" without growing unbounded.
 		$this->database->prune_changes( self::CHANGE_LOG_RETENTION_DAYS );
 
+		// Anything cached by the REST API before this import may now be stale.
+		if ( $this->results['created'] + $this->results['updated'] > 0 ) {
+			$generation = (int) get_option( CSF_Parts_Constants::OPTION_CACHE_GENERATION, 1 );
+			update_option( CSF_Parts_Constants::OPTION_CACHE_GENERATION, $generation + 1 );
+		}
+
 		return $this->results;
 	}
 

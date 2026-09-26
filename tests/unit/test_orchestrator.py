@@ -23,6 +23,7 @@ from src.models.part import Part
 from src.models.vehicle import Vehicle
 from src.scraper.ajax_parser import AJAXParsingError, AJAXResponseParser
 from src.scraper.etag_store import ETagStore
+from src.scraper.fetcher import DetailPageNotFound
 from src.scraper.hierarchy_cache import HierarchyCache
 from src.scraper.orchestrator import MAKES, DeduplicationResult, FailureTracker, ScraperOrchestrator
 
@@ -1496,6 +1497,55 @@ class TestScrapeAllPhase3:
         assert result["details_skipped_unchanged"] == 0
         assert result["details_fetched_count"] == 1
         orchestrator._enrich_part_with_details.assert_called_once()  # noqa: SLF001
+
+    def test_detail_page_404_marks_part_discontinued_and_200_restores(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """A 404 detail page flags the part discontinued; a later 200 clears the flag."""
+        # Arrange
+        orchestrator = self._make_orchestrator(tmp_path)
+        hierarchy = [
+            {
+                "make_id": 3,
+                "make": "Honda",
+                "year_id": 100,
+                "year": "2024",
+                "application_id": 8000,
+                "model": "Civic",
+            },
+        ]
+        mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
+        mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
+        orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=["<html/>"])
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = [
+            {"sku": "CSF-1001", "name": "Radiator", "vehicle_qualifiers": {}}
+        ]
+        orchestrator.validator.validate_batch.return_value = [
+            Part(sku="CSF-1001", name="Radiator", category="Radiator", description="Desc")
+        ]
+        orchestrator.html_parser.extract_detail_page_data.return_value = {
+            "full_description": "Desc",
+            "specifications": {},
+        }
+        mocker.patch.object(orchestrator, "_enrich_part_with_details")
+
+        # Act — CSF says the part is gone
+        orchestrator.fetcher.async_fetch_detail_pages = AsyncMock(
+            return_value=[DetailPageNotFound()]
+        )
+        gone = orchestrator.scrape_all(fetch_details=True)
+        was_discontinued = orchestrator.unique_parts["CSF-1001"].discontinued
+
+        # Act — the page is back
+        orchestrator.fetcher.async_fetch_detail_pages = AsyncMock(return_value=["<html>ok</html>"])
+        back = orchestrator.scrape_all(fetch_details=True, resume=False)
+
+        # Assert
+        assert was_discontinued is True
+        assert gone["parts_discontinued"] == 1
+        assert gone["details_failed"] == 0
+        assert orchestrator.unique_parts["CSF-1001"].discontinued is False
+        assert back["parts_restored"] == 1
 
     def test_detail_page_hash_enriches_changed(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Test Phase 3 enriches detail pages whose content hash has changed."""
