@@ -258,6 +258,13 @@ class TimeBudget:
 # enumeration, not a real removal, and the reconciliation is skipped.
 VEHICLE_REMOVAL_MAX_FRACTION = 0.10
 
+# A single run may mark at most this share of the catalog discontinued, and
+# only when at least DISCONTINUED_OUTAGE_MIN_COUNT parts 404 at once. More than
+# that looks like CSF's site misrouting (a maintenance page, a moved URL
+# scheme) rather than a real purge, so no part is flagged and the run fails.
+DISCONTINUED_MAX_FRACTION = 0.05
+DISCONTINUED_OUTAGE_MIN_COUNT = 20
+
 # Detail pages per fetch batch.  Presigned S3 image URLs on those pages expire
 # 10 minutes after the fetch, so a batch must finish processing well inside that.
 DETAIL_BATCH_SIZE = 60
@@ -1019,6 +1026,48 @@ class ScraperOrchestrator:
         logger.info("part_discontinued" if discontinued else "part_restored", sku=sku)
         return True
 
+    def _apply_not_found(self, skus: list[str], total: int) -> int:
+        """Flag parts whose detail pages returned 404, unless it looks like an outage.
+
+        Args:
+            skus: SKUs whose detail page returned 404 this run
+            total: Number of detail pages fetched this run
+
+        Returns:
+            Number of parts newly flagged discontinued (0 when the run is
+            judged to be a site problem, which is recorded as a failure per
+            SKU so the run exits non-zero)
+        """
+        if not skus:
+            return 0
+
+        suspected_outage = (
+            len(skus) >= DISCONTINUED_OUTAGE_MIN_COUNT
+            and total > 0
+            and len(skus) > total * DISCONTINUED_MAX_FRACTION
+        )
+        if suspected_outage:
+            logger.error(
+                "mass_not_found_ignored",
+                not_found=len(skus),
+                total=total,
+                reason="too many 404s for a real removal; nothing flagged discontinued",
+            )
+            for sku in skus:
+                self.failure_tracker.record(
+                    phase="detail",
+                    identifier=sku,
+                    error_type="SuspectedOutage",
+                    error_message="detail page 404 during a site-wide 404",
+                )
+            return 0
+
+        flagged = 0
+        for sku in skus:
+            if self._set_discontinued(sku, discontinued=True):
+                flagged += 1
+        return flagged
+
     @staticmethod
     def _needs_enrichment(part: Part, detail_data: dict[str, Any]) -> bool:
         """Whether a stored part lacks detail-page content the page currently has.
@@ -1737,6 +1786,7 @@ class ScraperOrchestrator:
         details_failed = 0
         parts_discontinued = 0
         parts_restored = 0
+        not_found_skus: list[str] = []
         detail_browser_fallback_count = 0
         if fetch_details:
             # Always fetch all SKUs — content hashing detects which ones
@@ -1783,8 +1833,9 @@ class ScraperOrchestrator:
                             # Keep its record, flag it, and leave its page hash so
                             # a restored page is detected as a change.
                             if isinstance(detail_result, DetailPageNotFound):
-                                if self._set_discontinued(sku, discontinued=True):
-                                    parts_discontinued += 1
+                                # Decided after the whole pass, so a site-wide 404
+                                # can be told apart from a handful of real removals.
+                                not_found_skus.append(sku)
                                 continue
 
                             # Browser fallback for pages where HTTP returned no content
@@ -1864,6 +1915,8 @@ class ScraperOrchestrator:
                             )
                         continue
 
+                parts_discontinued = self._apply_not_found(not_found_skus, len(sku_list))
+
                 # Persist detail page hashes for next run
                 self.detail_etag_store.save()
 
@@ -1879,6 +1932,7 @@ class ScraperOrchestrator:
                     detail_browser_fallback_count=detail_browser_fallback_count,
                     parts_discontinued=parts_discontinued,
                     parts_restored=parts_restored,
+                    detail_not_found=len(not_found_skus),
                 )
 
         # Compile statistics
@@ -1903,6 +1957,7 @@ class ScraperOrchestrator:
             "details_failed": details_failed,
             "parts_discontinued": parts_discontinued,
             "parts_restored": parts_restored,
+            "detail_not_found": len(not_found_skus),
             "failure_summary": self.failure_tracker.get_summary(),
         }
 

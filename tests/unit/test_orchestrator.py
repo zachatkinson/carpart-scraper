@@ -1547,6 +1547,45 @@ class TestScrapeAllPhase3:
         assert orchestrator.unique_parts["CSF-1001"].discontinued is False
         assert back["parts_restored"] == 1
 
+    def test_site_wide_404_flags_nothing_and_records_failures(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """When most detail pages 404 at once, no part is discontinued and the run fails."""
+        # Arrange — 30 parts, every detail page 404s
+        orchestrator = self._make_orchestrator(tmp_path)
+        hierarchy = [
+            {
+                "make_id": 3,
+                "make": "Honda",
+                "year_id": 100,
+                "year": "2024",
+                "application_id": 8000,
+                "model": "Civic",
+            },
+        ]
+        mocker.patch.object(orchestrator, "_build_hierarchy", return_value=hierarchy)
+        mocker.patch.object(orchestrator, "_save_checkpoint", return_value=tmp_path / "cp.json")
+        orchestrator.fetcher.async_scrape_application_pages = AsyncMock(return_value=["<html/>"])
+        skus = [f"CSF-{i:04d}" for i in range(30)]
+        orchestrator.html_parser.extract_parts_from_application_page.return_value = [
+            {"sku": sku, "name": "P", "vehicle_qualifiers": {}} for sku in skus
+        ]
+        orchestrator.validator.validate_batch.return_value = [
+            Part(sku=sku, name="P", category="Radiator") for sku in skus
+        ]
+        orchestrator.fetcher.async_fetch_detail_pages = AsyncMock(
+            return_value=[DetailPageNotFound() for _ in skus]
+        )
+
+        # Act
+        result = orchestrator.scrape_all(fetch_details=True)
+
+        # Assert
+        assert result["parts_discontinued"] == 0
+        assert result["detail_not_found"] == 30
+        assert not any(p.discontinued for p in orchestrator.unique_parts.values())
+        assert len(orchestrator.failure_tracker.get_failed_identifiers("detail")) == 30
+
     def test_detail_page_hash_enriches_changed(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Test Phase 3 enriches detail pages whose content hash has changed."""
         # Arrange
