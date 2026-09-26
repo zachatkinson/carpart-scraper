@@ -303,6 +303,7 @@ class ScraperOrchestrator:
 
     def __init__(  # noqa: PLR0913
         self,
+        *,
         output_dir: Path | str = "exports",
         incremental: bool = False,
         delay_override: float | None = None,
@@ -1481,6 +1482,7 @@ class ScraperOrchestrator:
 
     def scrape_all(  # noqa: PLR0913, PLR0912, PLR0915
         self,
+        *,
         make_filter: str | None = None,
         year_filter: int | None = None,
         fetch_details: bool = True,

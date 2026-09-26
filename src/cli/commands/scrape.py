@@ -105,6 +105,7 @@ FAILURE_RATE_THRESHOLD = 0.05
     help="Max minutes to run before saving checkpoint and exiting (env: CSF_TIME_BUDGET)",
 )
 def scrape(  # noqa: PLR0912, PLR0913, PLR0915
+    *,
     make: str | None,
     year: int | None,
     output_dir: Path,

@@ -15,7 +15,7 @@ import hashlib
 import random
 import re
 import time
-from typing import Final
+from typing import Final, Self
 
 import httpx
 import structlog
@@ -662,7 +662,7 @@ class RespectfulFetcher:
         self.client.close()
         logger.debug("fetcher_closed")
 
-    def __enter__(self) -> "RespectfulFetcher":
+    def __enter__(self) -> Self:
         """Context manager entry."""
         return self
 

@@ -7,7 +7,7 @@ and displaying response details and extracted data previews.
 
 import json
 import time
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +28,7 @@ logger = structlog.get_logger()
 console = Console()
 
 
-class EndpointType(str, Enum):
+class EndpointType(StrEnum):
     """Supported endpoint types for testing.
 
     Attributes:

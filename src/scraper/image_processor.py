@@ -14,7 +14,7 @@ import json
 import shutil
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import httpx
 import structlog
@@ -424,7 +424,7 @@ class ImageProcessor:
         self._save_manifest()
         self.client.close()
 
-    def __enter__(self) -> "ImageProcessor":
+    def __enter__(self) -> Self:
         """Context manager entry."""
         return self
 

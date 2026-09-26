@@ -79,6 +79,7 @@ DETAIL_BASE_URL = "https://csf.autocaredata.com/items/"
     help="Image storage directory (default: images/)",
 )
 def backfill_images(  # noqa: PLR0913
+    *,
     wp_url: str,
     wp_api_key: str | None,
     source: str,
@@ -134,7 +135,12 @@ def backfill_images(  # noqa: PLR0913
         syncer = _create_image_syncer(wp_url, wp_api_key, image_processor)
         fetcher = RespectfulFetcher()
         timed_out, processed, failed = _run_backfill(
-            skus_missing, fetcher, image_processor, syncer, batch_size, time_budget
+            skus_missing=skus_missing,
+            fetcher=fetcher,
+            image_processor=image_processor,
+            syncer=syncer,
+            batch_size=batch_size,
+            time_budget=time_budget,
         )
 
         # Print summary
@@ -204,6 +210,7 @@ def _find_missing_skus(all_skus: list[str], image_processor: ImageProcessor) -> 
 
 
 def _run_backfill(  # noqa: PLR0913
+    *,
     skus_missing: list[str],
     fetcher: RespectfulFetcher,
     image_processor: ImageProcessor,
@@ -250,13 +257,13 @@ def _run_backfill(  # noqa: PLR0913
         )
 
         batch_ok, batch_fail = _process_batch(
-            batch_skus,
-            batch_urls,
-            html_results,
-            fetcher,
-            parser,
-            image_processor,
-            syncer,
+            skus=batch_skus,
+            urls=batch_urls,
+            html_results=html_results,
+            fetcher=fetcher,
+            parser=parser,
+            image_processor=image_processor,
+            syncer=syncer,
         )
         processed += batch_ok
         failed += batch_fail
@@ -272,6 +279,7 @@ def _run_backfill(  # noqa: PLR0913
 
 
 def _process_batch(  # noqa: PLR0913
+    *,
     skus: list[str],
     urls: list[str],
     html_results: list[str | DetailPageNotFound | None],
