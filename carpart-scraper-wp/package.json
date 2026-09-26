@@ -9,15 +9,13 @@
     "start": "wp-scripts start",
     "lint:js": "wp-scripts lint-js",
     "format": "wp-scripts format",
-    "test": "vitest",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage",
     "test:a11y": "pa11y-ci",
     "test:a11y:verbose": "pa11y-ci --reporter cli",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:inspect": "playwright test --grep 'Inspect current'",
-    "test:e2e:setup-colors": "playwright test --grep 'Setup Kadence'"
+    "test:e2e:setup-colors": "playwright test --grep 'Setup Kadence'",
+    "packages-update": "wp-scripts packages-update"
   },
   "keywords": [
     "wordpress",
@@ -30,23 +28,16 @@
   "author": "Development Team",
   "license": "MIT",
   "devDependencies": {
-    "@playwright/test": "^1.56.1",
-    "@testing-library/react": "^16.1.0",
-    "@vitejs/plugin-react": "^4.3.4",
-    "@vitest/ui": "^3.0.0",
-    "@wordpress/scripts": "^30.26.0",
-    "jsdom": "^25.0.1",
-    "pa11y": "^9.0.1",
-    "pa11y-ci": "^4.0.1",
-    "vitest": "^3.0.0"
-  },
-  "dependencies": {
-    "@wordpress/block-editor": "^15.6.0",
-    "@wordpress/blocks": "^15.6.0",
-    "@wordpress/components": "^30.6.0",
-    "@wordpress/data": "^10.11.0",
-    "@wordpress/element": "^6.11.0",
-    "@wordpress/i18n": "^6.6.0",
-    "@wordpress/server-side-render": "^6.9.0"
+    "@playwright/test": "^1.63.0",
+    "@wordpress/block-editor": "^18.0.0",
+    "@wordpress/blocks": "^16.1.0",
+    "@wordpress/components": "^41.0.0",
+    "@wordpress/data": "^10.56.0",
+    "@wordpress/element": "^8.8.0",
+    "@wordpress/i18n": "^6.29.0",
+    "@wordpress/scripts": "^36.0.0",
+    "@wordpress/server-side-render": "^6.32.0",
+    "pa11y": "^10.0.0",
+    "pa11y-ci": "^4.1.1"
   }
 }

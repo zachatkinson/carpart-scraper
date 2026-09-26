@@ -1,6 +1,6 @@
 import { registerBlockType } from '@wordpress/blocks';
 import { __ } from '@wordpress/i18n';
-import Edit from './edit';
+import Edit from './edit.js';
 
 registerBlockType('csf-parts/product-catalog', {
 	edit: Edit,

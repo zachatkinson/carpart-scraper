@@ -355,9 +355,10 @@ Run PHP tests:
 phpunit
 ```
 
-Run JavaScript tests:
+Run the browser and accessibility checks (the plugin has no JS unit tests; blocks are exercised through Playwright against a running site):
 ```bash
-npm test
+npm run test:e2e
+npm run test:a11y
 ```
 
 ## Troubleshooting

@@ -156,7 +156,6 @@ carpart-scraper-wp/wordpress/
 carpart-scraper-wp/wp-config.php
 carpart-scraper-wp/wp-content/
 carpart-scraper-wp/node_modules/
-carpart-scraper-wp/blocks/node_modules/
 carpart-scraper-wp/vendor/
 carpart-scraper-wp/.ddev/
 
