@@ -163,6 +163,7 @@ carpart-scraper-wp/.ddev/
 carpart-scraper-wp/*.png
 carpart-scraper-wp/*.json
 !carpart-scraper-wp/package.json
+!carpart-scraper-wp/package-lock.json
 !carpart-scraper-wp/composer.json
 !carpart-scraper-wp/block.json
 !carpart-scraper-wp/.pa11yci.json
