@@ -19,8 +19,9 @@ import httpx
 import pytest
 from pytest_mock import MockerFixture
 
+from src.exporters.json_exporter import JSONExporter
 from src.models.part import Part
-from src.models.vehicle import Vehicle
+from src.models.vehicle import Vehicle, VehicleCompatibility
 from src.scraper.ajax_parser import AJAXParsingError, AJAXResponseParser
 from src.scraper.etag_store import ETagStore
 from src.scraper.fetcher import DetailPageNotFound
@@ -2594,6 +2595,34 @@ class TestFitmentReconciliation:
         assert len(orchestrator.vehicle_compat["CSF-2"]) == 1
         assert "CSF-1" in orchestrator.changed_skus
         assert result["parts_with_fitments_removed"] == 1
+
+    def test_export_after_last_fitment_removed_clears_stale_fitments(self, tmp_path: Path) -> None:
+        """A part left with no fitments exports cleanly and overwrites its old ones."""
+        # Arrange
+        orchestrator = self._orchestrator(tmp_path)
+        orchestrator.incremental = True
+        orchestrator.output_dir = tmp_path / "exports"
+        orchestrator.exporter = JSONExporter(orchestrator.output_dir)
+        orchestrator.unique_parts = {
+            sku: Part(sku=sku, name="Radiator", category="Radiator")
+            for sku in orchestrator.vehicle_compat
+        }
+        stale = VehicleCompatibility(
+            part_sku="CSF-3", vehicles=orchestrator.vehicle_compat["CSF-3"]
+        )
+        orchestrator.exporter.export_compatibility([stale])
+        camry_page = {"make": "Toyota", "model": "Camry", "year": "2020", "application_id": 3}
+        orchestrator._reconcile_page_fitments(camry_page, set())  # noqa: SLF001
+
+        # Act
+        paths = orchestrator.export_data()
+        complete_path = orchestrator.export_complete()
+
+        # Assert
+        compat = json.loads(paths["compatibility"].read_text())["compatibility"]
+        assert next(c for c in compat if c["part_sku"] == "CSF-3")["vehicles"] == []
+        complete = json.loads(complete_path.read_text())["parts"]
+        assert next(p for p in complete if p["sku"] == "CSF-3")["compatibility"] == []
 
 
 class TestETagFilteringUnprocessedApps:

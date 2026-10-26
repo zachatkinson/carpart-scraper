@@ -657,11 +657,11 @@ class DataValidator:
             # Attempt to create VehicleCompatibility instance
             compat = VehicleCompatibility(**compat_data)
 
-            # Additional validation checks
+            # A part CSF lists no vehicles for is valid, but worth surfacing
             if not compat.vehicles:
-                errors.append(
+                warnings.append(
                     ValidationIssue(
-                        severity="error",
+                        severity="warning",
                         field=f"compatibility[{index}].vehicles",
                         message=f"Compatibility for {compat.part_sku} has no vehicles",
                     )

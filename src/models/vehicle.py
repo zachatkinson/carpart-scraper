@@ -93,16 +93,18 @@ class Vehicle(BaseModel):
 class VehicleCompatibility(BaseModel):
     """Part-to-vehicle compatibility mapping.
 
-    Links a part SKU to compatible vehicles.
+    Links a part SKU to compatible vehicles. The list may be empty: a part
+    CSF still sells can lose its last fitment, and exporting that empty list
+    is what clears the stale fitments downstream.
 
     Attributes:
         part_sku: Part SKU this compatibility applies to
-        vehicles: List of compatible vehicles
+        vehicles: List of compatible vehicles (empty when CSF lists none)
         notes: Optional compatibility notes (e.g., 'Requires adapter kit')
     """
 
     part_sku: str = Field(..., min_length=1, description="Part SKU")
-    vehicles: list[Vehicle] = Field(..., min_length=1, description="Compatible vehicles")
+    vehicles: list[Vehicle] = Field(..., description="Compatible vehicles")
     notes: str | None = Field(None, description="Compatibility notes")
     scraped_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),

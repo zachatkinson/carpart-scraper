@@ -213,7 +213,7 @@ class TestScraperDataValidator:
         validator = ScraperDataValidator()
         invalid_data = {
             "part_sku": "CSF-12345",
-            "vehicles": [],  # Empty list - violates min_length=1
+            "vehicles": [{"make": "Honda"}],  # Vehicle missing model and year
         }
 
         # Act & Assert
@@ -1087,14 +1087,27 @@ class TestCLIDataValidator:
         """Test _validate_compatibility_data handles ValidationError."""
         # Arrange
         validator = CLIDataValidator()
-        # Missing required fields will cause ValidationError
-        bad_compat: dict[str, Any] = {"part_sku": "CSF-12345", "vehicles": []}
+        # Missing required vehicle fields will cause ValidationError
+        bad_compat: dict[str, Any] = {"part_sku": "CSF-12345", "vehicles": [{"make": "Honda"}]}
 
         # Act
         result = validator._validate_compatibility_data(bad_compat, 0)  # noqa: SLF001
 
         # Assert
         assert len(result["errors"]) > 0
+
+    def test_validate_compatibility_data_with_no_vehicles_warns(self) -> None:
+        """A part CSF lists no vehicles for is a warning, not an error."""
+        # Arrange
+        validator = CLIDataValidator()
+        no_fitments: dict[str, Any] = {"part_sku": "CSF-12345", "vehicles": []}
+
+        # Act
+        result = validator._validate_compatibility_data(no_fitments, 0)  # noqa: SLF001
+
+        # Assert
+        assert result["errors"] == []
+        assert len(result["warnings"]) == 1
 
     def test_validate_compatibility_data_generic_exception(self) -> None:
         """Test _validate_compatibility_data handles unexpected exceptions."""

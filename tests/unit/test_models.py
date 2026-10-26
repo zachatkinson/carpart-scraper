@@ -715,17 +715,16 @@ class TestVehicleCompatibility:
 
         assert "vehicles" in str(exc_info.value)
 
-    def test_compatibility_vehicles_minimum_one(self) -> None:
-        """Test that vehicles list must have at least one vehicle."""
+    def test_compatibility_with_no_vehicles_is_valid(self) -> None:
+        """A part whose last fitment CSF removed still has a compatibility record."""
         # Arrange
         empty_vehicles: list[Vehicle] = []
 
-        # Act & Assert
-        with pytest.raises(ValidationError) as exc_info:
-            VehicleCompatibility(part_sku="CSF-12345", vehicles=empty_vehicles)
+        # Act
+        compatibility = VehicleCompatibility(part_sku="CSF-12345", vehicles=empty_vehicles)
 
-        error_message = str(exc_info.value).lower()
-        assert "vehicles" in error_message
+        # Assert
+        assert compatibility.vehicles == []
 
     def test_compatibility_is_immutable(self) -> None:
         """Test that VehicleCompatibility is frozen (immutable)."""
